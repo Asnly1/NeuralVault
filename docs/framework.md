@@ -87,6 +87,7 @@
   - 理由: Rust 占用内存小，处理快
   - 整体：Tauri 启用 Sibecar 模式调用 Python。
 - **Database:**
+  - **Tools:** Rust: SQLx; Python: SQLModel
   - **Relational:** SQLite (单文件，易部署)。
   - **Vector:** ChromaDB (本地向量检索)。
 - **LLM Framework:** **LlamaIndex**。

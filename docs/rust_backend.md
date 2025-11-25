@@ -4,7 +4,7 @@
   - **功能**：快速保存文本到 SQL `resources` 表。
   - **逻辑**：
     1.  生成 `uuid` 和 `file_hash`。
-    2.  写入 SQLite，状态设为 `processing_stage = 'todo'`, `sync_status = 'pending'`, `classification_status = 'unclassified'`
+    2.  写入 SQLite，状态设为 `sync_status = 'pending'`, `processing_stage = 'todo'`, `classification_status = 'unclassified'`
     3.  **关键步骤**：使用 Rust 的 `reqwest` 客户端，异步调用 Python 的 `POST http://localhost:8000/ingest/notify`。
     4.  返回 `resource_id` 给前端（前端显示“已保存”）。
 - **`capture_screenshot()`**
