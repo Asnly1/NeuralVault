@@ -5,7 +5,7 @@ use std::fs;
 
 use tauri::Manager;
 
-pub use commands::{capture_resource, create_task, get_dashboard};
+pub use commands::{capture_resource, create_task, get_dashboard, seed_demo_data};
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -51,7 +51,8 @@ pub fn run() {
             greet,
             capture_resource,
             create_task,
-            get_dashboard
+            get_dashboard,
+            seed_demo_data
         ])
         // 启动应用
         // tauri::generate_context!()：这个宏会读取你的 tauri.conf.json 配置文件，并在编译时将其转化为代码。它告诉构建器应用的名称、版本、图标等信息。

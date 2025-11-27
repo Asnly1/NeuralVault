@@ -144,6 +144,18 @@ button:hover {
   box-shadow: 0 12px 34px rgba(67, 56, 202, 0.35);
 }
 
+.ghost {
+  background: #ffffff;
+  color: #4338ca;
+  border: 1px solid #c7d2fe;
+  box-shadow: none;
+}
+
+.ghost:hover {
+  transform: none;
+  box-shadow: 0 6px 18px rgba(67, 56, 202, 0.18);
+}
+
 .error {
   color: #dc2626;
   margin-top: 8px;

@@ -107,6 +107,7 @@ function App() {
   const [status, setStatus] = useState<TaskStatus>("inbox");
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [dueDate, setDueDate] = useState("");
+  const [seeding, setSeeding] = useState(false);
 
   // useMemo: 只有当 tasks 这个数据发生变化时，才重新运行里面的分组逻辑；否则，请直接给我上次算好的结果。
   const groupedTasks = useMemo(() => {
@@ -217,6 +218,20 @@ function App() {
     };
   }, []);
 
+  const handleSeed = async () => {
+    setSeeding(true);
+    setError(null);
+    try {
+      await invoke("seed_demo_data");
+      await reloadData();
+    } catch (err) {
+      console.error(err);
+      setError("生成演示数据失败");
+    } finally {
+      setSeeding(false);
+    }
+  };
+
   return (
     <main className="page">
       <header className="topbar">
@@ -231,6 +246,9 @@ function App() {
           ) : (
             <span className="pill ok">最新</span>
           )}
+          <button className="ghost" onClick={handleSeed} disabled={loading || seeding}>
+            {seeding ? "生成中..." : "生成演示数据"}
+          </button>
         </div>
       </header>
 
