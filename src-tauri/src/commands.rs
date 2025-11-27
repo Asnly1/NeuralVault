@@ -8,8 +8,9 @@ use uuid::Uuid;
 
 use crate::{
     db::{
-        NewResource, ResourceClassificationStatus, ResourceFileType, ResourceProcessingStage,
-        ResourceSyncStatus, SourceMeta,
+        get_task_by_id, insert_task, list_active_tasks, list_unclassified_resources, NewResource,
+        NewTask, ResourceClassificationStatus, ResourceFileType, ResourceProcessingStage,
+        ResourceRecord, ResourceSyncStatus, SourceMeta, TaskPriority, TaskRecord, TaskStatus,
     },
     AppState,
 };
@@ -33,6 +34,26 @@ pub struct CaptureRequest {
 pub struct CaptureResponse {
     pub resource_id: i64,
     pub resource_uuid: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateTaskRequest {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub status: Option<TaskStatus>,
+    pub priority: Option<TaskPriority>,
+    pub due_date: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CreateTaskResponse {
+    pub task: TaskRecord,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DashboardData {
+    pub tasks: Vec<TaskRecord>,
+    pub resources: Vec<ResourceRecord>,
 }
 
 fn parse_file_type(raw: Option<&str>) -> ResourceFileType {
@@ -191,4 +212,47 @@ pub async fn capture_resource(
         resource_id,
         resource_uuid,
     })
+}
+
+#[tauri::command]
+pub async fn create_task(
+    state: State<'_, AppState>,
+    payload: CreateTaskRequest,
+) -> Result<CreateTaskResponse, String> {
+    let status = payload.status.unwrap_or(TaskStatus::Inbox);
+    let priority = payload.priority.unwrap_or(TaskPriority::Medium);
+
+    let uuid = Uuid::new_v4().to_string();
+    let pool = &state.db;
+    let task_id = insert_task(
+        pool,
+        NewTask {
+            uuid: &uuid,
+            parent_task_id: None,
+            root_task_id: None,
+            title: payload.title.as_deref(),
+            description: payload.description.as_deref(),
+            suggested_subtasks: None,
+            status,
+            priority,
+            due_date: payload.due_date.as_deref(),
+            user_id: 1,
+        },
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let task = get_task_by_id(pool, task_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(CreateTaskResponse { task })
+}
+
+#[tauri::command]
+pub async fn get_dashboard(state: State<'_, AppState>) -> Result<DashboardData, String> {
+    let pool = &state.db;
+    let tasks = list_active_tasks(pool).await.map_err(|e| e.to_string())?;
+    let resources = list_unclassified_resources(pool).await.map_err(|e| e.to_string())?;
+    Ok(DashboardData { tasks, resources })
 }

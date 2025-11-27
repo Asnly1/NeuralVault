@@ -14,7 +14,7 @@ pub type DbPool = Pool<Sqlite>;
 pub static MIGRATOR: Migrator = sqlx::migrate!();
 // sqlx::migrate!() 是一个宏（Macro）。它会在编译时查找你项目根目录下的 migrations 文件夹（你需要自己创建这个文件夹，并在里面放 .sql 文件）。
 // 它会把这些 SQL 文件的内容“打包”进你最后编译出来的二进制可执行文件中。
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Type)]   
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Type, Serialize, Deserialize)]   
 // Type: 告诉 sqlx 枚举对应数据库里的什么类型。在 sqlx 中没有声明类型，默认为String
 // Clone + Copy: 把数据直接进行按位复制，而不是移动所有权
 // Clone: 表示这个类型可以被显式地复制（通过调用 .clone() 方法）
@@ -23,6 +23,7 @@ pub static MIGRATOR: Migrator = sqlx::migrate!();
 // 逻辑是：既然系统能自动帮你复制（Copy），那你手动复制（Clone）肯定也是没问题的。
 #[sqlx(rename_all = "lowercase")]                   
 //  这告诉 sqlx 把枚举变体映射为小写字符串存入数据库
+#[serde(rename_all = "lowercase")]
 pub enum TaskStatus {
     Inbox,
     Todo,
@@ -31,8 +32,9 @@ pub enum TaskStatus {
     Archived,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Type)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Type, Serialize, Deserialize)]
 #[sqlx(rename_all = "PascalCase")]
+#[serde(rename_all = "lowercase")]
 pub enum TaskPriority {
     High,
     Medium,
@@ -40,7 +42,7 @@ pub enum TaskPriority {
 }
 
 
-#[derive(Debug, FromRow, PartialEq)]
+#[derive(Debug, FromRow, PartialEq, Serialize)]
 // Debug: 允许你用 {:?} 格式化打印这个结构体
 // FromRow: 告诉 sqlx 如何把数据库查询结果的一行自动“映射”成 Rust 结构体
 // PartialEq 和 Eq: 允许比较两个TaskRecord 是否相等（使用 == 操作符）
@@ -89,8 +91,9 @@ pub struct SourceMeta {
     pub window_title: Option<String>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Type)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Type, Serialize)]
 #[sqlx(rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum ResourceSyncStatus {
     Pending,
     Synced,
@@ -98,8 +101,9 @@ pub enum ResourceSyncStatus {
     Error,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Type)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Type, Serialize)]
 #[sqlx(rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum ResourceProcessingStage {
     Todo,
     Chunking,
@@ -107,8 +111,9 @@ pub enum ResourceProcessingStage {
     Done,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Type)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Type, Serialize)]
 #[sqlx(rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum ResourceFileType {
     Text,
     Image,
@@ -118,8 +123,9 @@ pub enum ResourceFileType {
     Other,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Type)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Type, Serialize)]
 #[sqlx(rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum ResourceClassificationStatus {
     Unclassified,
     Suggested,
@@ -127,7 +133,7 @@ pub enum ResourceClassificationStatus {
     Ignored,
 }
 
-#[derive(Debug, FromRow, PartialEq, Eq)]
+#[derive(Debug, FromRow, PartialEq, Eq, Serialize)]
 pub struct ResourceRecord {
     pub resource_id: i64,
     pub uuid: String,
@@ -170,8 +176,9 @@ pub struct NewResource<'a> {
     pub user_id: i64,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Type)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Type, Serialize)]
 #[sqlx(rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum VisibilityScope {
     This,
     Subtree,
@@ -251,6 +258,17 @@ pub async fn get_task_by_id(pool: &SqlitePool, task_id: i64) -> Result<TaskRecor
     .await
 }
 
+pub async fn list_active_tasks(pool: &SqlitePool) -> Result<Vec<TaskRecord>, sqlx::Error> {
+    sqlx::query_as::<_, TaskRecord>(
+        "SELECT task_id, uuid, parent_task_id, root_task_id, title, description, suggested_subtasks, status, priority, due_date, created_at, user_updated_at, system_updated_at, is_deleted, deleted_at, user_id \
+         FROM tasks \
+         WHERE status IN ('inbox','todo','doing') AND is_deleted = 0 \
+         ORDER BY created_at DESC",
+    )
+    .fetch_all(pool)
+    .await
+}
+
 pub async fn insert_resource(
     pool: &SqlitePool,
     params: NewResource<'_>,
@@ -293,6 +311,18 @@ pub async fn get_resource_by_id(
     )
     .bind(resource_id)
     .fetch_one(pool)
+    .await
+}
+
+pub async fn list_unclassified_resources(pool: &SqlitePool) -> Result<Vec<ResourceRecord>, sqlx::Error> {
+    sqlx::query_as::<_, ResourceRecord>(
+        "SELECT resource_id, uuid, source_meta, file_hash, file_type, content, display_name, \
+                file_path, file_size_bytes, indexed_hash, processing_hash, sync_status, last_indexed_at, last_error, processing_stage, classification_status, created_at, is_deleted, deleted_at, user_id \
+         FROM resources \
+         WHERE classification_status = 'unclassified' AND is_deleted = 0 \
+         ORDER BY created_at DESC",
+    )
+    .fetch_all(pool)
     .await
 }
 

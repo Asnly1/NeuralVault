@@ -5,7 +5,7 @@ use std::fs;
 
 use tauri::Manager;
 
-pub use commands::capture_resource;
+pub use commands::{capture_resource, create_task, get_dashboard};
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -47,7 +47,12 @@ pub fn run() {
         // 初始化 Opener 插件。用于调用系统默认程序打开文件或 URL（例如用默认浏览器打开网页）
         .plugin(tauri_plugin_opener::init())
         // 注册前端（JavaScript）可以调用的 Rust 函数
-        .invoke_handler(tauri::generate_handler![greet, capture_resource])
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            capture_resource,
+            create_task,
+            get_dashboard
+        ])
         // 启动应用
         // tauri::generate_context!()：这个宏会读取你的 tauri.conf.json 配置文件，并在编译时将其转化为代码。它告诉构建器应用的名称、版本、图标等信息。
         // 一旦调用 .run()，程序就会进入事件循环（Event Loop），直到你关闭窗口，程序才会退出。
