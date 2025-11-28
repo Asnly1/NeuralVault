@@ -1,9 +1,9 @@
-use std::{fs, path::Path};
+use std::{fs, path::Path, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha2::{Digest, Sha256};
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
 
 use crate::{
@@ -60,13 +60,13 @@ pub struct DashboardData {
 fn parse_file_type(raw: Option<&str>) -> ResourceFileType {
     // 如果 raw 是 None：map 直接跳过闭包，什么都不做，直接返回 None
     // 如果 raw 是 Some("PDF")：
-    // map 会把 "PDF" 从 Option 的盒子里“拆”出来
+    // map 会把 "PDF" 从 Option 的盒子里"拆"出来
     // 把它传给你写的闭包 |s| s.to_lowercase()
     // 闭包执行，把 "PDF" 变成了 "pdf"（注意：to_lowercase() 会分配内存生成一个新的 String）
     // map 会把这个新的 "pdf" 重新包装 进一个 Some 盒子
     // 最终返回 Option<String>
     match raw.map(|s| s.to_lowercase()) {
-        // Some(t) 是一个“模式”：它的意思是，“如果这个盒子不为空（是 Some），那么把盒子里的东西取出来，并且临时命名为 t”
+        // Some(t) 是一个"模式"：它的意思是，"如果这个盒子不为空（是 Some），那么把盒子里的东西取出来，并且临时命名为 t"
         Some(t) if t == "image" => ResourceFileType::Image,
         Some(t) if t == "pdf" => ResourceFileType::Pdf,
         Some(t) if t == "url" => ResourceFileType::Url,
@@ -80,6 +80,29 @@ fn compute_sha256(bytes: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
     format!("{:x}", hasher.finalize())
+}
+
+/// 从文件路径中提取扩展名
+fn get_extension(path: &str) -> Option<String> {
+    Path::new(path)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|s| s.to_lowercase())
+}
+
+/// 获取 assets 目录路径，如果不存在则创建
+fn get_assets_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("获取应用数据目录失败: {}", e))?;
+
+    let assets_dir = app_data_dir.join("assets");
+
+    // 创建 assets 目录（如果不存在）
+    fs::create_dir_all(&assets_dir).map_err(|e| format!("创建 assets 目录失败: {}", e))?;
+
+    Ok(assets_dir)
 }
 
 async fn notify_python(resource_uuid: String) {
@@ -99,6 +122,7 @@ async fn notify_python(resource_uuid: String) {
 // 这个宏将 Rust 函数 capture_resource 标记为可供前端调用的命令
 #[tauri::command]
 pub async fn capture_resource(
+    app: AppHandle,
     state: State<'_, AppState>,
     payload: CaptureRequest,
 ) -> Result<CaptureResponse, String> {
@@ -110,69 +134,157 @@ pub async fn capture_resource(
         source_meta,
     } = payload;
 
-    let (content_bytes, content_for_db, file_size_bytes, file_path_for_db) =
-        // content 是 Option<String>, take() 会把里面的值取出来（变成 None 留在原地），并将所有权转移出来
+    // 生成资源 UUID（用于文件名和数据库记录）
+    let resource_uuid = Uuid::new_v4().to_string();
+
+    // ========== 读取文件内容 ==========
+    // content_bytes: 用于计算 hash 的字节（文本+文件 或 单独文本 或 单独文件）
+    // content_for_db: 文本内容存入数据库
+    // file_size_bytes: 文件大小（仅文件有）
+    // stored_file_path: 存储在应用目录中的相对路径（如 "assets/abc123.pdf"）
+    // generated_display_name: 自动生成的显示名称
+    let (content_bytes, content_for_db, file_size_bytes, stored_file_path, generated_display_name) =
+        // take() 会把 content: Option<String> 中的值取出来（变成 None 留在原地），并将所有权转移出来
         match (content.take(), file_path.clone()) {
-            (Some(text), path_opt) => {
+            // ========== 情况1: 既有文本又有文件 ==========
+            (Some(text), Some(source_path)) => {
+                // 读取文件内容
+                let file_bytes =
+                    fs::read(&source_path).map_err(|e| format!("读取文件失败: {}", e))?;
+
+                // 拼接文本和文件字节
+                let text_bytes = text.as_bytes();
+                let mut combined_bytes = Vec::with_capacity(text_bytes.len() + file_bytes.len());
+                combined_bytes.extend_from_slice(text_bytes);
+                combined_bytes.extend_from_slice(&file_bytes);
+
+                // 总大小 = 文本 + 文件
+                let combined_size = combined_bytes.len() as i64;
+
+                // 提取原始文件名作为 display_name
+                let original_name = Path::new(&source_path)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string());
+
+                // 获取文件扩展名
+                let ext = get_extension(&source_path);
+
+                // 构建目标文件名: {uuid}.{ext}
+                let target_filename = match &ext {
+                    Some(e) => format!("{}.{}", resource_uuid, e),
+                    None => resource_uuid.clone(),
+                };
+
+                // 获取 assets 目录并复制文件
+                let assets_dir = get_assets_dir(&app)?;
+                let target_path = assets_dir.join(&target_filename);
+
+                // 复制文件到应用目录
+                fs::copy(&source_path, &target_path)
+                    .map_err(|e| format!("复制文件失败: {}", e))?;
+
+                // 存储相对路径
+                let relative_path = format!("assets/{}", target_filename);
+
+                (
+                    combined_bytes,        // hash 用拼接后的字节
+                    Some(text),            // 文本存数据库
+                    Some(combined_size),   // 文本+文件 总大小
+                    Some(relative_path),   // 文件路径
+                    original_name,         // 文件名作为 display_name
+                )
+            }
+
+            // ========== 情况2: 只有文本 ==========
+            (Some(text), None) => {
                 let size = text.as_bytes().len() as i64;
-                (text.clone().into_bytes(), Some(text), Some(size), path_opt)
+
+                // 取文本前20个字符作为 display_name
+                let name = {
+                    let trimmed = text.trim();
+                    if trimmed.is_empty() {
+                        None
+                    } else {
+                        let chars: Vec<char> = trimmed.chars().take(21).collect();
+                        if chars.len() > 20 {
+                            let sample: String = chars.into_iter().take(20).collect();
+                            Some(format!("{sample}..."))
+                        } else {
+                            Some(chars.into_iter().collect())
+                        }
+                    }
+                };
+
+                (
+                    text.clone().into_bytes(), // hash 用文本字节
+                    Some(text),                // 文本存数据库
+                    Some(size),                // 文本大小
+                    None,                      // 无文件路径
+                    name,                      // 文本前20字符
+                )
             }
-            (None, Some(path)) => {
-                let bytes = fs::read(&path).map_err(|e| e.to_string())?;
+
+            // ========== 情况3: 只有文件 ==========
+            (None, Some(source_path)) => {
+                // 读取原始文件
+                let bytes = fs::read(&source_path).map_err(|e| format!("读取文件失败: {}", e))?;
                 let size = bytes.len() as i64;
-                (bytes, None, Some(size), Some(path))
+
+                // 提取原始文件名
+                let original_name = Path::new(&source_path)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string());
+
+                // 获取文件扩展名
+                let ext = get_extension(&source_path);
+
+                // 构建目标文件名: {uuid}.{ext}
+                let target_filename = match &ext {
+                    Some(e) => format!("{}.{}", resource_uuid, e),
+                    None => resource_uuid.clone(),
+                };
+
+                // 获取 assets 目录并复制文件
+                let assets_dir = get_assets_dir(&app)?;
+                let target_path = assets_dir.join(&target_filename);
+
+                // 复制文件到应用目录
+                fs::copy(&source_path, &target_path)
+                    .map_err(|e| format!("复制文件失败: {}", e))?;
+
+                // 存储相对路径
+                let relative_path = format!("assets/{}", target_filename);
+
+                (
+                    bytes,                // hash 用文件字节
+                    None,                 // 无文本
+                    Some(size),           // 文件大小
+                    Some(relative_path),  // 文件路径
+                    original_name,        // 文件名
+                )
             }
+
+            // ========== 情况4: 什么都没有 ==========
             (None, None) => return Err("content 或 file_path 至少提供一个".into()),
         };
 
-    // 优先用户传入，其次取文件名；如仅有文本，取前 5 个字符作为名称
-    let display_name = display_name
-        // or_else: 如果前面的值存在，就用前面的；如果不存在，执行这段代码来生成一个兜底值
-        .or_else(|| {
-            file_path
-                // 把 Option<String> 变成了 Option<&String>
-                .as_ref()
-                // 把 Option<&String> 中的 &String 拿出来，作为p
-                // Path::new(p) 把字符串包装成路径对象
-                // file_name() 提取路径的最后一部分
-                .and_then(|p| Path::new(p).file_name())
-                // os (&OsStr): 这是操作系统的原生字符串，未必是合法的 UTF-8
-                // to_string_lossy(): 尝试转成 UTF-8 字符串
-                // .to_string() 把它变成一个真正的、拥有所有权的 String
-                .map(|os| os.to_string_lossy().to_string())
-        })
-        .or_else(|| {
-            content_for_db.as_ref().and_then(|text| {
-                // trim: 去掉字符串“首尾”的空白字符
-                let trimmed = text.trim();
-                if trimmed.is_empty() {
-                    None
-                } else {
-                    // 尝试取前 21 个字符
-                    let chars: Vec<char> = trimmed.chars().take(21).collect();
+    // ========== 生成 display_name ==========
+    // 优先级: 用户传入 > generated_display_name（已包含文件名或文本前20字符）
+    let display_name = display_name.or(generated_display_name);
 
-                    if chars.len() > 20 {
-                        // 如果拿到了 21 个，说明原库肯定超过 20 个
-                        // 取前 20 个拼上省略号
-                        let sample: String = chars.into_iter().take(20).collect();
-                        Some(format!("{sample}..."))
-                    } else {
-                        // 如果不到 21 个，说明原库就很短，直接全用
-                        let sample: String = chars.into_iter().collect();
-                        Some(sample)
-                    }
-                }
-            })
-        });
-
+    // ========== 计算文件哈希 ==========
     let file_hash = compute_sha256(&content_bytes);
-    let resource_uuid = Uuid::new_v4().to_string();
+
+    // ========== 解析文件类型 ==========
     let resource_type = parse_file_type(file_type.as_deref());
+
+    // ========== 解析来源元信息 ==========
     let meta = source_meta.map(|m| SourceMeta {
         url: m.url,
         window_title: m.window_title,
     });
 
+    // ========== 插入数据库 ==========
     let pool = &state.db;
     let resource_id = crate::db::insert_resource(
         pool,
@@ -181,9 +293,11 @@ pub async fn capture_resource(
             source_meta: meta.as_ref(),
             file_hash: &file_hash,
             file_type: resource_type,
+            // 文本内容存数据库，二进制文件不存
             content: content_for_db.as_deref(),
             display_name: display_name.as_deref(),
-            file_path: file_path_for_db.as_deref(),
+            // 存储相对路径（如 "assets/abc123.pdf"）
+            file_path: stored_file_path.as_deref(),
             file_size_bytes,
             indexed_hash: None,
             processing_hash: None,
@@ -198,14 +312,9 @@ pub async fn capture_resource(
     .await
     .map_err(|e| e.to_string())?;
 
-    // 异步通知 Python，不影响主流程
+    // ========== 异步通知 Python ==========
+    // 不阻塞主流程
     tauri::async_runtime::spawn(notify_python(resource_uuid.clone()));
-    // 流程：
-    // Rust 主线程执行到 spawn 时，只是创建一个任务包（Task），把它扔进“任务队列”
-    // 不等待任务执行，主线程直接继续往下走，瞬间返回 Ok 给前端
-    // 前端用户看到“保存成功”
-    // 与此同时，Rust 的后台运行时（Runtime，底层通常是 Tokio）会找一个空闲线程来执行 notify_python
-    // 如果 Python 通知的慢，或者失败了，完全不影响用户在前台的感知
 
     Ok(CaptureResponse {
         resource_id,
