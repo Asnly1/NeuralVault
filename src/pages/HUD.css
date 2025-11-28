@@ -1,0 +1,183 @@
+/* ============================================
+   HUD - Raycast 风格悬浮输入窗
+   ============================================ */
+
+.hud-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  -webkit-app-region: drag;
+}
+
+.hud-form {
+  width: 100%;
+  max-width: 680px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  background: rgba(22, 27, 34, 0.92);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.3),
+    0 8px 40px rgba(0, 0, 0, 0.5),
+    0 2px 12px rgba(0, 0, 0, 0.3);
+  -webkit-app-region: no-drag;
+}
+
+/* Logo/Icon */
+.hud-icon {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.hud-logo {
+  font-size: 18px;
+  color: #6e7681;
+  transition: color 0.2s ease;
+}
+
+.hud-form:focus-within .hud-logo {
+  color: #58a6ff;
+}
+
+.hud-spinner {
+  font-size: 18px;
+  color: #58a6ff;
+  animation: spin 1s linear infinite;
+}
+
+.hud-success {
+  font-size: 18px;
+  color: #3fb950;
+  animation: pop 0.3s ease;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Input */
+.hud-input {
+  flex: 1;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: #e6edf3;
+  font-size: 16px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans",
+    Helvetica, Arial, sans-serif;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  outline: none;
+}
+
+.hud-input::placeholder {
+  color: #484f58;
+  font-weight: 400;
+}
+
+.hud-input:disabled {
+  opacity: 0.6;
+}
+
+/* Submit Button */
+.hud-submit {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(88, 166, 255, 0.15);
+  color: #58a6ff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.hud-submit:hover {
+  background: rgba(88, 166, 255, 0.25);
+}
+
+.hud-submit:active {
+  transform: scale(0.95);
+}
+
+/* ============================================
+   Responsive
+   ============================================ */
+
+@media (prefers-color-scheme: light) {
+  .hud-form {
+    background: rgba(255, 255, 255, 0.92);
+    border-color: rgba(0, 0, 0, 0.1);
+  }
+
+  .hud-input {
+    color: #1f2328;
+  }
+
+  .hud-input::placeholder {
+    color: #8c959f;
+  }
+
+  .hud-logo {
+    color: #8c959f;
+  }
+
+  .hud-form:focus-within .hud-logo {
+    color: #0969da;
+  }
+
+  .hud-spinner,
+  .hud-submit {
+    color: #0969da;
+  }
+
+  .hud-submit {
+    background: rgba(9, 105, 218, 0.1);
+  }
+
+  .hud-submit:hover {
+    background: rgba(9, 105, 218, 0.2);
+  }
+
+  .hud-success {
+    color: #1a7f37;
+  }
+}
+

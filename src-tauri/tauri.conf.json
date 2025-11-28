@@ -12,9 +12,25 @@
   "app": {
     "windows": [
       {
-        "title": "neuralvault",
-        "width": 800,
-        "height": 600
+        "label": "main",
+        "title": "NeuralVault",
+        "width": 1200,
+        "height": 800
+      },
+      {
+        "label": "hud",
+        "title": "Quick Capture",
+        "url": "index.html#/hud",
+        "width": 680,
+        "height": 72,
+        "center": true,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "visible": false,
+        "skipTaskbar": true,
+        "shadow": false
       }
     ],
     "security": {

@@ -66,3 +66,21 @@ export const quickCapture = async (
 export const seedDemoData = async (): Promise<SeedResponse> => {
   return await invoke("seed_demo_data");
 };
+
+// ============================================
+// HUD API
+// ============================================
+
+/**
+ * 切换 HUD 窗口显示/隐藏
+ */
+export const toggleHUD = async (): Promise<void> => {
+  return await invoke("toggle_hud");
+};
+
+/**
+ * 隐藏 HUD 窗口
+ */
+export const hideHUD = async (): Promise<void> => {
+  return await invoke("hide_hud");
+};
