@@ -3,9 +3,33 @@ import { z } from "zod";
 import "./App.css";
 
 import { Task, Resource, PageType } from "./types";
-import { fetchDashboardData, createTask, seedDemoData } from "./api";
+import { fetchDashboardData, quickCapture, seedDemoData } from "./api";
 import { Sidebar } from "./components";
 import { DashboardPage, WorkspacePage, SettingsPage } from "./pages";
+
+// 根据文件扩展名推断文件类型
+function getFileTypeFromPath(filePath: string): string {
+  const ext = filePath.split(".").pop()?.toLowerCase() || "";
+  
+  // 图片类型
+  if (["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"].includes(ext)) {
+    return "image";
+  }
+  // PDF
+  if (ext === "pdf") {
+    return "pdf";
+  }
+  // EPUB
+  if (ext === "epub") {
+    return "epub";
+  }
+  // 文本类型
+  if (["txt", "md", "json", "csv", "xml", "html", "css", "js", "ts"].includes(ext)) {
+    return "text";
+  }
+  // 其他
+  return "other";
+}
 
 function App() {
   const [currentPage, setCurrentPage] = useState<PageType>("dashboard");
@@ -36,24 +60,37 @@ function App() {
   }, []);
 
   // useCallback: React 会把这个函数存起来。只要依赖数组（第二个参数）没变，React 就会返回上一次生成的那个函数引用。
-  const handleCreateTask = useCallback(
-    async (title: string, description: string) => {
+  // handleCapture: 处理快速捕获，将内容或文件保存为资源
+  // content: 用户输入的文本内容
+  // filePath: 通过 Tauri dialog 选择的文件路径（Rust 会直接读取）
+  const handleCapture = useCallback(
+    async (content: string, filePath?: string) => {
       setError(null);
       try {
-        await createTask({
-          title,
-          description: description || undefined,
-          status: "inbox",
-          priority: "medium",
-        });
+        if (filePath) {
+          // 有文件路径：让 Rust 后端直接读取文件
+          // Rust 会根据 file_path 读取文件内容，支持图片/PDF 等二进制文件
+          await quickCapture({
+            file_path: filePath,
+            file_type: getFileTypeFromPath(filePath),
+            // 如果用户同时输入了文本，也一起传递
+            content: content || undefined,
+          });
+        } else if (content) {
+          // 纯文本内容
+          await quickCapture({
+            content,
+            file_type: "text",
+          });
+        }
         await reloadData();
       } catch (err) {
         console.error(err);
-        setError("创建任务失败");
+        setError("捕获失败");
       }
     },
     // React 要求：凡是在 Hook 内部（也就是 { ... } 里面）使用到的、来自组件作用域的变量或函数，都必须包含在依赖数组中。
-    // handleCreateTask 函数内部使用了 reloadData 函数，所以 reloadData 必须出现在依赖数组中。
+    // handleCapture 函数内部使用了 reloadData 函数，所以 reloadData 必须出现在依赖数组中。
     [reloadData]
   );
 
@@ -123,7 +160,7 @@ function App() {
             resources={resources}
             loading={loading || seeding}
             error={error}
-            onCreateTask={handleCreateTask}
+            onCapture={handleCapture}
             onSeed={handleSeed}
             onRefresh={reloadData}
             onSelectTask={handleSelectTask}

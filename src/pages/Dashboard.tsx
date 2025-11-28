@@ -7,7 +7,7 @@ interface DashboardPageProps {
   resources: Resource[];
   loading: boolean;
   error: string | null;
-  onCreateTask: (title: string, description: string) => Promise<void>;
+  onCapture: (content: string, filePath?: string) => Promise<void>;
   onSeed: () => void;
   onRefresh: () => void;
   onSelectTask: (task: Task) => void;
@@ -24,7 +24,7 @@ export function DashboardPage({
   resources,
   loading,
   error,
-  onCreateTask,
+  onCapture,
   onSeed,
   onRefresh,
   onSelectTask,
@@ -75,7 +75,7 @@ export function DashboardPage({
 
       {/* 快速输入区 */}
       <section className="section-capture">
-        <QuickCapture onCreateTask={onCreateTask} loading={loading} />
+        <QuickCapture onCapture={onCapture} loading={loading} />
       </section>
 
       {/* 任务看板 */}

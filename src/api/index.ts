@@ -53,7 +53,7 @@ export const createTask = async (
 export const quickCapture = async (
   request: CaptureRequest
 ): Promise<CaptureResponse> => {
-  return await invoke("quick_capture", { payload: request });
+  return await invoke("capture_resource", { payload: request });
 };
 
 // ============================================

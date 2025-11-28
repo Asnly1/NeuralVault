@@ -22,7 +22,7 @@
         "title": "Quick Capture",
         "url": "index.html#/hud",
         "width": 680,
-        "height": 72,
+        "height": 220,
         "center": true,
         "resizable": false,
         "decorations": false,

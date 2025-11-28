@@ -390,98 +390,205 @@ body {
   min-height: 100%;
 }
 
-/* 快速输入区 */
+/* 快速输入区 - Gemini 风格 */
 .section-capture {
   padding: 0 32px 20px;
 }
 
-.quick-capture {
+.quick-capture-gemini {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  padding: 16px;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  transition: border-color var(--transition-fast);
 }
 
-.capture-main {
+.quick-capture-gemini:focus-within {
+  border-color: var(--border-focus);
+}
+
+/* 文件预览 */
+.capture-file-preview {
   display: flex;
-  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
-.capture-input {
-  flex: 1;
-  padding: 12px 16px;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  background: var(--bg-secondary);
-  color: var(--text-primary);
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.file-icon {
   font-size: 14px;
-  transition: all var(--transition-fast);
+  flex-shrink: 0;
 }
 
-.capture-input::placeholder {
+.file-name {
+  font-size: 13px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-size {
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.file-remove {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.file-remove:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* 输入区域 */
+.capture-input-area {
+  padding: 16px 16px 8px;
+}
+
+.capture-textarea {
+  width: 100%;
+  min-height: 24px;
+  max-height: 200px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 15px;
+  font-family: inherit;
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+}
+
+.capture-textarea::placeholder {
   color: var(--text-muted);
 }
 
-.capture-input:focus {
-  outline: none;
-  border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px var(--accent-subtle);
+.capture-textarea:disabled {
+  opacity: 0.6;
 }
 
-.capture-btn {
-  width: 44px;
-  height: 44px;
+/* 底部工具栏 */
+.capture-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px 12px;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbar-btn {
+  width: 36px;
+  height: 36px;
   border: none;
-  border-radius: var(--radius-md);
-  background: var(--accent);
-  color: white;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
   font-size: 20px;
-  font-weight: 600;
+  font-weight: 300;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: all var(--transition-fast);
 }
 
-.capture-btn:hover:not(:disabled) {
-  background: var(--accent-hover);
+.toolbar-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
-.capture-btn:disabled {
-  opacity: 0.5;
+.toolbar-btn:disabled {
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
-.capture-expanded {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-subtle);
+.toolbar-icon {
+  line-height: 1;
 }
 
-.capture-desc {
-  width: 100%;
-  padding: 12px 16px;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  font-size: 14px;
-  font-family: inherit;
-  resize: vertical;
-  min-height: 60px;
+.file-input-hidden {
+  display: none;
 }
 
-.capture-desc::placeholder {
-  color: var(--text-muted);
-}
-
-.capture-desc:focus {
-  outline: none;
-  border-color: var(--border-focus);
-}
-
-.capture-actions {
+/* 发送按钮 */
+.capture-submit {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent);
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
   display: flex;
-  justify-content: flex-end;
-  margin-top: 10px;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.capture-submit:hover:not(:disabled) {
+  background: var(--accent-hover);
+  transform: scale(1.05);
+}
+
+.capture-submit:disabled {
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  transform: none;
+}
+
+.submit-icon {
+  line-height: 1;
+}
+
+.submit-loading {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* 任务看板 */

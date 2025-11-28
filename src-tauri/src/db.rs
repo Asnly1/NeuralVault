@@ -1,27 +1,27 @@
 use std::{path::Path, str::FromStr, time::Duration};
 
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use sqlx::types::Json;
 use sqlx::{
     migrate::Migrator,
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous},
     FromRow, Pool, Sqlite, SqlitePool, Type,
 };
-use sqlx::types::Json;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 pub type DbPool = Pool<Sqlite>;
 
 pub static MIGRATOR: Migrator = sqlx::migrate!();
 // sqlx::migrate!() 是一个宏（Macro）。它会在编译时查找你项目根目录下的 migrations 文件夹（你需要自己创建这个文件夹，并在里面放 .sql 文件）。
 // 它会把这些 SQL 文件的内容“打包”进你最后编译出来的二进制可执行文件中。
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Type, Serialize, Deserialize)]   
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Type, Serialize, Deserialize)]
 // Type: 告诉 sqlx 枚举对应数据库里的什么类型。在 sqlx 中没有声明类型，默认为String
 // Clone + Copy: 把数据直接进行按位复制，而不是移动所有权
 // Clone: 表示这个类型可以被显式地复制（通过调用 .clone() 方法）
 // Copy: 表示这个类型可以被隐式地复制（通过 = 赋值）
 // Rust 规定： 如果一个类型想要支持隐式复制 (Copy)，它必须先支持显式复制 (Clone)。Copy 依赖于 Clone。
 // 逻辑是：既然系统能自动帮你复制（Copy），那你手动复制（Clone）肯定也是没问题的。
-#[sqlx(rename_all = "lowercase")]                   
+#[sqlx(rename_all = "lowercase")]
 //  这告诉 sqlx 把枚举变体映射为小写字符串存入数据库
 #[serde(rename_all = "lowercase")]
 pub enum TaskStatus {
@@ -40,7 +40,6 @@ pub enum TaskPriority {
     Medium,
     Low,
 }
-
 
 #[derive(Debug, FromRow, PartialEq, Serialize)]
 // Debug: 允许你用 {:?} 格式化打印这个结构体
@@ -314,7 +313,9 @@ pub async fn get_resource_by_id(
     .await
 }
 
-pub async fn list_unclassified_resources(pool: &SqlitePool) -> Result<Vec<ResourceRecord>, sqlx::Error> {
+pub async fn list_unclassified_resources(
+    pool: &SqlitePool,
+) -> Result<Vec<ResourceRecord>, sqlx::Error> {
     sqlx::query_as::<_, ResourceRecord>(
         "SELECT resource_id, uuid, source_meta, file_hash, file_type, content, display_name, \
                 file_path, file_size_bytes, indexed_hash, processing_hash, sync_status, last_indexed_at, last_error, processing_stage, classification_status, created_at, is_deleted, deleted_at, user_id \
@@ -390,18 +391,23 @@ mod tests {
         let pool = init_pool(&db_path).await.unwrap();
 
         let task_uuid = Uuid::new_v4().to_string();
-        let task_id = insert_task(&pool, NewTask {
-            uuid: &task_uuid,
-            title: Some("Demo Task"),
-            description: Some("desc"),
-            parent_task_id: None,
-            root_task_id: None,
-            suggested_subtasks: None,
-            due_date: None,
-            status: TaskStatus::Inbox,
-            priority: TaskPriority::Medium,
-            user_id: 1,
-        }).await.unwrap();
+        let task_id = insert_task(
+            &pool,
+            NewTask {
+                uuid: &task_uuid,
+                title: Some("Demo Task"),
+                description: Some("desc"),
+                parent_task_id: None,
+                root_task_id: None,
+                suggested_subtasks: None,
+                due_date: None,
+                status: TaskStatus::Inbox,
+                priority: TaskPriority::Medium,
+                user_id: 1,
+            },
+        )
+        .await
+        .unwrap();
         assert!(task_id > 0);
         let task = get_task_by_id(&pool, task_id).await.unwrap();
         assert_eq!(task.uuid, task_uuid);
@@ -411,30 +417,38 @@ mod tests {
         assert!(!task.is_deleted);
 
         let resource_uuid = Uuid::new_v4().to_string();
-        let resource_id = insert_resource(&pool, NewResource {
-            uuid: &resource_uuid,
-            source_meta: None,
-            file_hash: "hash-demo",
-            file_type: ResourceFileType::Text,
-            content: None,
-            display_name: Some("demo.txt"),
-            file_path: None,
-            file_size_bytes: None,
-            indexed_hash: None,
-            processing_hash: None,
-            sync_status: ResourceSyncStatus::Pending,
-            last_indexed_at: None,
-            last_error: None,
-            processing_stage: ResourceProcessingStage::Todo,
-            classification_status: ResourceClassificationStatus::Unclassified,
-            user_id: 1,
-        }).await.unwrap();
+        let resource_id = insert_resource(
+            &pool,
+            NewResource {
+                uuid: &resource_uuid,
+                source_meta: None,
+                file_hash: "hash-demo",
+                file_type: ResourceFileType::Text,
+                content: None,
+                display_name: Some("demo.txt"),
+                file_path: None,
+                file_size_bytes: None,
+                indexed_hash: None,
+                processing_hash: None,
+                sync_status: ResourceSyncStatus::Pending,
+                last_indexed_at: None,
+                last_error: None,
+                processing_stage: ResourceProcessingStage::Todo,
+                classification_status: ResourceClassificationStatus::Unclassified,
+                user_id: 1,
+            },
+        )
+        .await
+        .unwrap();
         assert!(resource_id > 0);
         let resource = get_resource_by_id(&pool, resource_id).await.unwrap();
         assert_eq!(resource.uuid, resource_uuid);
         assert_eq!(resource.file_hash, "hash-demo");
         assert_eq!(resource.file_type, ResourceFileType::Text);
-        assert_eq!(resource.classification_status, ResourceClassificationStatus::Unclassified);
+        assert_eq!(
+            resource.classification_status,
+            ResourceClassificationStatus::Unclassified
+        );
         assert_eq!(resource.sync_status, ResourceSyncStatus::Pending);
         assert_eq!(resource.processing_stage, ResourceProcessingStage::Todo);
         assert_eq!(resource.user_id, 1);

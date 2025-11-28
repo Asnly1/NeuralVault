@@ -97,9 +97,7 @@ async fn notify_python(resource_uuid: String) {
 }
 
 // 这个宏将 Rust 函数 capture_resource 标记为可供前端调用的命令
-// rename = "quick_capture" 意味着前端 JS 调用时使用 invoke('quick_capture', ...)
-// 而不是函数名 capture_resource
-#[tauri::command(rename = "quick_capture")]
+#[tauri::command]
 pub async fn capture_resource(
     state: State<'_, AppState>,
     payload: CaptureRequest,
@@ -152,7 +150,7 @@ pub async fn capture_resource(
                 } else {
                     // 尝试取前 21 个字符
                     let chars: Vec<char> = trimmed.chars().take(21).collect();
-                    
+
                     if chars.len() > 20 {
                         // 如果拿到了 21 个，说明原库肯定超过 20 个
                         // 取前 20 个拼上省略号
@@ -208,7 +206,7 @@ pub async fn capture_resource(
     // 前端用户看到“保存成功”
     // 与此同时，Rust 的后台运行时（Runtime，底层通常是 Tokio）会找一个空闲线程来执行 notify_python
     // 如果 Python 通知的慢，或者失败了，完全不影响用户在前台的感知
-    
+
     Ok(CaptureResponse {
         resource_id,
         resource_uuid,
@@ -254,7 +252,9 @@ pub async fn create_task(
 pub async fn get_dashboard(state: State<'_, AppState>) -> Result<DashboardData, String> {
     let pool = &state.db;
     let tasks = list_active_tasks(pool).await.map_err(|e| e.to_string())?;
-    let resources = list_unclassified_resources(pool).await.map_err(|e| e.to_string())?;
+    let resources = list_unclassified_resources(pool)
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(DashboardData { tasks, resources })
 }
 

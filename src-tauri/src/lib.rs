@@ -50,6 +50,7 @@ pub fn run() {
     let shortcut = Shortcut::new(Some(Modifiers::ALT), Code::Space);
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         // move: 将 shortcut 的所有权移入闭包，因为闭包需要 'static 生命周期
         .setup(move |app| {
             // ========== 数据库初始化 ==========

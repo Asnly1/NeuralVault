@@ -1,183 +1,165 @@
 /* ============================================
-   HUD - Raycast 风格悬浮输入窗
+   HUD - 悬浮输入窗样式覆盖
+   基于 QuickCapture 组件，通过 .quick-capture-hud 类添加 HUD 特定样式
    ============================================ */
 
-.hud-container {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  -webkit-app-region: drag;
-}
-
-.hud-form {
-  width: 100%;
-  max-width: 680px;
-  height: 56px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 0 16px;
+/* HUD 容器 - 全屏居中，透明背景 */
+.quick-capture-hud {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90%;
+  max-width: 640px;
   background: rgba(22, 27, 34, 0.92);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.3),
-    0 8px 40px rgba(0, 0, 0, 0.5),
-    0 2px 12px rgba(0, 0, 0, 0.3);
-  -webkit-app-region: no-drag;
+    0 16px 70px rgba(0, 0, 0, 0.5),
+    0 4px 16px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
 }
 
-/* Logo/Icon */
-.hud-icon {
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+/* 文件预览 */
+.quick-capture-hud .capture-file-preview {
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 10px 16px;
 }
 
-.hud-logo {
-  font-size: 18px;
-  color: #6e7681;
-  transition: color 0.2s ease;
+.quick-capture-hud .file-info {
+  gap: 10px;
 }
 
-.hud-form:focus-within .hud-logo {
-  color: #58a6ff;
+.quick-capture-hud .file-icon {
+  font-size: 16px;
 }
 
-.hud-spinner {
-  font-size: 18px;
-  color: #58a6ff;
-  animation: spin 1s linear infinite;
+.quick-capture-hud .file-name {
+  color: #e6edf3;
+  font-size: 13px;
 }
 
-.hud-success {
-  font-size: 18px;
-  color: #3fb950;
-  animation: pop 0.3s ease;
+.quick-capture-hud .file-remove {
+  color: #8b949e;
 }
 
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.quick-capture-hud .file-remove:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e6edf3;
 }
 
-@keyframes pop {
-  0% {
-    transform: scale(0.5);
-    opacity: 0;
-  }
-  50% {
-    transform: scale(1.2);
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
+/* 输入区域 */
+.quick-capture-hud .capture-input-area {
+  padding: 16px 16px 8px;
 }
 
-/* Input */
-.hud-input {
-  flex: 1;
-  height: 100%;
-  border: none;
+.quick-capture-hud .capture-textarea {
   background: transparent;
   color: #e6edf3;
-  font-size: 16px;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans",
-    Helvetica, Arial, sans-serif;
-  font-weight: 400;
-  letter-spacing: -0.01em;
-  outline: none;
+  font-size: 15px;
+  min-height: 24px;
 }
 
-.hud-input::placeholder {
-  color: #484f58;
-  font-weight: 400;
+.quick-capture-hud .capture-textarea::placeholder {
+  color: #6e7681;
 }
 
-.hud-input:disabled {
-  opacity: 0.6;
+/* 工具栏 */
+.quick-capture-hud .capture-toolbar {
+  padding: 8px 12px 14px;
+  border-top: none;
 }
 
-/* Submit Button */
-.hud-submit {
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: 6px;
-  background: rgba(88, 166, 255, 0.15);
+.quick-capture-hud .toolbar-btn {
+  background: rgba(255, 255, 255, 0.06);
+  color: #8b949e;
+  border-radius: 8px;
+}
+
+.quick-capture-hud .toolbar-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  color: #e6edf3;
+}
+
+.quick-capture-hud .capture-submit {
+  background: rgba(88, 166, 255, 0.2);
   color: #58a6ff;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s ease;
-  flex-shrink: 0;
 }
 
-.hud-submit:hover {
-  background: rgba(88, 166, 255, 0.25);
+.quick-capture-hud .capture-submit:hover:not(:disabled) {
+  background: rgba(88, 166, 255, 0.3);
 }
 
-.hud-submit:active {
-  transform: scale(0.95);
+.quick-capture-hud .capture-submit:disabled {
+  background: rgba(255, 255, 255, 0.06);
+  color: #6e7681;
 }
 
 /* ============================================
-   Responsive
+   浅色模式
    ============================================ */
 
 @media (prefers-color-scheme: light) {
-  .hud-form {
-    background: rgba(255, 255, 255, 0.92);
+  .quick-capture-hud {
+    background: rgba(255, 255, 255, 0.95);
     border-color: rgba(0, 0, 0, 0.1);
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.1),
+      0 16px 70px rgba(0, 0, 0, 0.2),
+      0 4px 16px rgba(0, 0, 0, 0.1);
   }
 
-  .hud-input {
+  .quick-capture-hud .capture-file-preview {
+    background: rgba(0, 0, 0, 0.03);
+    border-bottom-color: rgba(0, 0, 0, 0.08);
+  }
+
+  .quick-capture-hud .file-name {
     color: #1f2328;
   }
 
-  .hud-input::placeholder {
+  .quick-capture-hud .file-remove {
+    color: #656d76;
+  }
+
+  .quick-capture-hud .file-remove:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: #1f2328;
+  }
+
+  .quick-capture-hud .capture-textarea {
+    color: #1f2328;
+  }
+
+  .quick-capture-hud .capture-textarea::placeholder {
     color: #8c959f;
   }
 
-  .hud-logo {
+  .quick-capture-hud .toolbar-btn {
+    background: rgba(0, 0, 0, 0.05);
+    color: #656d76;
+  }
+
+  .quick-capture-hud .toolbar-btn:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.1);
+    color: #1f2328;
+  }
+
+  .quick-capture-hud .capture-submit {
+    background: rgba(9, 105, 218, 0.15);
+    color: #0969da;
+  }
+
+  .quick-capture-hud .capture-submit:hover:not(:disabled) {
+    background: rgba(9, 105, 218, 0.25);
+  }
+
+  .quick-capture-hud .capture-submit:disabled {
+    background: rgba(0, 0, 0, 0.05);
     color: #8c959f;
-  }
-
-  .hud-form:focus-within .hud-logo {
-    color: #0969da;
-  }
-
-  .hud-spinner,
-  .hud-submit {
-    color: #0969da;
-  }
-
-  .hud-submit {
-    background: rgba(9, 105, 218, 0.1);
-  }
-
-  .hud-submit:hover {
-    background: rgba(9, 105, 218, 0.2);
-  }
-
-  .hud-success {
-    color: #1a7f37;
   }
 }
-
