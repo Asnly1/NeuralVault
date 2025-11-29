@@ -3,7 +3,7 @@ import { z } from "zod";
 import "./App.css";
 
 import { Task, Resource, PageType } from "./types";
-import { fetchDashboardData, quickCapture, seedDemoData } from "./api";
+import { fetchDashboardData, quickCapture, seedDemoData, linkResource } from "./api";
 import { Sidebar } from "./components";
 import { DashboardPage, WorkspacePage, SettingsPage } from "./pages";
 
@@ -118,6 +118,22 @@ function App() {
     setCurrentPage("dashboard");
   }, []);
 
+  // 关联资源到任务
+  const handleLinkResource = useCallback(
+    async (resourceId: number, taskId: number) => {
+      setError(null);
+      try {
+        await linkResource({ resource_id: resourceId, task_id: taskId });
+        // 关联成功后刷新数据，资源会从未分类列表中消失
+        await reloadData();
+      } catch (err) {
+        console.error(err);
+        setError("关联资源失败");
+      }
+    },
+    [reloadData]
+  );
+
   useEffect(() => {
     let ignore = false;
 
@@ -164,6 +180,7 @@ function App() {
             onSeed={handleSeed}
             onRefresh={reloadData}
             onSelectTask={handleSelectTask}
+            onLinkResource={handleLinkResource}
           />
         )}
 

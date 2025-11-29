@@ -7,6 +7,8 @@ import {
   CaptureRequest,
   CaptureResponse,
   SeedResponse,
+  LinkResourceRequest,
+  LinkResourceResponse,
 } from "../types";
 
 // ============================================
@@ -54,6 +56,28 @@ export const quickCapture = async (
   request: CaptureRequest
 ): Promise<CaptureResponse> => {
   return await invoke("capture_resource", { payload: request });
+};
+
+/**
+ * 将资源关联到任务
+ * @param request - 关联请求参数
+ */
+export const linkResource = async (
+  request: LinkResourceRequest
+): Promise<LinkResourceResponse> => {
+  return await invoke("link_resource", { payload: request });
+};
+
+/**
+ * 取消资源与任务的关联
+ * @param taskId - 任务 ID
+ * @param resourceId - 资源 ID
+ */
+export const unlinkResource = async (
+  taskId: number,
+  resourceId: number
+): Promise<LinkResourceResponse> => {
+  return await invoke("unlink_resource", { task_id: taskId, resource_id: resourceId });
 };
 
 // ============================================

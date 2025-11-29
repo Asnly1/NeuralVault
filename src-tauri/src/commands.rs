@@ -8,10 +8,11 @@ use uuid::Uuid;
 
 use crate::{
     db::{
-        get_task_by_id, insert_resource, insert_task, list_active_tasks,
-        list_unclassified_resources, NewResource, NewTask, ResourceClassificationStatus,
-        ResourceFileType, ResourceProcessingStage, ResourceRecord, ResourceSyncStatus, SourceMeta,
-        TaskPriority, TaskRecord, TaskStatus,
+        get_task_by_id, insert_resource, insert_task, link_resource_to_task, list_active_tasks,
+        list_unclassified_resources, unlink_resource_from_task, LinkResourceParams, NewResource,
+        NewTask, ResourceClassificationStatus, ResourceFileType, ResourceProcessingStage,
+        ResourceRecord, ResourceSyncStatus, SourceMeta, TaskPriority, TaskRecord, TaskStatus,
+        VisibilityScope,
     },
     AppState,
 };
@@ -367,6 +368,69 @@ pub async fn get_dashboard(state: State<'_, AppState>) -> Result<DashboardData, 
     Ok(DashboardData { tasks, resources })
 }
 
+/// 关联资源到任务的请求
+#[derive(Debug, Deserialize)]
+pub struct LinkResourceRequest {
+    pub task_id: i64,
+    pub resource_id: i64,
+    /// 可见范围: "this" | "subtree" | "global"
+    pub visibility_scope: Option<String>,
+    /// 本地别名，可在任务上下文中给资源起个别名
+    pub local_alias: Option<String>,
+}
+
+/// 关联/取消关联资源的响应
+#[derive(Debug, Serialize)]
+pub struct LinkResourceResponse {
+    pub success: bool,
+}
+
+
+/// 将资源关联到任务
+#[tauri::command]
+pub async fn link_resource(
+    state: State<'_, AppState>,
+    payload: LinkResourceRequest,
+) -> Result<LinkResourceResponse, String> {
+    let pool = &state.db;
+
+    // 解析可见范围，默认为 subtree
+    let visibility_scope = match payload.visibility_scope.as_deref() {
+        Some("this") => VisibilityScope::This,
+        Some("global") => VisibilityScope::Global,
+        _ => VisibilityScope::Subtree,
+    };
+
+    link_resource_to_task(
+        pool,
+        LinkResourceParams {
+            task_id: payload.task_id,
+            resource_id: payload.resource_id,
+            visibility_scope,
+            local_alias: payload.local_alias.as_deref(),
+        },
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(LinkResourceResponse { success: true })
+}
+
+/// 取消资源与任务的关联
+#[tauri::command]
+pub async fn unlink_resource(
+    state: State<'_, AppState>,
+    task_id: i64,
+    resource_id: i64,
+) -> Result<LinkResourceResponse, String> {
+    let pool = &state.db;
+
+    unlink_resource_from_task(pool, task_id, resource_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(LinkResourceResponse { success: true })
+}
 #[derive(Debug, Serialize)]
 pub struct SeedResponse {
     pub tasks_created: usize,

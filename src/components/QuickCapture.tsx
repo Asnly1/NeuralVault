@@ -141,7 +141,6 @@ export function QuickCapture({
             extensions: [
               "txt",
               "md",
-              "json",
               "pdf",
               "png",
               "jpg",
@@ -153,7 +152,7 @@ export function QuickCapture({
           },
           {
             name: "文本文件",
-            extensions: ["txt", "md", "json", "csv", "xml", "html", "css", "js", "ts"],
+            extensions: ["txt", "md"],
           },
           {
             name: "图片",
@@ -199,7 +198,9 @@ export function QuickCapture({
         {selectedFile && (
           <div className="capture-file-preview">
             <div className="file-info">
-              <span className="file-icon">{getFileIcon(selectedFile.name)}</span>
+              <span className="file-icon">
+                {getFileIcon(selectedFile.name)}
+              </span>
               <span className="file-name">{selectedFile.name}</span>
             </div>
             <button

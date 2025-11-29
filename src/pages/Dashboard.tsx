@@ -11,6 +11,7 @@ interface DashboardPageProps {
   onSeed: () => void;
   onRefresh: () => void;
   onSelectTask: (task: Task) => void;
+  onLinkResource: (resourceId: number, taskId: number) => Promise<void>;
 }
 
 const columns: { key: TaskStatus; label: string; emoji: string }[] = [
@@ -28,6 +29,7 @@ export function DashboardPage({
   onSeed,
   onRefresh,
   onSelectTask,
+  onLinkResource,
 }: DashboardPageProps) {
   // useMemo: 只有当 tasks 这个数据发生变化时，才重新运行里面的分组逻辑；否则，请直接给我上次算好的结果
   const groupedTasks = useMemo(() => {
@@ -124,7 +126,12 @@ export function DashboardPage({
         {resources.length > 0 ? (
           <div className="resources-grid">
             {resources.map((res) => (
-              <ResourceCard key={res.resource_id} resource={res} />
+              <ResourceCard
+                key={res.resource_id}
+                resource={res}
+                tasks={tasks}
+                onLinkToTask={onLinkResource}
+              />
             ))}
           </div>
         ) : (

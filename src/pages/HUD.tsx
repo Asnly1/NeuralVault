@@ -13,7 +13,7 @@ function getFileTypeFromPath(filePath: string): string {
   }
   if (ext === "pdf") return "pdf";
   if (ext === "epub") return "epub";
-  if (["txt", "md", "json", "csv", "xml", "html", "css", "js", "ts"].includes(ext)) {
+  if (["txt", "md"].includes(ext)) {
     return "text";
   }
   return "other";
@@ -21,22 +21,25 @@ function getFileTypeFromPath(filePath: string): string {
 
 export function HUDPage() {
   // 处理捕获
-  const handleCapture = useCallback(async (content: string, filePath?: string) => {
-    if (filePath) {
-      // 有文件：传递文件路径给 Rust
-      await quickCapture({
-        file_path: filePath,
-        file_type: getFileTypeFromPath(filePath),
-        content: content || undefined,
-      });
-    } else if (content) {
-      // 纯文本
-      await quickCapture({
-        content,
-        file_type: "text",
-      });
-    }
-  }, []);
+  const handleCapture = useCallback(
+    async (content: string, filePath?: string) => {
+      if (filePath) {
+        // 有文件：传递文件路径给 Rust
+        await quickCapture({
+          file_path: filePath,
+          file_type: getFileTypeFromPath(filePath),
+          content: content || undefined,
+        });
+      } else if (content) {
+        // 纯文本
+        await quickCapture({
+          content,
+          file_type: "text",
+        });
+      }
+    },
+    []
+  );
 
   // 隐藏窗口
   const handleHide = useCallback(() => {

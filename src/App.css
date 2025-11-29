@@ -835,6 +835,112 @@ body {
   color: var(--text-muted);
 }
 
+/* 资源卡片关联按钮 */
+.resource-actions {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.resource-link-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.resource-link-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--border-focus);
+  color: var(--text-primary);
+}
+
+.resource-link-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 任务选择下拉菜单 */
+.resource-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 6px;
+  min-width: 220px;
+  max-width: 300px;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  z-index: 1000;
+  animation: dropdown-fade-in 0.15s ease;
+}
+
+@keyframes dropdown-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dropdown-header {
+  padding: 10px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+}
+
+.dropdown-list {
+  list-style: none;
+  padding: 6px;
+  margin: 0;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.dropdown-item:hover {
+  background: var(--bg-hover);
+}
+
+.dropdown-item-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.dropdown-item-text {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .resources-empty {
   padding: 48px 24px;
   border: 1px dashed var(--border-default);

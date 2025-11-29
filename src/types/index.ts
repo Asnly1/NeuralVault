@@ -159,3 +159,22 @@ export interface SeedResponse {
   tasks_created: number;
   resources_created: number;
 }
+
+/**
+ * 关联资源到任务请求 (对应 Rust: LinkResourceRequest)
+ */
+export interface LinkResourceRequest {
+  task_id: number;
+  resource_id: number;
+  /** 可见范围: "this" | "subtree" | "global" */
+  visibility_scope?: string;
+  /** 本地别名，可在任务上下文中给资源起个别名 */
+  local_alias?: string;
+}
+
+/**
+ * 关联/取消关联资源响应 (对应 Rust: LinkResourceResponse)
+ */
+export interface LinkResourceResponse {
+  success: boolean;
+}

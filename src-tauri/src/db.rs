@@ -342,6 +342,44 @@ pub async fn link_resource_to_task(
     .execute(pool)
     .await?;
 
+    // 更新资源分类状态为 linked
+    sqlx::query("UPDATE resources SET classification_status = 'linked' WHERE resource_id = ?")
+        .bind(params.resource_id)
+        .execute(pool)
+        .await?;
+
+    Ok(())
+}
+
+/// 取消资源与任务的关联，并将资源状态改回 unclassified
+pub async fn unlink_resource_from_task(
+    pool: &SqlitePool,
+    task_id: i64,
+    resource_id: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "DELETE FROM task_resource_link WHERE task_id = ? AND resource_id = ?",
+    )
+    .bind(task_id)
+    .bind(resource_id)
+    .execute(pool)
+    .await?;
+
+    // 检查资源是否还有其他关联，如果没有则恢复为 unclassified
+    let count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM task_resource_link WHERE resource_id = ?",
+    )
+    .bind(resource_id)
+    .fetch_one(pool)
+    .await?;
+
+    if count == 0 {
+        sqlx::query("UPDATE resources SET classification_status = 'unclassified' WHERE resource_id = ?")
+            .bind(resource_id)
+            .execute(pool)
+            .await?;
+    }
+
     Ok(())
 }
 
