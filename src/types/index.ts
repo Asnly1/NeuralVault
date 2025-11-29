@@ -178,3 +178,10 @@ export interface LinkResourceRequest {
 export interface LinkResourceResponse {
   success: boolean;
 }
+
+/**
+ * 获取任务关联资源响应 (对应 Rust: TaskResourcesResponse)
+ */
+export interface TaskResourcesResponse {
+  resources: Resource[];
+}

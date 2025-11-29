@@ -9,10 +9,10 @@ use uuid::Uuid;
 use crate::{
     db::{
         get_task_by_id, insert_resource, insert_task, link_resource_to_task, list_active_tasks,
-        list_unclassified_resources, unlink_resource_from_task, LinkResourceParams, NewResource,
-        NewTask, ResourceClassificationStatus, ResourceFileType, ResourceProcessingStage,
-        ResourceRecord, ResourceSyncStatus, SourceMeta, TaskPriority, TaskRecord, TaskStatus,
-        VisibilityScope,
+        list_resources_for_task, list_unclassified_resources, unlink_resource_from_task,
+        LinkResourceParams, NewResource, NewTask, ResourceClassificationStatus, ResourceFileType,
+        ResourceProcessingStage, ResourceRecord, ResourceSyncStatus, SourceMeta, TaskPriority,
+        TaskRecord, TaskStatus, VisibilityScope,
     },
     AppState,
 };
@@ -431,6 +431,28 @@ pub async fn unlink_resource(
 
     Ok(LinkResourceResponse { success: true })
 }
+
+/// 获取任务关联资源的响应
+#[derive(Debug, Serialize)]
+pub struct TaskResourcesResponse {
+    pub resources: Vec<ResourceRecord>,
+}
+
+/// 获取任务关联的资源列表
+#[tauri::command]
+pub async fn get_task_resources(
+    state: State<'_, AppState>,
+    task_id: i64,
+) -> Result<TaskResourcesResponse, String> {
+    let pool = &state.db;
+
+    let resources = list_resources_for_task(pool, task_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(TaskResourcesResponse { resources })
+}
+
 #[derive(Debug, Serialize)]
 pub struct SeedResponse {
     pub tasks_created: usize,

@@ -9,7 +9,10 @@ import {
   SeedResponse,
   LinkResourceRequest,
   LinkResourceResponse,
+  TaskResourcesResponse,
+  resourceSchema,
 } from "../types";
+import { z } from "zod";
 
 // ============================================
 // Dashboard API
@@ -77,7 +80,24 @@ export const unlinkResource = async (
   taskId: number,
   resourceId: number
 ): Promise<LinkResourceResponse> => {
-  return await invoke("unlink_resource", { task_id: taskId, resource_id: resourceId });
+  return await invoke("unlink_resource", { taskId, resourceId });
+};
+
+/**
+ * 获取任务关联的资源列表
+ * @param taskId - 任务 ID
+ */
+export const fetchTaskResources = async (
+  taskId: number
+): Promise<TaskResourcesResponse> => {
+  const raw = await invoke("get_task_resources", { taskId });
+  // 校验并转换资源数据
+  const parsed = z
+    .object({
+      resources: z.array(resourceSchema).default([]),
+    })
+    .parse(raw);
+  return parsed;
 };
 
 // ============================================

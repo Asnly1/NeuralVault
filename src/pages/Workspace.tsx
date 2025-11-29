@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { Task, priorityConfig } from "../types";
+import { useState, useEffect } from "react";
+import { Task, Resource, priorityConfig, resourceTypeIcons } from "../types";
+import { fetchTaskResources } from "../api";
 
 interface WorkspacePageProps {
   selectedTask: Task | null;
@@ -8,6 +9,43 @@ interface WorkspacePageProps {
 
 export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
   const [chatInput, setChatInput] = useState("");
+  const [linkedResources, setLinkedResources] = useState<Resource[]>([]);
+  const [loadingResources, setLoadingResources] = useState(false);
+
+  // 加载任务关联的资源
+  useEffect(() => {
+    if (!selectedTask) {
+      setLinkedResources([]);
+      return;
+    }
+
+    let ignore = false;
+
+    const loadResources = async () => {
+      setLoadingResources(true);
+      try {
+        const data = await fetchTaskResources(selectedTask.task_id);
+        if (!ignore) {
+          setLinkedResources(data.resources);
+        }
+      } catch (err) {
+        console.error("加载关联资源失败:", err);
+        if (!ignore) {
+          setLinkedResources([]);
+        }
+      } finally {
+        if (!ignore) {
+          setLoadingResources(false);
+        }
+      }
+    };
+
+    loadResources();
+
+    return () => {
+      ignore = true;
+    };
+  }, [selectedTask]);
 
   if (!selectedTask) {
     return (
@@ -79,10 +117,32 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
           </div>
 
           <div className="context-section">
-            <h3 className="context-title">关联资源</h3>
-            <div className="context-empty">
-              <span>暂无关联资源</span>
-            </div>
+            <h3 className="context-title">
+              关联资源
+              {linkedResources.length > 0 && (
+                <span className="context-count">{linkedResources.length}</span>
+              )}
+            </h3>
+            {loadingResources ? (
+              <div className="context-loading">加载中...</div>
+            ) : linkedResources.length > 0 ? (
+              <ul className="context-resources">
+                {linkedResources.map((resource) => (
+                  <li key={resource.resource_id} className="context-resource-item">
+                    <span className="context-resource-icon">
+                      {resourceTypeIcons[resource.file_type]}
+                    </span>
+                    <span className="context-resource-name">
+                      {resource.display_name || "未命名文件"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="context-empty">
+                <span>暂无关联资源</span>
+              </div>
+            )}
           </div>
         </aside>
 
