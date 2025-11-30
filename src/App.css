@@ -1517,6 +1517,294 @@ body {
 }
 
 /* ============================================
+   Tiptap 编辑器样式
+   ============================================ */
+
+.tiptap-editor-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-card);
+}
+
+/* 工具栏 */
+.tiptap-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 14px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-wrap: wrap;
+}
+
+.tiptap-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.tiptap-toolbar-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.tiptap-toolbar-btn.active {
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+
+.tiptap-toolbar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tiptap-toolbar-btn code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.tiptap-toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border-subtle);
+  margin: 0 6px;
+}
+
+/* 编辑器容器 */
+.tiptap-editor {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+}
+
+/* 编辑器内容区 */
+.tiptap-editor-content {
+  min-height: 100%;
+  padding: 24px 32px;
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.7;
+  outline: none;
+}
+
+/* 占位符 */
+.tiptap-editor-content:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-muted);
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
+
+/* 标题样式 */
+.tiptap-editor-content h1 {
+  font-size: 2em;
+  font-weight: 700;
+  margin: 1.5em 0 0.5em;
+  color: var(--text-primary);
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+}
+
+.tiptap-editor-content h1:first-child {
+  margin-top: 0;
+}
+
+.tiptap-editor-content h2 {
+  font-size: 1.5em;
+  font-weight: 600;
+  margin: 1.4em 0 0.5em;
+  color: var(--text-primary);
+  line-height: 1.35;
+}
+
+.tiptap-editor-content h3 {
+  font-size: 1.25em;
+  font-weight: 600;
+  margin: 1.3em 0 0.4em;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.tiptap-editor-content h4,
+.tiptap-editor-content h5,
+.tiptap-editor-content h6 {
+  font-size: 1.1em;
+  font-weight: 600;
+  margin: 1.2em 0 0.4em;
+  color: var(--text-primary);
+}
+
+/* 段落 */
+.tiptap-editor-content p {
+  margin: 0 0 1em;
+}
+
+/* 粗体和斜体 */
+.tiptap-editor-content strong {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tiptap-editor-content em {
+  font-style: italic;
+}
+
+/* 删除线 */
+.tiptap-editor-content s {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+/* 行内代码 */
+.tiptap-editor-content code {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  color: var(--accent);
+}
+
+/* 代码块 */
+.tiptap-editor-content pre {
+  margin: 1em 0;
+  padding: 16px 20px;
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  overflow-x: auto;
+}
+
+.tiptap-editor-content pre code {
+  padding: 0;
+  background: transparent;
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+/* 引用块 */
+.tiptap-editor-content blockquote {
+  margin: 1em 0;
+  padding: 12px 20px;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-subtle);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.tiptap-editor-content blockquote p {
+  margin: 0;
+}
+
+/* 列表 */
+.tiptap-editor-content ul,
+.tiptap-editor-content ol {
+  margin: 1em 0;
+  padding-left: 1.5em;
+}
+
+.tiptap-editor-content li {
+  margin: 0.3em 0;
+}
+
+.tiptap-editor-content ul {
+  list-style-type: disc;
+}
+
+.tiptap-editor-content ol {
+  list-style-type: decimal;
+}
+
+.tiptap-editor-content li > ul,
+.tiptap-editor-content li > ol {
+  margin: 0.2em 0;
+}
+
+/* 分隔线 */
+.tiptap-editor-content hr {
+  margin: 2em 0;
+  border: none;
+  border-top: 1px solid var(--border-default);
+}
+
+/* 链接 */
+.tiptap-editor-content a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.tiptap-editor-content a:hover {
+  color: var(--accent-hover);
+}
+
+/* 编辑器内容区有编辑器时的样式 */
+.editor-content.has-editor {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+.editor-content.has-editor .tiptap-editor-wrapper {
+  width: 100%;
+  height: 100%;
+}
+
+/* 资源列表选中状态 */
+.context-resource-item.active {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+}
+
+.context-resource-item.active .context-resource-name {
+  color: var(--accent);
+}
+
+/* 可编辑标记 */
+.context-resource-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* 面包屑资源名称 */
+.breadcrumb-resource {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+/* 未保存指示器 */
+.modified-indicator {
+  margin-left: auto;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.15);
+  color: var(--status-syncing);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* ============================================
    响应式适配
    ============================================ */
 

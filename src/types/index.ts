@@ -50,6 +50,8 @@ export const resourceSchema = z.object({
   file_type: z.enum(resourceTypeValues),
   classification_status: z.enum(classificationValues),
   created_at: z.coerce.date().nullable(),
+  content: z.string().nullable().optional(),
+  file_path: z.string().nullable().optional(),
 });
 
 export const dashboardSchema = z.object({
