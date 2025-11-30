@@ -2,7 +2,6 @@ import { useEffect, useCallback } from "react";
 import { listen, emit } from "@tauri-apps/api/event";
 import { quickCapture } from "../api";
 import { QuickCapture } from "../components";
-import "./HUD.css";
 
 // 根据文件扩展名推断文件类型
 function getFileTypeFromPath(filePath: string): string {
@@ -60,12 +59,16 @@ export function HUDPage() {
   }, []);
 
   return (
-    <QuickCapture
-      variant="hud"
-      onCapture={handleCapture}
-      onSuccess={handleHide}
-      onCancel={handleHide}
-      autoFocus
-    />
+    <div className="h-screen w-screen flex items-center justify-center p-4 bg-transparent">
+      <div className="w-full max-w-lg">
+        <QuickCapture
+          variant="hud"
+          onCapture={handleCapture}
+          onSuccess={handleHide}
+          onCancel={handleHide}
+          autoFocus
+        />
+      </div>
+    </div>
   );
 }

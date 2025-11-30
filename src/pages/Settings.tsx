@@ -1,4 +1,9 @@
 import { useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 
 export function SettingsPage() {
   const [apiKey, setApiKey] = useState("");
@@ -7,109 +12,119 @@ export function SettingsPage() {
   const shortcut = "Alt + Space";
 
   return (
-    <div className="page-settings">
-      <header className="page-header">
-        <div className="header-title">
-          <h1>设置</h1>
-          <p className="header-subtitle">配置你的 NeuralVault</p>
-        </div>
+    <div className="flex flex-col h-full p-6 space-y-6">
+      {/* Header */}
+      <header className="shrink-0">
+        <h1 className="text-2xl font-bold tracking-tight">设置</h1>
+        <p className="text-muted-foreground">配置你的 NeuralVault</p>
       </header>
 
-      <div className="settings-content">
-        {/* API 配置 */}
-        <section className="settings-section">
-          <h2 className="settings-section-title">
-            <span className="section-icon">🔑</span>
-            API 配置
-          </h2>
+      <Separator />
 
-          <div className="settings-group">
-            <div className="setting-item">
-              <label className="setting-label">OpenAI API Key</label>
-              <input
+      {/* Settings Content */}
+      <div className="flex-1 space-y-6 overflow-auto">
+        {/* API Configuration */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <span>🔑</span>
+              API 配置
+            </CardTitle>
+            <CardDescription>配置 AI 模型的 API 密钥</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">OpenAI API Key</label>
+              <Input
                 type="password"
-                className="setting-input"
                 placeholder="sk-..."
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
               />
-              <p className="setting-hint">用于云端 AI 模型调用</p>
+              <p className="text-xs text-muted-foreground">
+                用于云端 AI 模型调用
+              </p>
             </div>
-          </div>
-        </section>
+          </CardContent>
+        </Card>
 
-        {/* 本地模型 */}
-        <section className="settings-section">
-          <h2 className="settings-section-title">
-            <span className="section-icon">🖥️</span>
-            本地模型
-          </h2>
-
-          <div className="settings-group">
-            <div className="setting-item">
-              <div className="setting-row">
-                <label className="setting-label">启用本地模型</label>
-                <button
-                  className={`toggle ${enableLocal ? "active" : ""}`}
-                  onClick={() => setEnableLocal(!enableLocal)}
-                >
-                  <span className="toggle-knob" />
-                </button>
+        {/* Local Model */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <span>🖥️</span>
+              本地模型
+            </CardTitle>
+            <CardDescription>使用本地运行的 LLM 模型</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <label className="text-sm font-medium">启用本地模型</label>
+                <p className="text-xs text-muted-foreground">
+                  使用 Ollama 运行本地 LLM
+                </p>
               </div>
-              <p className="setting-hint">使用 Ollama 运行本地 LLM</p>
+              <Switch
+                checked={enableLocal}
+                onCheckedChange={setEnableLocal}
+              />
             </div>
 
-            <div className="setting-item">
-              <label className="setting-label">Ollama URL</label>
-              <input
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Ollama URL</label>
+              <Input
                 type="text"
-                className="setting-input"
                 placeholder="http://127.0.0.1:11434"
                 value={modelPath}
                 onChange={(e) => setModelPath(e.target.value)}
                 disabled={!enableLocal}
               />
             </div>
-          </div>
-        </section>
+          </CardContent>
+        </Card>
 
-        {/* 快捷键 */}
-        <section className="settings-section">
-          <h2 className="settings-section-title">
-            <span className="section-icon">⌨️</span>
-            快捷键
-          </h2>
-
-          <div className="settings-group">
-            <div className="setting-item">
-              <label className="setting-label">快速捕获</label>
-              <div className="shortcut-display">
-                <kbd>{shortcut}</kbd>
+        {/* Shortcuts */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <span>⌨️</span>
+              快捷键
+            </CardTitle>
+            <CardDescription>查看和配置快捷键</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium">快速捕获</p>
+                <p className="text-xs text-muted-foreground">
+                  呼出悬浮输入窗
+                </p>
               </div>
-              <p className="setting-hint">呼出悬浮输入窗</p>
+              <Badge variant="secondary" className="font-mono">
+                {shortcut}
+              </Badge>
             </div>
-          </div>
-        </section>
+          </CardContent>
+        </Card>
 
-        {/* 关于 */}
-        <section className="settings-section">
-          <h2 className="settings-section-title">
-            <span className="section-icon">ℹ️</span>
-            关于
-          </h2>
-
-          <div className="about-info">
-            <p>
-              <strong>NeuralVault</strong>
-            </p>
-            <p className="about-version">Version 0.1.0 (MVP)</p>
-            <p className="about-desc">
+        {/* About */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <span>ℹ️</span>
+              关于
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <p className="text-lg font-semibold">NeuralVault</p>
+            <Badge variant="outline">Version 0.1.0 (MVP)</Badge>
+            <p className="text-sm text-muted-foreground pt-2">
               本地优先的智能第二大脑，基于 RAG 的个人助理。
             </p>
-          </div>
-        </section>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
 }
-

@@ -1,5 +1,10 @@
 import { FormEvent, useState, useRef, useEffect, KeyboardEvent } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 // variant: 组件变体，用于添加不同的 CSS 类
 // - "card": Dashboard 中的卡片样式（默认）
@@ -150,39 +155,26 @@ export function QuickCapture({
               "epub",
             ],
           },
-          {
-            name: "文本文件",
-            extensions: ["txt", "md"],
-          },
+          { name: "文本文件", extensions: ["txt", "md"] },
           {
             name: "图片",
             extensions: ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"],
           },
-          {
-            name: "文档",
-            extensions: ["pdf", "epub"],
-          },
-          {
-            name: "所有文件",
-            extensions: ["*"],
-          },
+          { name: "文档", extensions: ["pdf", "epub"] },
+          { name: "所有文件", extensions: ["*"] },
         ],
       });
 
       if (selected && typeof selected === "string") {
         const fileName =
           selected.split("/").pop() || selected.split("\\").pop() || "未知文件";
-        setSelectedFile({
-          path: selected,
-          name: fileName,
-        });
+        setSelectedFile({ path: selected, name: fileName });
       }
     } catch (err) {
       console.error("Failed to open file dialog:", err);
     }
   };
 
-  // 移除已选文件
   const handleRemoveFile = () => {
     setSelectedFile(null);
   };
@@ -190,101 +182,111 @@ export function QuickCapture({
   const isLoading = loading || isSubmitting;
   const canSubmit = (content.trim() || selectedFile) && !isLoading;
 
-  // 统一的 UI 结构，通过 variant 类名区分样式
-  return (
-    <div className={`quick-capture-gemini ${isHUD ? "quick-capture-hud" : ""}`}>
-      <form onSubmit={handleSubmit}>
-        {/* 已选文件预览 */}
-        {selectedFile && (
-          <div className="capture-file-preview">
-            <div className="file-info">
-              <span className="file-icon">
-                {getFileIcon(selectedFile.name)}
-              </span>
-              <span className="file-name">{selectedFile.name}</span>
-            </div>
-            <button
-              type="button"
-              className="file-remove"
-              onClick={handleRemoveFile}
-              title="移除文件"
-            >
-              ×
-            </button>
-          </div>
-        )}
+  const Wrapper = isHUD ? "div" : Card;
+  const ContentWrapper = isHUD ? "div" : CardContent;
 
-        {/* 输入区域 */}
-        <div className="capture-input-area">
-          <textarea
+  return (
+    <Wrapper
+      className={cn(
+        isHUD &&
+          "bg-background/80 backdrop-blur-lg border rounded-xl shadow-2xl"
+      )}
+    >
+      <ContentWrapper className={cn(!isHUD && "p-4", isHUD && "p-3")}>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          {/* Selected File Preview */}
+          {selectedFile && (
+            <div className="flex items-center justify-between gap-2 rounded-lg bg-muted px-3 py-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-sm">
+                  {getFileIcon(selectedFile.name)}
+                </span>
+                <span className="text-sm truncate">{selectedFile.name}</span>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0"
+                onClick={handleRemoveFile}
+              >
+                ×
+              </Button>
+            </div>
+          )}
+
+          {/* Textarea */}
+          <Textarea
             ref={textareaRef}
-            className="capture-textarea"
             placeholder={placeholder || defaultPlaceholder}
             value={content}
             onChange={(e) => setContent(e.target.value)}
             onKeyDown={handleKeyDown}
-            rows={1}
             disabled={isLoading}
             autoFocus={autoFocus}
+            className={cn(
+              "min-h-[40px] resize-none border-0 bg-transparent p-0 focus-visible:ring-0 focus-visible:ring-offset-0",
+              isHUD && "text-base"
+            )}
+            rows={1}
           />
-        </div>
 
-        {/* 底部工具栏 */}
-        <div className="capture-toolbar">
-          <div className="toolbar-left">
-            {/* 上传文件按钮 */}
-            <button
-              type="button"
-              className="toolbar-btn"
-              onClick={handleFileButtonClick}
-              disabled={isLoading}
-              title="选择文件"
-            >
-              <span className="toolbar-icon">+</span>
-            </button>
-          </div>
+          {/* Toolbar */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={handleFileButtonClick}
+                disabled={isLoading}
+                title="选择文件"
+              >
+                <span className="text-lg">+</span>
+              </Button>
+              {isHUD && (
+                <Badge variant="secondary" className="text-xs">
+                  Enter 发送 · Esc 关闭
+                </Badge>
+              )}
+            </div>
 
-          <div className="toolbar-right">
-            {/* 发送按钮 */}
-            <button
+            <Button
               type="submit"
-              className="capture-submit"
+              size="icon"
+              className="h-8 w-8 rounded-full"
               disabled={!canSubmit}
               title="发送 (Enter)"
             >
               {isLoading ? (
-                <span className="submit-loading">○</span>
+                <span className="animate-spin text-sm">○</span>
               ) : (
-                <span className="submit-icon">↑</span>
+                <span className="text-sm">↑</span>
               )}
-            </button>
+            </Button>
           </div>
-        </div>
-      </form>
-    </div>
+        </form>
+      </ContentWrapper>
+    </Wrapper>
   );
 }
 
-// 根据文件扩展名返回对应的图标
 function getFileIcon(fileName: string): string {
   const ext = fileName.split(".").pop()?.toLowerCase() || "";
 
   const iconMap: Record<string, string> = {
-    // 文本
     txt: "📄",
     md: "📝",
     json: "📋",
-    // 图片
     png: "🖼️",
     jpg: "🖼️",
     jpeg: "🖼️",
     gif: "🖼️",
     webp: "🖼️",
     svg: "🖼️",
-    // 文档
     pdf: "📕",
     epub: "📖",
-    // 代码
     js: "📜",
     ts: "📜",
     html: "🌐",

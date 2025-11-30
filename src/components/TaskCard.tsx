@@ -1,3 +1,6 @@
+import { cn } from "@/lib/utils";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Task, priorityConfig } from "../types";
 
 interface TaskCardProps {
@@ -7,35 +10,57 @@ interface TaskCardProps {
 
 export function TaskCard({ task, onClick }: TaskCardProps) {
   const isOverdue = task.due_date && new Date(task.due_date) < new Date();
+  const priority = priorityConfig[task.priority];
 
   return (
-    <article
-      className={`task-card ${isOverdue ? "overdue" : ""}`}
+    <Card
+      className={cn(
+        "cursor-pointer transition-all hover:shadow-md hover:border-primary/50",
+        isOverdue && "border-destructive/50 bg-destructive/5"
+      )}
       onClick={onClick}
     >
-      <div className="task-card-header">
-        <span
-          className="priority-dot"
-          style={{ background: priorityConfig[task.priority].color }}
-          title={`优先级: ${priorityConfig[task.priority].label}`}
-        />
-        <h4 className="task-title">{task.title || "未命名任务"}</h4>
-      </div>
+      <CardHeader className="p-3 pb-2">
+        <div className="flex items-start gap-2">
+          <span
+            className="mt-1.5 h-2 w-2 rounded-full shrink-0"
+            style={{ background: priority.color }}
+          />
+          <h4 className="text-sm font-medium leading-tight line-clamp-2">
+            {task.title || "未命名任务"}
+          </h4>
+        </div>
+      </CardHeader>
 
-      {task.description && <p className="task-desc">{task.description}</p>}
+      {task.description && (
+        <CardContent className="px-3 pb-2 pt-0">
+          <p className="text-xs text-muted-foreground line-clamp-2">
+            {task.description}
+          </p>
+        </CardContent>
+      )}
 
-      <div className="task-meta">
-        <span className={`priority-badge priority-${task.priority}`}>
-          {priorityConfig[task.priority].label}
-        </span>
+      <CardContent className="flex items-center gap-2 px-3 pb-3 pt-0">
+        <Badge
+          variant="secondary"
+          className="text-xs px-1.5 py-0"
+          style={{
+            backgroundColor: `${priority.color}20`,
+            color: priority.color,
+          }}
+        >
+          {priority.label}
+        </Badge>
         {task.due_date && (
-          <span className={`due-badge ${isOverdue ? "overdue" : ""}`}>
-            {isOverdue ? "⚠ " : ""}
+          <Badge
+            variant={isOverdue ? "destructive" : "outline"}
+            className="text-xs px-1.5 py-0"
+          >
+            {isOverdue && "⚠ "}
             {task.due_date.toLocaleDateString("zh-CN")}
-          </span>
+          </Badge>
         )}
-      </div>
-    </article>
+      </CardContent>
+    </Card>
   );
 }
-

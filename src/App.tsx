@@ -3,31 +3,33 @@ import { z } from "zod";
 import "./App.css";
 
 import { Task, Resource, PageType } from "./types";
-import { fetchDashboardData, quickCapture, seedDemoData, linkResource } from "./api";
+import {
+  fetchDashboardData,
+  quickCapture,
+  seedDemoData,
+  linkResource,
+} from "./api";
 import { Sidebar } from "./components";
 import { DashboardPage, WorkspacePage, SettingsPage } from "./pages";
 
 // 根据文件扩展名推断文件类型
 function getFileTypeFromPath(filePath: string): string {
   const ext = filePath.split(".").pop()?.toLowerCase() || "";
-  
-  // 图片类型
+
   if (["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"].includes(ext)) {
     return "image";
   }
-  // PDF
   if (ext === "pdf") {
     return "pdf";
   }
-  // EPUB
   if (ext === "epub") {
     return "epub";
   }
-  // 文本类型
-  if (["txt", "md", "json", "csv", "xml", "html", "css", "js", "ts"].includes(ext)) {
+  if (
+    ["txt", "md", "json", "csv", "xml", "html", "css", "js", "ts"].includes(ext)
+  ) {
     return "text";
   }
-  // 其他
   return "other";
 }
 
@@ -164,12 +166,12 @@ function App() {
   }, []);
 
   return (
-    <div className="app-container">
+    <div className="flex h-screen bg-background text-foreground">
       {/* Sidebar: 是一个函数，接收一个参数（通常称为 props，这里被解构成了 { currentPage, onNavigate }） */}
       {/* onNavigate: 一个接受PageType并返回void的函数吗 */}
       <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} />
 
-      <main className="main-content">
+      <main className="flex-1 min-w-0 overflow-hidden">
         {currentPage === "dashboard" && (
           <DashboardPage
             tasks={tasks}

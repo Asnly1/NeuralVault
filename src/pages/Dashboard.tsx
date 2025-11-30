@@ -1,4 +1,9 @@
 import { useMemo } from "react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import { Task, Resource, TaskStatus } from "../types";
 import { TaskCard, ResourceCard, QuickCapture } from "../components";
 
@@ -51,97 +56,124 @@ export function DashboardPage({
   }, [tasks]);
 
   return (
-    <div className="page-dashboard">
-      {/* 顶部栏 */}
-      <header className="page-header">
-        <div className="header-title">
-          <h1>智能看板</h1>
-          <p className="header-subtitle">管理你的任务与资源</p>
-        </div>
-        <div className="header-actions">
-          {loading ? (
-            <span className="status-badge syncing">同步中...</span>
-          ) : (
-            <span className="status-badge synced">已同步</span>
-          )}
-          <button className="btn-icon" onClick={onRefresh} title="刷新">
-            ↻
-          </button>
-          <button className="btn-secondary" onClick={onSeed}>
-            生成演示数据
-          </button>
-        </div>
-      </header>
-
-      {error && <div className="error-banner">{error}</div>}
-
-      {/* 快速输入区 */}
-      <section className="section-capture">
-        <QuickCapture onCapture={onCapture} loading={loading} />
-      </section>
-
-      {/* 任务看板 */}
-      <section className="section-board">
-        <div className="board-grid">
-          {columns.map((col) => (
-            <div key={col.key} className="board-column">
-              <div className="column-header">
-                <span className="column-emoji">{col.emoji}</span>
-                <h3 className="column-title">{col.label}</h3>
-                <span className="column-count">
-                  {groupedTasks[col.key].length}
-                </span>
-              </div>
-              <div className="column-content">
-                {groupedTasks[col.key].length > 0 ? (
-                  groupedTasks[col.key].map((task) => (
-                    <TaskCard
-                      key={task.task_id}
-                      task={task}
-                      onClick={() => onSelectTask(task)}
-                    />
-                  ))
-                ) : (
-                  <div className="column-empty">
-                    <span className="empty-icon">○</span>
-                    <span>暂无任务</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* 未分类资源 */}
-      <section className="section-resources">
-        <div className="section-header">
-          <h2>
-            <span className="section-icon">📂</span>
-            未分类资源
-          </h2>
-          <span className="resource-count">{resources.length} 项</span>
-        </div>
-
-        {resources.length > 0 ? (
-          <div className="resources-grid">
-            {resources.map((res) => (
-              <ResourceCard
-                key={res.resource_id}
-                resource={res}
-                tasks={tasks}
-                onLinkToTask={onLinkResource}
-              />
-            ))}
+    <ScrollArea className="h-full">
+      <div className="p-6 space-y-6">
+        {/* Header */}
+        <header className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">智能看板</h1>
+            <p className="text-muted-foreground">管理你的任务与资源</p>
           </div>
-        ) : (
-          <div className="resources-empty">
-            <span className="empty-icon">◇</span>
-            <p>没有未分类的资源</p>
-            <p className="empty-hint">使用快捷键 Alt + Space 快速捕获</p>
+          <div className="flex items-center gap-3">
+            <Badge variant={loading ? "secondary" : "outline"}>
+              {loading ? "同步中..." : "已同步"}
+            </Badge>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onRefresh}
+              title="刷新"
+            >
+              <span className="text-lg">↻</span>
+            </Button>
+            <Button variant="secondary" onClick={onSeed}>
+              生成演示数据
+            </Button>
+          </div>
+        </header>
+
+        {/* Error Banner */}
+        {error && (
+          <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-destructive text-sm">
+            {error}
           </div>
         )}
-      </section>
-    </div>
+
+        {/* Quick Capture */}
+        <section>
+          <QuickCapture onCapture={onCapture} loading={loading} />
+        </section>
+
+        <Separator />
+
+        {/* Task Board */}
+        <section>
+          <div className="grid grid-cols-3 gap-4">
+            {columns.map((col) => (
+              <Card key={col.key} className="flex flex-col max-h-[400px]">
+                <CardHeader className="pb-3 shrink-0">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2 text-base font-medium">
+                      <span>{col.emoji}</span>
+                      <span>{col.label}</span>
+                    </CardTitle>
+                    <Badge variant="secondary" className="text-xs">
+                      {groupedTasks[col.key].length}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="flex-1 pt-0 overflow-hidden">
+                  <ScrollArea className="h-full pr-2">
+                    <div className="space-y-2 pb-2">
+                      {groupedTasks[col.key].length > 0 ? (
+                        groupedTasks[col.key].map((task) => (
+                          <TaskCard
+                            key={task.task_id}
+                            task={task}
+                            onClick={() => onSelectTask(task)}
+                          />
+                        ))
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                          <span className="text-2xl mb-2">○</span>
+                          <span className="text-sm">暂无任务</span>
+                        </div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+
+        {/* Uncategorized Resources */}
+        <section>
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-base font-medium">
+                  <span>📂</span>
+                  <span>未分类资源</span>
+                </CardTitle>
+                <Badge variant="secondary">{resources.length} 项</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {resources.length > 0 ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {resources.map((res) => (
+                    <ResourceCard
+                      key={res.resource_id}
+                      resource={res}
+                      tasks={tasks}
+                      onLinkToTask={onLinkResource}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                  <span className="text-3xl mb-3">◇</span>
+                  <p className="text-sm">没有未分类的资源</p>
+                  <p className="text-xs mt-1">
+                    使用快捷键 Alt + Space 快速捕获
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </section>
+      </div>
+    </ScrollArea>
   );
 }
