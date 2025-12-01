@@ -4,6 +4,7 @@
 4. ✅ Dashboard 把资源和任务联系的功能（点击资源卡片的 🔗 按钮选择任务关联）
 5. ✅ 工作台需要看到和任务关联的资源
 6. 工作台使用
-   1. Tiptap + tiptap-markdown 实现富文本编辑
+   1. ✅ Tiptap + tiptap-markdown 实现富文本编辑
    2. react-zoom-pan-pinch 实现图片预览
    3. react-pdf-highlighter-extended 实现 pdf 阅读，标注（MVP 先不做）
+7. ✅ HUD 粘贴文件/图片

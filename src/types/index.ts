@@ -187,3 +187,24 @@ export interface LinkResourceResponse {
 export interface TaskResourcesResponse {
   resources: Resource[];
 }
+
+// ============================================
+// Clipboard Types (对应 Rust: ClipboardContent, ReadClipboardResponse)
+// ============================================
+
+/**
+ * 剪贴板内容类型 (对应 Rust: ClipboardContent)
+ */
+export type ClipboardContent =
+  | { type: "Image"; data: { file_path: string; file_name: string } }
+  | { type: "Files"; data: { paths: string[] } }
+  | { type: "Text"; data: { content: string } }
+  | { type: "Html"; data: { content: string; plain_text: string | null } }
+  | { type: "Empty" };
+
+/**
+ * 读取剪贴板响应 (对应 Rust: ReadClipboardResponse)
+ */
+export interface ReadClipboardResponse {
+  content: ClipboardContent;
+}

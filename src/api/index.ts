@@ -10,6 +10,7 @@ import {
   LinkResourceRequest,
   LinkResourceResponse,
   TaskResourcesResponse,
+  ReadClipboardResponse,
   resourceSchema,
 } from "../types";
 import { z } from "zod";
@@ -127,4 +128,16 @@ export const toggleHUD = async (): Promise<void> => {
  */
 export const hideHUD = async (): Promise<void> => {
   return await invoke("hide_hud");
+};
+
+// ============================================
+// Clipboard API
+// ============================================
+
+/**
+ * 读取系统剪贴板内容
+ * 支持图片、文件、HTML、纯文本
+ */
+export const readClipboard = async (): Promise<ReadClipboardResponse> => {
+  return await invoke("read_clipboard");
 };

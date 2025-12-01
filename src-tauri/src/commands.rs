@@ -1,5 +1,6 @@
 use std::{fs, path::Path, path::PathBuf};
 
+use clipboard_rs::{common::RustImage, Clipboard, ClipboardContext, ContentFormat};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -149,51 +150,82 @@ pub async fn capture_resource(
         match (content.take(), file_path.clone()) {
             // ========== 情况1: 既有文本又有文件 ==========
             (Some(text), Some(source_path)) => {
-                // 读取文件内容
-                let file_bytes =
-                    fs::read(&source_path).map_err(|e| format!("读取文件失败: {}", e))?;
+                // 检查是否是从剪贴板粘贴的文件（已保存到 assets 目录）
+                if source_path.starts_with("assets/") {
+                    // 从剪贴板粘贴的图片，文件已经保存到 assets 目录
+                    let assets_dir = get_assets_dir(&app)?;
+                    let file_name = source_path.strip_prefix("assets/").unwrap_or(&source_path);
+                    let full_path = assets_dir.join(file_name);
 
-                // 拼接文本和文件字节
-                let text_bytes = text.as_bytes();
-                let mut combined_bytes = Vec::with_capacity(text_bytes.len() + file_bytes.len());
-                combined_bytes.extend_from_slice(text_bytes);
-                combined_bytes.extend_from_slice(&file_bytes);
+                    // 读取文件内容
+                    let file_bytes =
+                        fs::read(&full_path).map_err(|e| format!("读取文件失败: {}", e))?;
 
-                // 总大小 = 文本 + 文件
-                let combined_size = combined_bytes.len() as i64;
+                    // 拼接文本和文件字节
+                    let text_bytes = text.as_bytes();
+                    let mut combined_bytes =
+                        Vec::with_capacity(text_bytes.len() + file_bytes.len());
+                    combined_bytes.extend_from_slice(text_bytes);
+                    combined_bytes.extend_from_slice(&file_bytes);
 
-                // 提取原始文件名作为 display_name
-                let original_name = Path::new(&source_path)
-                    .file_name()
-                    .map(|n| n.to_string_lossy().to_string());
+                    let combined_size = combined_bytes.len() as i64;
 
-                // 获取文件扩展名
-                let ext = get_extension(&source_path);
+                    (
+                        combined_bytes,
+                        Some(text),
+                        Some(combined_size),
+                        Some(source_path.clone()),
+                        Some(file_name.to_string()),
+                    )
+                } else {
+                    // 正常的外部文件
+                    // 读取文件内容
+                    let file_bytes =
+                        fs::read(&source_path).map_err(|e| format!("读取文件失败: {}", e))?;
 
-                // 构建目标文件名: {uuid}.{ext}
-                let target_filename = match &ext {
-                    Some(e) => format!("{}.{}", resource_uuid, e),
-                    None => resource_uuid.clone(),
-                };
+                    // 拼接文本和文件字节
+                    let text_bytes = text.as_bytes();
+                    let mut combined_bytes =
+                        Vec::with_capacity(text_bytes.len() + file_bytes.len());
+                    combined_bytes.extend_from_slice(text_bytes);
+                    combined_bytes.extend_from_slice(&file_bytes);
 
-                // 获取 assets 目录并复制文件
-                let assets_dir = get_assets_dir(&app)?;
-                let target_path = assets_dir.join(&target_filename);
+                    // 总大小 = 文本 + 文件
+                    let combined_size = combined_bytes.len() as i64;
 
-                // 复制文件到应用目录
-                fs::copy(&source_path, &target_path)
-                    .map_err(|e| format!("复制文件失败: {}", e))?;
+                    // 提取原始文件名作为 display_name
+                    let original_name = Path::new(&source_path)
+                        .file_name()
+                        .map(|n| n.to_string_lossy().to_string());
 
-                // 存储相对路径
-                let relative_path = format!("assets/{}", target_filename);
+                    // 获取文件扩展名
+                    let ext = get_extension(&source_path);
 
-                (
-                    combined_bytes,        // hash 用拼接后的字节
-                    Some(text),            // 文本存数据库
-                    Some(combined_size),   // 文本+文件 总大小
-                    Some(relative_path),   // 文件路径
-                    original_name,         // 文件名作为 display_name
-                )
+                    // 构建目标文件名: {uuid}.{ext}
+                    let target_filename = match &ext {
+                        Some(e) => format!("{}.{}", resource_uuid, e),
+                        None => resource_uuid.clone(),
+                    };
+
+                    // 获取 assets 目录并复制文件
+                    let assets_dir = get_assets_dir(&app)?;
+                    let target_path = assets_dir.join(&target_filename);
+
+                    // 复制文件到应用目录
+                    fs::copy(&source_path, &target_path)
+                        .map_err(|e| format!("复制文件失败: {}", e))?;
+
+                    // 存储相对路径
+                    let relative_path = format!("assets/{}", target_filename);
+
+                    (
+                        combined_bytes,      // hash 用拼接后的字节
+                        Some(text),          // 文本存数据库
+                        Some(combined_size), // 文本+文件 总大小
+                        Some(relative_path), // 文件路径
+                        original_name,       // 文件名作为 display_name
+                    )
+                }
             }
 
             // ========== 情况2: 只有文本 ==========
@@ -227,42 +259,66 @@ pub async fn capture_resource(
 
             // ========== 情况3: 只有文件 ==========
             (None, Some(source_path)) => {
-                // 读取原始文件
-                let bytes = fs::read(&source_path).map_err(|e| format!("读取文件失败: {}", e))?;
-                let size = bytes.len() as i64;
+                // 检查是否是从剪贴板粘贴的文件（已保存到 assets 目录）
+                // 相对路径格式: "assets/xxx.png"
+                if source_path.starts_with("assets/") {
+                    // 从剪贴板粘贴的图片，文件已经保存到 assets 目录
+                    let assets_dir = get_assets_dir(&app)?;
+                    let file_name = source_path.strip_prefix("assets/").unwrap_or(&source_path);
+                    let full_path = assets_dir.join(file_name);
 
-                // 提取原始文件名
-                let original_name = Path::new(&source_path)
-                    .file_name()
-                    .map(|n| n.to_string_lossy().to_string());
+                    // 读取文件内容计算 hash
+                    let bytes =
+                        fs::read(&full_path).map_err(|e| format!("读取文件失败: {}", e))?;
+                    let size = bytes.len() as i64;
 
-                // 获取文件扩展名
-                let ext = get_extension(&source_path);
+                    (
+                        bytes,                    // hash 用文件字节
+                        None,                     // 无文本
+                        Some(size),               // 文件大小
+                        Some(source_path.clone()), // 保持相对路径
+                        Some(file_name.to_string()), // 文件名
+                    )
+                } else {
+                    // 正常的外部文件，需要复制到 assets 目录
+                    // 读取原始文件
+                    let bytes =
+                        fs::read(&source_path).map_err(|e| format!("读取文件失败: {}", e))?;
+                    let size = bytes.len() as i64;
 
-                // 构建目标文件名: {uuid}.{ext}
-                let target_filename = match &ext {
-                    Some(e) => format!("{}.{}", resource_uuid, e),
-                    None => resource_uuid.clone(),
-                };
+                    // 提取原始文件名
+                    let original_name = Path::new(&source_path)
+                        .file_name()
+                        .map(|n| n.to_string_lossy().to_string());
 
-                // 获取 assets 目录并复制文件
-                let assets_dir = get_assets_dir(&app)?;
-                let target_path = assets_dir.join(&target_filename);
+                    // 获取文件扩展名
+                    let ext = get_extension(&source_path);
 
-                // 复制文件到应用目录
-                fs::copy(&source_path, &target_path)
-                    .map_err(|e| format!("复制文件失败: {}", e))?;
+                    // 构建目标文件名: {uuid}.{ext}
+                    let target_filename = match &ext {
+                        Some(e) => format!("{}.{}", resource_uuid, e),
+                        None => resource_uuid.clone(),
+                    };
 
-                // 存储相对路径
-                let relative_path = format!("assets/{}", target_filename);
+                    // 获取 assets 目录并复制文件
+                    let assets_dir = get_assets_dir(&app)?;
+                    let target_path = assets_dir.join(&target_filename);
 
-                (
-                    bytes,                // hash 用文件字节
-                    None,                 // 无文本
-                    Some(size),           // 文件大小
-                    Some(relative_path),  // 文件路径
-                    original_name,        // 文件名
-                )
+                    // 复制文件到应用目录
+                    fs::copy(&source_path, &target_path)
+                        .map_err(|e| format!("复制文件失败: {}", e))?;
+
+                    // 存储相对路径
+                    let relative_path = format!("assets/{}", target_filename);
+
+                    (
+                        bytes,               // hash 用文件字节
+                        None,                // 无文本
+                        Some(size),          // 文件大小
+                        Some(relative_path), // 文件路径
+                        original_name,       // 文件名
+                    )
+                }
             }
 
             // ========== 情况4: 什么都没有 ==========
@@ -563,5 +619,118 @@ pub async fn seed_demo_data(state: State<'_, AppState>) -> Result<SeedResponse, 
     Ok(SeedResponse {
         tasks_created: task_ids.len(),
         resources_created: demo_resources.len(),
+    })
+}
+
+// ========== 剪贴板相关 ==========
+
+/// 剪贴板内容类型
+#[derive(Debug, Serialize)]
+#[serde(tag = "type", content = "data")]
+// serde在序列化时将额外创建两个键
+// 例子：ClipboardContent::Image { file_path: "/tmp/a.png".into(), file_name: "a.png".into() }
+// {
+//     "type": "Image",
+//     "data": {
+//       "file_path": "/tmp/a.png",
+//       "file_name": "a.png"
+//     }
+//   }
+pub enum ClipboardContent {
+    /// 图片：返回保存后的文件路径
+    Image { file_path: String, file_name: String },
+    /// 文件列表：返回文件路径数组
+    Files { paths: Vec<String> },
+    /// 纯文本
+    Text { content: String },
+    /// HTML 内容
+    Html { content: String, plain_text: Option<String> },
+    /// 剪贴板为空
+    Empty,
+}
+
+/// 读取剪贴板响应
+#[derive(Debug, Serialize)]
+pub struct ReadClipboardResponse {
+    pub content: ClipboardContent,
+}
+
+/// 读取系统剪贴板内容
+/// 
+/// 优先级：文件 > 图片 > HTML > 文本
+/// 注意：文件优先于图片，因为复制文件时 macOS 会同时放置预览图片
+#[tauri::command]
+pub fn read_clipboard(app: AppHandle) -> Result<ReadClipboardResponse, String> {
+    let ctx = ClipboardContext::new().map_err(|e| format!("无法访问剪贴板: {}", e))?;
+
+    // 1. 优先检查文件列表（复制文件时 macOS 会同时生成预览图片，所以文件优先）
+    if ctx.has(ContentFormat::Files) {
+        if let Ok(files) = ctx.get_files() {
+            if !files.is_empty() {
+                return Ok(ReadClipboardResponse {
+                    content: ClipboardContent::Files { paths: files },
+                });
+            }
+        }
+    }
+
+    // 2. 检查图片（截图或复制的图片）
+    if ctx.has(ContentFormat::Image) {
+        if let Ok(img) = ctx.get_image() {
+            // 生成唯一文件名
+            let uuid = Uuid::new_v4().to_string();
+            let file_name = format!("{}.png", uuid);
+            
+            // 获取 assets 目录
+            let assets_dir = get_assets_dir(&app)?;
+            let target_path = assets_dir.join(&file_name);
+            
+            // 保存图片
+            img.save_to_path(target_path.to_str().unwrap_or_default())
+                .map_err(|e| format!("保存图片失败: {}", e))?;
+            
+            // 返回相对路径
+            let relative_path = format!("assets/{}", file_name);
+            
+            return Ok(ReadClipboardResponse {
+                content: ClipboardContent::Image {
+                    file_path: relative_path,
+                    file_name,
+                },
+            });
+        }
+    }
+
+    // 3. 检查 HTML（可能来自网页复制）
+    if ctx.has(ContentFormat::Html) {
+        if let Ok(html) = ctx.get_html() {
+            if !html.trim().is_empty() {
+                // 同时尝试获取纯文本版本
+                let plain_text = ctx.get_text().ok().filter(|t| !t.trim().is_empty());
+                
+                return Ok(ReadClipboardResponse {
+                    content: ClipboardContent::Html {
+                        content: html,
+                        plain_text,
+                    },
+                });
+            }
+        }
+    }
+
+    // 4. 检查纯文本
+    if ctx.has(ContentFormat::Text) {
+        if let Ok(text) = ctx.get_text() {
+            if !text.trim().is_empty() {
+                return Ok(ReadClipboardResponse {
+                    content: ClipboardContent::Text { content: text },
+                });
+            }
+        }
+    }
+
+    // 5. 剪贴板为空
+    Ok(ReadClipboardResponse {
+        content: ClipboardContent::Empty,
     })
 }

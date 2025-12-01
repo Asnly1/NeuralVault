@@ -1,10 +1,19 @@
-import { FormEvent, useState, useRef, useEffect, KeyboardEvent } from "react";
+import {
+  FormEvent,
+  useState,
+  useRef,
+  useEffect,
+  KeyboardEvent,
+  ClipboardEvent,
+} from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { readClipboard } from "@/api";
+import { ClipboardContent } from "@/types";
 
 // variant: 组件变体，用于添加不同的 CSS 类
 // - "card": Dashboard 中的卡片样式（默认）
@@ -13,8 +22,9 @@ type QuickCaptureVariant = "card" | "hud";
 
 // 选中的文件信息
 interface SelectedFile {
-  path: string; // 文件绝对路径
+  path: string; // 文件绝对路径或相对路径（从剪贴板粘贴的图片）
   name: string; // 文件名（用于显示）
+  isFromClipboard?: boolean; // 是否来自剪贴板（图片已保存到 assets）
 }
 
 interface QuickCaptureProps {
@@ -41,7 +51,7 @@ export function QuickCapture({
   placeholder,
 }: QuickCaptureProps) {
   const [content, setContent] = useState("");
-  const [selectedFile, setSelectedFile] = useState<SelectedFile | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -103,13 +113,28 @@ export function QuickCapture({
 
   const handleSubmit = async (e?: FormEvent) => {
     e?.preventDefault();
-    if ((!content.trim() && !selectedFile) || loading || isSubmitting) return;
+    if (
+      (!content.trim() && selectedFiles.length === 0) ||
+      loading ||
+      isSubmitting
+    )
+      return;
 
     setIsSubmitting(true);
     try {
-      await onCapture(content.trim(), selectedFile?.path);
+      const text = content.trim();
+      if (selectedFiles.length === 0) {
+        // 只有文本，没有文件
+        await onCapture(text);
+      } else {
+        // 有文件：每个文件都使用相同的文本
+        for (const file of selectedFiles) {
+          await onCapture(text, file.path);
+        }
+      }
+
       setContent("");
-      setSelectedFile(null);
+      setSelectedFiles([]);
 
       // 重置 textarea 高度
       if (textareaRef.current) {
@@ -135,11 +160,89 @@ export function QuickCapture({
     }
   };
 
-  // 使用 Tauri dialog API 选择文件
+  // 处理粘贴事件：读取系统剪贴板内容
+  const handlePaste = async (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    // 检查是否有文件或图片（通过原生 clipboardData）
+    const items = e.clipboardData?.items;
+    let hasFileOrImage = false;
+
+    if (items) {
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        // 检查是否是文件类型（图片也是文件）
+        if (item.kind === "file") {
+          hasFileOrImage = true;
+          break;
+        }
+      }
+    }
+
+    // 如果有文件或图片，使用 Rust 后端读取剪贴板
+    if (hasFileOrImage) {
+      e.preventDefault(); // 阻止默认粘贴行为
+
+      try {
+        const response = await readClipboard();
+        handleClipboardContent(response.content);
+      } catch (err) {
+        console.error("读取剪贴板失败:", err);
+      }
+    }
+    // 如果是纯文本，让浏览器默认处理
+  };
+
+  // 处理剪贴板内容
+  const handleClipboardContent = (clipboardContent: ClipboardContent) => {
+    switch (clipboardContent.type) {
+      case "Image":
+        // 图片已保存到 assets，添加到文件列表
+        setSelectedFiles((prev) => [
+          ...prev,
+          {
+            path: clipboardContent.data.file_path,
+            name: clipboardContent.data.file_name,
+            isFromClipboard: true,
+          },
+        ]);
+        break;
+
+      case "Files":
+        // 文件列表：添加所有文件
+        if (clipboardContent.data.paths.length > 0) {
+          const newFiles = clipboardContent.data.paths.map((filePath) => ({
+            path: filePath,
+            name:
+              filePath.split("/").pop() ||
+              filePath.split("\\").pop() ||
+              "未知文件",
+          }));
+          setSelectedFiles((prev) => [...prev, ...newFiles]);
+        }
+        break;
+
+      case "Html":
+        // HTML 内容：优先使用纯文本，否则使用 HTML
+        const textContent =
+          clipboardContent.data.plain_text || clipboardContent.data.content;
+        setContent((prev) => prev + textContent);
+        break;
+
+      case "Text":
+        // 纯文本：追加到输入框
+        setContent((prev) => prev + clipboardContent.data.content);
+        break;
+
+      case "Empty":
+        // 剪贴板为空，不做处理
+        break;
+    }
+  };
+
+  // 使用 Tauri dialog API 选择文件（支持多选）
   const handleFileButtonClick = async () => {
     try {
       const selected = await open({
-        multiple: false,
+        multiple: true,
         filters: [
           {
             name: "支持的文件",
@@ -165,22 +268,30 @@ export function QuickCapture({
         ],
       });
 
-      if (selected && typeof selected === "string") {
-        const fileName =
-          selected.split("/").pop() || selected.split("\\").pop() || "未知文件";
-        setSelectedFile({ path: selected, name: fileName });
+      if (selected) {
+        // selected 可能是 string 或 string[]
+        const paths = Array.isArray(selected) ? selected : [selected];
+        const newFiles = paths.map((filePath) => ({
+          path: filePath,
+          name:
+            filePath.split("/").pop() ||
+            filePath.split("\\").pop() ||
+            "未知文件",
+        }));
+        setSelectedFiles((prev) => [...prev, ...newFiles]);
       }
     } catch (err) {
       console.error("Failed to open file dialog:", err);
     }
   };
 
-  const handleRemoveFile = () => {
-    setSelectedFile(null);
+  // 移除指定索引的文件
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   const isLoading = loading || isSubmitting;
-  const canSubmit = (content.trim() || selectedFile) && !isLoading;
+  const canSubmit = (content.trim() || selectedFiles.length > 0) && !isLoading;
 
   const Wrapper = isHUD ? "div" : Card;
   const ContentWrapper = isHUD ? "div" : CardContent;
@@ -194,24 +305,29 @@ export function QuickCapture({
     >
       <ContentWrapper className={cn(!isHUD && "p-4", isHUD && "p-3")}>
         <form onSubmit={handleSubmit} className="space-y-3">
-          {/* Selected File Preview */}
-          {selectedFile && (
-            <div className="flex items-center justify-between gap-2 rounded-lg bg-muted px-3 py-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-sm">
-                  {getFileIcon(selectedFile.name)}
-                </span>
-                <span className="text-sm truncate">{selectedFile.name}</span>
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 shrink-0"
-                onClick={handleRemoveFile}
-              >
-                ×
-              </Button>
+          {/* Selected Files Preview */}
+          {selectedFiles.length > 0 && (
+            <div className="space-y-1.5 max-h-32 overflow-y-auto">
+              {selectedFiles.map((file, index) => (
+                <div
+                  key={`${file.path}-${index}`}
+                  className="flex items-center justify-between gap-2 rounded-lg bg-muted px-3 py-1.5"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-sm">{getFileIcon(file.name)}</span>
+                    <span className="text-sm truncate">{file.name}</span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 shrink-0"
+                    onClick={() => handleRemoveFile(index)}
+                  >
+                    ×
+                  </Button>
+                </div>
+              ))}
             </div>
           )}
 
@@ -222,6 +338,7 @@ export function QuickCapture({
             value={content}
             onChange={(e) => setContent(e.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             disabled={isLoading}
             autoFocus={autoFocus}
             className={cn(
