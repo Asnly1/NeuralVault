@@ -9,17 +9,31 @@ src/
 ├── assets/               # 静态资源（图标/占位符）
 ├── components/
 │   ├── index.ts
-│   ├── QuickCapture.tsx  # 捕获组件，支持 HUD/卡片两种皮肤
+│   ├── QuickCapture.tsx  # 捕获组件，支持 HUD/卡片、多文件、剪贴板粘贴
 │   ├── ResourceCard.tsx  # 资源卡片 + 任务关联下拉
 │   ├── Sidebar.tsx       # 侧边栏导航
-│   └── TaskCard.tsx      # 任务卡片（逾期高亮）
+│   ├── TaskCard.tsx      # 任务卡片（逾期高亮）
+│   ├── TiptapEditor.tsx  # Markdown 富文本编辑器（基于 Tiptap）
+│   └── ui/               # shadcn/ui 通用组件库
+│       ├── avatar.tsx
+│       ├── badge.tsx
+│       ├── button.tsx
+│       ├── card.tsx
+│       ├── dropdown-menu.tsx
+│       ├── input.tsx
+│       ├── scroll-area.tsx
+│       ├── separator.tsx
+│       ├── switch.tsx
+│       ├── textarea.tsx
+│       └── tooltip.tsx
+├── lib/
+│   └── utils.ts          # 工具函数（cn 等）
 ├── pages/
 │   ├── Dashboard.tsx     # 智能看板 (Page A)
-│   ├── HUD.css           # 悬浮 HUD 样式覆盖
 │   ├── HUD.tsx           # 悬浮输入窗 (Quick Capture HUD)
 │   ├── index.ts
 │   ├── Settings.tsx      # 设置 (Page E)
-│   └── Workspace.tsx     # 任务工作台 (Page B)
+│   └── Workspace.tsx     # 任务工作台 (Page B)，集成编辑器
 ├── types/
 │   └── index.ts          # 类型、Schema、常量
 ├── App.tsx               # 主界面，状态管理 & 路由
@@ -40,6 +54,7 @@ src/
 - 枚举值：`taskStatusValues`（inbox/todo/doing/done/archived）、`taskPriorityValues`、`resourceTypeValues`、`classificationValues`。
 - 数据类型：`Task`、`Resource`、`DashboardData`、`TaskStatus`、`TaskPriority`、`ResourceType`、`PageType`（"dashboard" | "workspace" | "settings"）。
 - API 类型：`CreateTaskRequest/Response`、`CaptureRequest/Response`、`LinkResourceRequest/Response`、`TaskResourcesResponse`、`SeedResponse`、`CaptureSourceMeta`。
+- 剪贴板类型：`ClipboardContent`（Image/Files/Text/Html/Empty）、`ReadClipboardResponse`。
 - 常量：`priorityConfig`（中文标签 + 颜色）、`resourceTypeIcons`（emoji 图标）、`navItems`（Sidebar 菜单）。
 
 ---
@@ -48,16 +63,17 @@ src/
 
 封装所有 Tauri `invoke` 调用，统一使用类型化请求/响应。
 
-| 函数                     | 参数                       | 返回                       | 说明                           |
-| ------------------------ | -------------------------- | -------------------------- | ------------------------------ |
-| `fetchDashboardData()`   | -                          | `Promise<DashboardData>`   | 取回看板任务 + 未分类资源      |
-| `createTask()`           | `CreateTaskRequest`        | `Promise<CreateTaskResponse>` | 创建任务                       |
-| `quickCapture()`         | `CaptureRequest`           | `Promise<CaptureResponse>` | 快速捕获文本/文件              |
-| `linkResource()`         | `LinkResourceRequest`      | `Promise<LinkResourceResponse>` | 资源关联到任务                 |
-| `unlinkResource()`       | `(taskId, resourceId)`     | `Promise<LinkResourceResponse>` | 取消关联                       |
-| `fetchTaskResources()`   | `taskId: number`           | `Promise<TaskResourcesResponse>` | 拉取任务的关联资源（含校验）   |
-| `seedDemoData()`         | -                          | `Promise<SeedResponse>`    | 生成演示数据                   |
-| `toggleHUD()`/`hideHUD()`| -                          | `Promise<void>`            | 控制悬浮 HUD 的显示/隐藏       |
+| 函数                      | 参数                   | 返回                             | 说明                                  |
+| ------------------------- | ---------------------- | -------------------------------- | ------------------------------------- |
+| `fetchDashboardData()`    | -                      | `Promise<DashboardData>`         | 取回看板任务 + 未分类资源             |
+| `createTask()`            | `CreateTaskRequest`    | `Promise<CreateTaskResponse>`    | 创建任务                              |
+| `quickCapture()`          | `CaptureRequest`       | `Promise<CaptureResponse>`       | 快速捕获文本/文件                     |
+| `linkResource()`          | `LinkResourceRequest`  | `Promise<LinkResourceResponse>`  | 资源关联到任务                        |
+| `unlinkResource()`        | `(taskId, resourceId)` | `Promise<LinkResourceResponse>`  | 取消关联                              |
+| `fetchTaskResources()`    | `taskId: number`       | `Promise<TaskResourcesResponse>` | 拉取任务的关联资源（含校验）          |
+| `seedDemoData()`          | -                      | `Promise<SeedResponse>`          | 生成演示数据                          |
+| `toggleHUD()`/`hideHUD()` | -                      | `Promise<void>`                  | 控制悬浮 HUD 的显示/隐藏              |
+| `readClipboard()`         | -                      | `Promise<ReadClipboardResponse>` | 读取系统剪贴板（图片/文件/文本/HTML） |
 
 ---
 
@@ -101,7 +117,12 @@ interface ResourceCardProps {
 
 #### `QuickCapture.tsx`
 
-快速捕获组件，支持文本/文件，Enter 发送、Shift+Enter 换行，封装 Tauri 文件选择。
+快速捕获组件，支持文本/文件，Enter 发送、Shift+Enter 换行，封装 Tauri 文件选择。增强功能：
+
+- **多文件选择**：支持选择和预览多个文件（Tauri dialog API）
+- **剪贴板粘贴**：支持粘贴图片、文件、HTML、纯文本（通过 `readClipboard` API）
+- **自动高度调整**：textarea 根据内容自适应高度
+- **HUD 模式**：Esc 关闭、窗口失焦自动关闭
 
 ```tsx
 interface QuickCaptureProps {
@@ -115,6 +136,47 @@ interface QuickCaptureProps {
 }
 ```
 
+#### `TiptapEditor.tsx`
+
+Markdown 富文本编辑器组件，基于 Tiptap + StarterKit + Markdown 扩展。
+
+- **Markdown 支持**：输入输出均为 Markdown 格式
+- **双向绑定**：内容变化实时回调
+- **可编辑控制**：支持只读模式
+- **标题层级**：支持 H1-H6
+
+```tsx
+interface TiptapEditorProps {
+  content: string; // Markdown 格式的内容
+  onChange?: (markdown: string) => void; // 内容变化回调，返回 Markdown 格式
+  editable?: boolean;
+  placeholder?: string;
+}
+```
+
+#### `ui/` 组件库
+
+基于 shadcn/ui 的通用 UI 组件，提供一致的设计语言和交互体验：
+
+- `Button`：按钮组件，支持多种变体（default/ghost/secondary/destructive）和尺寸
+- `Card`：卡片容器（CardHeader/CardContent/CardTitle/CardDescription）
+- `Badge`：徽章标签
+- `Input/Textarea`：表单输入组件
+- `Switch`：开关组件
+- `ScrollArea`：滚动区域容器
+- `Separator`：分隔线
+- `Tooltip`：提示框（TooltipProvider/TooltipTrigger/TooltipContent）
+- `DropdownMenu`：下拉菜单
+- `Avatar`：头像组件
+
+---
+
+### `lib/utils.ts`
+
+工具函数库，提供常用辅助函数：
+
+- `cn(...inputs)`：用于合并和条件化 className（基于 clsx + tailwind-merge）
+
 ---
 
 ### `pages/`
@@ -127,11 +189,16 @@ interface QuickCaptureProps {
 
 #### `Workspace.tsx` (Page B)
 
-任务工作台：三栏布局。
+任务工作台：三栏布局，已集成编辑器与资源预览。
 
-- 左栏：当前任务详情 + `fetchTaskResources` 拉取的关联资源列表。
-- 中栏：工作区占位（后续接入编辑器/PDF）。
-- 右栏：ChatBox 占位（当前任务上下文提示）。
+- **左栏**：当前任务详情 + `fetchTaskResources` 拉取的关联资源列表，点击资源在中栏显示。
+- **中栏**：资源编辑/预览区
+  - 文本资源：使用 `TiptapEditor` 进行 Markdown 编辑（实时保存状态提示）
+  - PDF 资源：预览占位（开发中）
+  - 图片资源：预览占位（开发中）
+  - URL 资源：显示内容占位
+  - 其他类型：显示文件类型提示
+- **右栏**：AI 助手占位（当前任务上下文提示，输入框支持 `@` 引用文件）。
 - 未选择任务时显示返回看板的空状态。
 
 ```tsx
@@ -145,9 +212,9 @@ interface WorkspacePageProps {
 
 设置：API Key 输入，本地模型开关与 URL，快捷键展示，关于信息。
 
-#### `HUD.tsx` + `HUD.css` (Quick Capture HUD)
+#### `HUD.tsx` (Quick Capture HUD)
 
-独立的悬浮输入窗。通过 Tauri hash 路由 `#/hud` 渲染，监听 `hud-focus` 事件聚焦输入，捕获成功后通过 `emit("hud-blur")` 通知后端关闭窗口。`HUD.css` 在 QuickCapture 基础上添加玻璃拟态样式与明/暗配色。
+独立的悬浮输入窗。通过 Tauri hash 路由 `#/hud` 渲染，监听 `hud-focus` 事件聚焦输入，捕获成功后通过 `emit("hud-blur")` 通知后端关闭窗口。使用 `QuickCapture` 组件的 `hud` 变体，应用透明背景 + 毛玻璃效果（backdrop-blur）。
 
 ---
 
@@ -175,10 +242,12 @@ interface WorkspacePageProps {
 
 ### `App.css`
 
-全局样式，基于 CSS 变量的深色主题，覆盖 Sidebar、看板、工作台、设置页与 QuickCapture。
+全局样式，基于 Tailwind CSS + CSS 变量的深色主题，配合 shadcn/ui 组件库。
 
-- 变量分组：背景/边框、文字、强调色（含 hover/subtle）、状态色、字体、圆角、阴影、过渡。
-- 组件样式：侧边栏导航、看板列、任务/资源卡片、QuickCapture（含 HUD 皮肤）、工作台三栏布局、设置表单与开关。
+- **CSS 变量**：背景/边框、文字、强调色（含 hover/subtle）、状态色、字体、圆角、阴影、过渡。
+- **全局样式**：覆盖 Sidebar、看板、工作台、设置页与 QuickCapture。
+- **Tiptap 编辑器样式**：自定义编辑器内容区样式（`.tiptap-editor-content`）。
+- **响应式设计**：基于 Tailwind 的响应式网格布局（Dashboard、ResourceCard）。
 
 ---
 
@@ -186,14 +255,21 @@ interface WorkspacePageProps {
 
 ```
 入口: main.tsx
-  ├─ #/hud -> HUDPage -> QuickCapture(variant="hud") -> api.quickCapture -> Rust (capture_resource)
+  ├─ #/hud -> HUDPage -> QuickCapture(variant="hud")
+  │                        ├─ 剪贴板粘贴 -> readClipboard -> Rust (read_clipboard)
+  │                        └─ 捕获提交 -> quickCapture -> Rust (capture_resource)
   └─ default -> App.tsx
-        ├─ DashboardPage (tasks/resources) -> TaskCard / ResourceCard / QuickCapture
-        ├─ WorkspacePage (selectedTask) -> fetchTaskResources -> 任务上下文/Chat 占位
-        └─ SettingsPage
+        ├─ DashboardPage (tasks/resources)
+        │    ├─ TaskCard / ResourceCard / QuickCapture（含剪贴板支持）
+        │    └─ onLinkResource -> linkResource -> Rust
+        ├─ WorkspacePage (selectedTask)
+        │    ├─ fetchTaskResources -> 获取关联资源
+        │    ├─ TiptapEditor（文本编辑，Markdown 双向绑定）
+        │    └─ AI Chat 占位（输入框 + 上下文）
+        └─ SettingsPage (API Key / 本地模型 / 快捷键 / 关于)
               ▲
               │ state: tasks, resources, currentPage, selectedTask, loading, error, seeding
-              │ actions: fetchDashboardData / seedDemoData / linkResource / quickCapture
+              │ actions: fetchDashboardData / seedDemoData / linkResource / quickCapture / readClipboard
               ▼
         api/index.ts -> tauri invoke -> Rust commands.rs
 ```
@@ -202,14 +278,14 @@ interface WorkspacePageProps {
 
 ## 页面对应关系
 
-| 设计文档 / 场景              | 组件文件              | 路由 Key / 窗口 |
-| --------------------------- | --------------------- | --------------- |
-| Quick Capture HUD           | `pages/HUD.tsx`       | `#/hud`         |
-| Page A - 智能看板           | `pages/Dashboard.tsx` | `dashboard`     |
-| Page B - 任务工作台         | `pages/Workspace.tsx` | `workspace`     |
-| Page C - 复盘与脉搏         | 暂未实现 (V1.0 不做)  | -               |
-| Page D - 知识宇宙           | 暂未实现 (V1.0 不做)  | -               |
-| Page E - 设置               | `pages/Settings.tsx`  | `settings`      |
+| 设计文档 / 场景     | 组件文件              | 路由 Key / 窗口 |
+| ------------------- | --------------------- | --------------- |
+| Quick Capture HUD   | `pages/HUD.tsx`       | `#/hud`         |
+| Page A - 智能看板   | `pages/Dashboard.tsx` | `dashboard`     |
+| Page B - 任务工作台 | `pages/Workspace.tsx` | `workspace`     |
+| Page C - 复盘与脉搏 | 暂未实现 (V1.0 不做)  | -               |
+| Page D - 知识宇宙   | 暂未实现 (V1.0 不做)  | -               |
+| Page E - 设置       | `pages/Settings.tsx`  | `settings`      |
 
 ---
 
@@ -219,3 +295,8 @@ interface WorkspacePageProps {
 2. **HUD 行为**：如需更多 HUD 交互（历史记录、快捷标签），直接在 `QuickCapture` 扩展 props，HUD 只需传递新能力即可复用。
 3. **类型/Schema**：新增模型字段时先更新 `types/index.ts` 的 Schema，再调整 API 返回值解析，避免 Zod 校验失败。
 4. **API 对应**：前后端新增命令时保持 `api/index.ts` 与 Rust `commands.rs` 同步命名，确保类型对齐。
+5. **编辑器增强**：当前 `TiptapEditor` 支持基础 Markdown 编辑，可扩展更多插件（表格、代码高亮、公式等）。
+6. **资源预览**：Workspace 中的 PDF/图片预览功能可使用 `@tauri-apps/plugin-fs` 读取文件，使用 `react-pdf` 或 `<img>` 标签渲染。
+7. **保存功能**：文本编辑器的保存功能需要添加 Rust 命令 `update_resource_content`，前端监听 `Ctrl+S` 快捷键触发保存。
+8. **剪贴板增强**：可扩展支持复制资源到剪贴板、HTML 格式保留样式等功能。
+9. **UI 组件扩展**：如需新增 shadcn/ui 组件，使用 `npx shadcn-ui@latest add [component]` 命令自动生成。
