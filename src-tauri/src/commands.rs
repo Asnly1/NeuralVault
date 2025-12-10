@@ -655,6 +655,18 @@ pub struct ReadClipboardResponse {
     pub content: ClipboardContent,
 }
 
+/// 获取 assets 目录的完整路径
+/// 
+/// 用于前端将相对路径（如 "assets/xxx.png"）转换为完整路径
+#[tauri::command]
+pub fn get_assets_path(app: AppHandle) -> Result<String, String> {
+    let assets_dir = get_assets_dir(&app)?;
+    assets_dir
+        .to_str()
+        .ok_or_else(|| "无法转换路径为字符串".to_string())
+        .map(|s| s.to_string())
+}
+
 /// 读取系统剪贴板内容
 /// 
 /// 优先级：文件 > 图片 > HTML > 文本

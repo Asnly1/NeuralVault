@@ -74,6 +74,7 @@ Tauri 应用配置文件，定义窗口、权限、构建流程。
 #### 安全策略
 
 - **CSP**：关闭（`null`），允许灵活的前端资源加载
+- **Asset 协议**：启用 `assetProtocol`，作用域为 `$APPDATA/**`，允许前端通过 `convertFileSrc` 访问应用数据目录中的文件（如图片预览）
 
 ---
 
@@ -244,6 +245,7 @@ pub struct AppState {
 | `get_task_resources` | `state, task_id`              | `Result<TaskResourcesResponse>` | 获取任务关联的资源列表                   |
 | `seed_demo_data`     | `state`                       | `Result<SeedResponse>`          | 生成演示数据（3 个任务 + 3 个资源）      |
 | `read_clipboard`     | `app`                         | `Result<ReadClipboardResponse>` | 读取系统剪贴板（图片/文件/HTML/文本）    |
+| `get_assets_path`    | `app`                         | `Result<String>`                | 获取 assets 目录的完整路径               |
 
 ##### 核心逻辑详解
 
@@ -282,6 +284,13 @@ pub struct AppState {
 ###### `seed_demo_data`
 
 生成 3 个演示任务和 3 个演示资源，用于快速体验功能。
+
+###### `get_assets_path`
+
+获取 assets 目录的完整路径，用于前端将相对路径（如 `assets/xxx.png`）转换为可访问的完整路径。
+
+- **返回值**：assets 目录的绝对路径字符串（例如：`/Users/xxx/Library/Application Support/com.hovsco.neuralvault/assets`）
+- **用途**：图片预览等功能需要将数据库中的相对路径转换为完整路径，再通过 Tauri 的 `convertFileSrc` API 转换为浏览器可访问的 URL
 
 ---
 
@@ -480,6 +489,14 @@ SQLite 数据库
 
 - **统一错误类型**：所有命令返回 `Result<T, String>`，便于前端处理
 - **详细错误信息**：使用 `.map_err(|e| e.to_string())` 转换错误，提供可读的错误消息
+
+### 7. Asset 协议配置
+
+- **用途**：允许前端通过 `convertFileSrc` API 访问应用数据目录中的文件
+- **配置位置**：`tauri.conf.json` 的 `app.security.assetProtocol`
+- **作用域**：`$APPDATA/**` 表示允许访问整个应用数据目录
+- **使用场景**：图片预览、PDF 预览等需要加载本地文件的功能
+- **URL 格式**：`asset://localhost/<encoded_path>`（由 `convertFileSrc` 自动生成）
 
 ---
 

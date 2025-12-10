@@ -7,8 +7,10 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Task, Resource, priorityConfig, resourceTypeIcons } from "../types";
-import { fetchTaskResources } from "../api";
+import { fetchTaskResources, getAssetsPath } from "../api";
 import { TiptapEditor } from "../components";
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
+import { convertFileSrc } from "@tauri-apps/api/core";
 
 interface WorkspacePageProps {
   selectedTask: Task | null;
@@ -24,6 +26,12 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
   );
   const [editorContent, setEditorContent] = useState("");
   const [isModified, setIsModified] = useState(false);
+  const [assetsPath, setAssetsPath] = useState<string>("");
+
+  // Load assets path on mount
+  useEffect(() => {
+    getAssetsPath().then(setAssetsPath).catch(console.error);
+  }, []);
 
   // Load task resources
   useEffect(() => {
@@ -132,11 +140,104 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
     }
 
     if (selectedResource.file_type === "image") {
+      // 获取图片路径并转换为 Tauri 可访问的 URL
+      const imagePath = selectedResource.file_path;
+      if (!imagePath || !assetsPath) {
+        return (
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+            <span className="text-4xl mb-4">⚠️</span>
+            <p className="text-lg font-medium">
+              {!imagePath ? "图片路径缺失" : "正在加载..."}
+            </p>
+          </div>
+        );
+      }
+
+      // 将相对路径转换为完整路径
+      // imagePath 格式: "assets/xxx.png"
+      // assetsPath 格式: "/Users/.../assets"
+      // 需要提取文件名并拼接完整路径
+      const fileName = imagePath.replace("assets/", "");
+      const fullPath = `${assetsPath}/${fileName}`;
+
+      // convertFileSrc 将本地文件路径转换为 Tauri asset 协议 URL
+      const imageUrl = convertFileSrc(fullPath);
+
       return (
-        <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-          <span className="text-4xl mb-4">🖼️</span>
-          <p className="text-lg font-medium">图片预览</p>
-          <p className="text-sm">图片预览功能开发中...</p>
+        <div className="relative w-full h-full bg-black/5">
+          <TransformWrapper
+            initialScale={1}
+            minScale={0.1}
+            maxScale={10}
+            centerOnInit={true}
+            wheel={{ step: 0.1 }}
+            doubleClick={{ mode: "reset" }}
+          >
+            {({ zoomIn, zoomOut, resetTransform, centerView }) => (
+              <>
+                {/* 控制按钮工具栏 */}
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex gap-2 bg-background/95 backdrop-blur-sm border rounded-lg p-2 shadow-lg">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => zoomIn()}
+                    title="放大 (滚轮向上)"
+                  >
+                    🔍+
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => zoomOut()}
+                    title="缩小 (滚轮向下)"
+                  >
+                    🔍−
+                  </Button>
+                  <Separator orientation="vertical" className="h-8" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => resetTransform()}
+                    title="重置 (双击图片)"
+                  >
+                    ⟲ 重置
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => centerView()}
+                    title="居中"
+                  >
+                    ⊕ 居中
+                  </Button>
+                </div>
+
+                {/* 图片容器 */}
+                <TransformComponent
+                  wrapperClass="!w-full !h-full"
+                  contentClass="!w-full !h-full flex items-center justify-center"
+                >
+                  <img
+                    src={imageUrl}
+                    alt={selectedResource.display_name || "图片预览"}
+                    className="max-w-full max-h-full object-contain"
+                    style={{ userSelect: "none" }}
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.onerror = null;
+                      target.style.display = "none";
+                      console.error("图片加载失败:", imagePath);
+                    }}
+                  />
+                </TransformComponent>
+
+                {/* 使用提示 */}
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 bg-background/80 backdrop-blur-sm border rounded-lg px-3 py-1.5 text-xs text-muted-foreground">
+                  滚轮缩放 · 拖拽平移 · 双击重置
+                </div>
+              </>
+            )}
+          </TransformWrapper>
         </div>
       );
     }

@@ -141,3 +141,14 @@ export const hideHUD = async (): Promise<void> => {
 export const readClipboard = async (): Promise<ReadClipboardResponse> => {
   return await invoke("read_clipboard");
 };
+
+// ============================================
+// File System API
+// ============================================
+
+/**
+ * 获取 assets 目录的完整路径
+ */
+export const getAssetsPath = async (): Promise<string> => {
+  return await invoke("get_assets_path");
+};

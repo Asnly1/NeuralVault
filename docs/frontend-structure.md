@@ -74,6 +74,7 @@ src/
 | `seedDemoData()`          | -                      | `Promise<SeedResponse>`          | 生成演示数据                          |
 | `toggleHUD()`/`hideHUD()` | -                      | `Promise<void>`                  | 控制悬浮 HUD 的显示/隐藏              |
 | `readClipboard()`         | -                      | `Promise<ReadClipboardResponse>` | 读取系统剪贴板（图片/文件/文本/HTML） |
+| `getAssetsPath()`         | -                      | `Promise<string>`                | 获取 assets 目录的完整路径            |
 
 ---
 
@@ -195,7 +196,13 @@ interface TiptapEditorProps {
 - **中栏**：资源编辑/预览区
   - 文本资源：使用 `TiptapEditor` 进行 Markdown 编辑（实时保存状态提示）
   - PDF 资源：预览占位（开发中）
-  - 图片资源：预览占位（开发中）
+  - 图片资源：使用 `react-zoom-pan-pinch` 实现缩放平移预览
+    - 滚轮缩放（0.1x - 10x）
+    - 鼠标拖拽平移
+    - 双击重置视图
+    - 工具栏控制（放大/缩小/重置/居中）
+    - 优雅的半透明控制栏 + 操作提示
+    - 自动路径转换（相对路径 → 完整路径 → Tauri URL）
   - URL 资源：显示内容占位
   - 其他类型：显示文件类型提示
 - **右栏**：AI 助手占位（当前任务上下文提示，输入框支持 `@` 引用文件）。
@@ -296,7 +303,12 @@ interface WorkspacePageProps {
 3. **类型/Schema**：新增模型字段时先更新 `types/index.ts` 的 Schema，再调整 API 返回值解析，避免 Zod 校验失败。
 4. **API 对应**：前后端新增命令时保持 `api/index.ts` 与 Rust `commands.rs` 同步命名，确保类型对齐。
 5. **编辑器增强**：当前 `TiptapEditor` 支持基础 Markdown 编辑，可扩展更多插件（表格、代码高亮、公式等）。
-6. **资源预览**：Workspace 中的 PDF/图片预览功能可使用 `@tauri-apps/plugin-fs` 读取文件，使用 `react-pdf` 或 `<img>` 标签渲染。
+6. **资源预览**：
+   - ✅ **图片预览已完成**：
+     - 使用 `react-zoom-pan-pinch` 实现缩放平移功能
+     - 路径转换流程：相对路径（`assets/xxx.png`）→ `getAssetsPath()` 获取完整路径 → `convertFileSrc()` 转换为 asset 协议 URL（`asset://localhost/...`）
+     - 配置要求：`tauri.conf.json` 中启用 `assetProtocol`，作用域设置为 `$APPDATA/**`
+   - 🚧 **PDF 预览**：待实现
 7. **保存功能**：文本编辑器的保存功能需要添加 Rust 命令 `update_resource_content`，前端监听 `Ctrl+S` 快捷键触发保存。
 8. **剪贴板增强**：可扩展支持复制资源到剪贴板、HTML 格式保留样式等功能。
 9. **UI 组件扩展**：如需新增 shadcn/ui 组件，使用 `npx shadcn-ui@latest add [component]` 命令自动生成。

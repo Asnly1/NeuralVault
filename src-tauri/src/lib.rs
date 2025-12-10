@@ -7,8 +7,8 @@ use tauri::{Emitter, Listener, Manager};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 pub use commands::{
-    capture_resource, create_task, get_dashboard, get_task_resources, link_resource,
-    read_clipboard, seed_demo_data, unlink_resource,
+    capture_resource, create_task, get_assets_path, get_dashboard, get_task_resources,
+    link_resource, read_clipboard, seed_demo_data, unlink_resource,
 };
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -135,7 +135,8 @@ pub fn run() {
             unlink_resource,
             toggle_hud,
             hide_hud,
-            read_clipboard
+            read_clipboard,
+            get_assets_path
         ])
         // 启动应用
         // tauri::generate_context!()：这个宏会读取你的 tauri.conf.json 配置文件，并在编译时将其转化为代码。它告诉构建器应用的名称、版本、图标等信息。
