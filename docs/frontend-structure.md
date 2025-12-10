@@ -155,6 +155,39 @@ interface TiptapEditorProps {
 }
 ```
 
+#### `PDFViewer.tsx`
+
+PDF 阅读器组件，基于 react-pdf-highlighter-extended + PDF.js。
+
+- **PDF 渲染**：使用 PDF.js 渲染引擎，支持大文件
+- **文本高亮**：选中文本后可添加高亮标注
+- **区域高亮**：支持框选区域进行截图高亮
+- **高亮管理**：悬停查看高亮内容，点击删除
+- **滚轮缩放**：支持滚轮缩放查看
+- **加载状态**：加载动画和错误提示
+- **懒加载**：在 Workspace 中使用 `React.lazy()` 按需加载，避免影响应用启动性能
+
+```tsx
+interface PDFViewerProps {
+  url: string; // PDF 文件的 URL（通过 convertFileSrc 转换后的 asset:// 协议）
+  displayName?: string; // 显示名称
+}
+```
+
+**使用方式**（Workspace.tsx 中）：
+
+```tsx
+const PDFViewer = lazy(() =>
+  import("../components/PDFViewer").then((module) => ({
+    default: module.PDFViewer,
+  }))
+);
+
+<Suspense fallback={<LoadingUI />}>
+  <PDFViewer url={pdfUrl} displayName={name} />
+</Suspense>;
+```
+
 #### `ui/` 组件库
 
 基于 shadcn/ui 的通用 UI 组件，提供一致的设计语言和交互体验：
@@ -195,7 +228,13 @@ interface TiptapEditorProps {
 - **左栏**：当前任务详情 + `fetchTaskResources` 拉取的关联资源列表，点击资源在中栏显示。
 - **中栏**：资源编辑/预览区
   - 文本资源：使用 `TiptapEditor` 进行 Markdown 编辑（实时保存状态提示）
-  - PDF 资源：预览占位（开发中）
+  - PDF 资源：使用 `react-pdf-highlighter-extended` 实现 PDF 阅读和高亮标注
+    - PDF.js 渲染引擎
+    - 选中文本添加高亮
+    - 区域截图高亮
+    - 高亮管理（查看/删除）
+    - 滚轮缩放查看
+    - 自动路径转换（相对路径 → 完整路径 → Tauri URL）
   - 图片资源：使用 `react-zoom-pan-pinch` 实现缩放平移预览
     - 滚轮缩放（0.1x - 10x）
     - 鼠标拖拽平移
@@ -308,7 +347,14 @@ interface WorkspacePageProps {
      - 使用 `react-zoom-pan-pinch` 实现缩放平移功能
      - 路径转换流程：相对路径（`assets/xxx.png`）→ `getAssetsPath()` 获取完整路径 → `convertFileSrc()` 转换为 asset 协议 URL（`asset://localhost/...`）
      - 配置要求：`tauri.conf.json` 中启用 `assetProtocol`，作用域设置为 `$APPDATA/**`
-   - 🚧 **PDF 预览**：待实现
+   - ✅ **PDF 预览已完成**：
+     - 使用 `react-pdf-highlighter-extended` + `pdfjs-dist@4.4.168` 实现 PDF 阅读
+     - 支持文本高亮、区域截图（按住 Alt/Option）
+     - PDF.js worker 配置：复制 `node_modules/pdfjs-dist/build/pdf.worker.min.mjs` 到 `public/` 目录
+     - 路径转换流程与图片预览相同
+     - 依赖安装：`npm install react-pdf-highlighter-extended pdfjs-dist@4.4.168 --legacy-peer-deps`
+     - 懒加载：使用 `React.lazy()` 避免影响应用启动
+     - 版本要求：`pdfjs-dist` 必须是 4.4.168，与 `react-pdf-highlighter-extended` 匹配
 7. **保存功能**：文本编辑器的保存功能需要添加 Rust 命令 `update_resource_content`，前端监听 `Ctrl+S` 快捷键触发保存。
 8. **剪贴板增强**：可扩展支持复制资源到剪贴板、HTML 格式保留样式等功能。
 9. **UI 组件扩展**：如需新增 shadcn/ui 组件，使用 `npx shadcn-ui@latest add [component]` 命令自动生成。

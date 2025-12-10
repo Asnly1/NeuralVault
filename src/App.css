@@ -149,3 +149,62 @@ body,
   @apply text-muted-foreground pointer-events-none float-left h-0;
   content: attr(data-placeholder);
 }
+
+/* ============================================
+   PDF Highlighter Styles
+   ============================================ */
+
+.pdf-viewer-wrapper {
+  @apply relative w-full h-full overflow-hidden;
+}
+
+.PdfHighlighter {
+  @apply relative h-full overflow-auto;
+}
+
+.PdfHighlighter__page-container {
+  @apply mx-auto p-4 flex justify-center;
+}
+
+.PdfHighlighter canvas {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.Highlight {
+  background: rgba(255, 226, 143, 0.3);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.Highlight--scrolledTo {
+  background: rgba(255, 226, 143, 0.6);
+}
+
+.Tip {
+  @apply bg-card border border-border rounded-lg p-3 z-10;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.Tip__compact {
+  @apply flex gap-2 items-center;
+}
+
+.Tip__card {
+  @apply bg-card border border-border rounded-lg p-4 max-w-md;
+}
+
+.Tip__emoji {
+  @apply text-2xl;
+}
+
+.Tip__text {
+  @apply text-foreground text-sm leading-relaxed;
+}
+
+.pdf-loading {
+  @apply flex flex-col items-center justify-center h-full gap-4;
+}
+
+.pdf-error {
+  @apply flex flex-col items-center justify-center h-full gap-4 text-destructive;
+}

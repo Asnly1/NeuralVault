@@ -6,5 +6,5 @@
 6. 工作台使用
    1. ✅ Tiptap + tiptap-markdown 实现富文本编辑
    2. ✅ react-zoom-pan-pinch 实现图片预览
-   3. react-pdf-highlighter-extended 实现 pdf 阅读，标注（MVP 先不做）
+   3. ✅ react-pdf-highlighter-extended 实现 pdf 阅读（支持文本高亮和区域截图）
 7. ✅ HUD 粘贴文件/图片

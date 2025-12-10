@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,13 @@ import { fetchTaskResources, getAssetsPath } from "../api";
 import { TiptapEditor } from "../components";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { convertFileSrc } from "@tauri-apps/api/core";
+
+// 懒加载 PDF 组件，避免启动时加载
+const PDFViewer = lazy(() =>
+  import("../components/PDFViewer").then((module) => ({
+    default: module.PDFViewer,
+  }))
+);
 
 interface WorkspacePageProps {
   selectedTask: Task | null;
@@ -130,12 +137,43 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
     }
 
     if (selectedResource.file_type === "pdf") {
+      // 获取 PDF 路径并转换为 Tauri 可访问的 URL
+      const pdfPath = selectedResource.file_path;
+      if (!pdfPath || !assetsPath) {
+        return (
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+            <span className="text-4xl mb-4">⚠️</span>
+            <p className="text-lg font-medium">
+              {!pdfPath ? "PDF 路径缺失" : "正在加载..."}
+            </p>
+          </div>
+        );
+      }
+
+      // 将相对路径转换为完整路径
+      // pdfPath 格式: "assets/xxx.pdf"
+      // assetsPath 格式: "/Users/.../assets"
+      // 需要提取文件名并拼接完整路径
+      const fileName = pdfPath.replace("assets/", "");
+      const fullPath = `${assetsPath}/${fileName}`;
+
+      // convertFileSrc 将本地文件路径转换为 Tauri asset 协议 URL
+      const pdfUrl = convertFileSrc(fullPath);
+
       return (
-        <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-          <span className="text-4xl mb-4">📕</span>
-          <p className="text-lg font-medium">PDF 阅读器</p>
-          <p className="text-sm">PDF 预览功能开发中...</p>
-        </div>
+        <Suspense
+          fallback={
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+              <div className="animate-spin text-4xl mb-4">⟳</div>
+              <p className="text-lg font-medium">正在加载 PDF 阅读器...</p>
+            </div>
+          }
+        >
+          <PDFViewer
+            url={pdfUrl}
+            displayName={selectedResource.display_name || "PDF 文档"}
+          />
+        </Suspense>
       );
     }
 
