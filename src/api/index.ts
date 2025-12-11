@@ -48,6 +48,14 @@ export const createTask = async (
   return await invoke("create_task", { payload: request });
 };
 
+/**
+ * 删除任务（软删除）
+ * @param taskId - 任务 ID
+ */
+export const deleteTask = async (taskId: number): Promise<void> => {
+  return await invoke("delete_task_command", { taskId });
+};
+
 // ============================================
 // Resource API
 // ============================================

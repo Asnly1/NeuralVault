@@ -265,6 +265,17 @@ pub async fn list_active_tasks(pool: &SqlitePool) -> Result<Vec<TaskRecord>, sql
     .await
 }
 
+/// 软删除任务（设置 is_deleted = 1）
+pub async fn delete_task(pool: &SqlitePool, task_id: i64) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE tasks SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE task_id = ?",
+    )
+    .bind(task_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 pub async fn insert_resource(
     pool: &SqlitePool,
     params: NewResource<'_>,

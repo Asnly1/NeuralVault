@@ -9,11 +9,11 @@ use uuid::Uuid;
 
 use crate::{
     db::{
-        get_task_by_id, insert_resource, insert_task, link_resource_to_task, list_active_tasks,
-        list_resources_for_task, list_unclassified_resources, unlink_resource_from_task,
-        LinkResourceParams, NewResource, NewTask, ResourceClassificationStatus, ResourceFileType,
-        ResourceProcessingStage, ResourceRecord, ResourceSyncStatus, SourceMeta, TaskPriority,
-        TaskRecord, TaskStatus, VisibilityScope,
+        delete_task, get_task_by_id, insert_resource, insert_task, link_resource_to_task,
+        list_active_tasks, list_resources_for_task, list_unclassified_resources,
+        unlink_resource_from_task, LinkResourceParams, NewResource, NewTask,
+        ResourceClassificationStatus, ResourceFileType, ResourceProcessingStage, ResourceRecord,
+        ResourceSyncStatus, SourceMeta, TaskPriority, TaskRecord, TaskStatus, VisibilityScope,
     },
     AppState,
 };
@@ -422,6 +422,19 @@ pub async fn get_dashboard(state: State<'_, AppState>) -> Result<DashboardData, 
         .await
         .map_err(|e| e.to_string())?;
     Ok(DashboardData { tasks, resources })
+}
+
+/// 删除任务（软删除）
+#[tauri::command]
+pub async fn delete_task_command(
+    state: State<'_, AppState>,
+    task_id: i64,
+) -> Result<(), String> {
+    let pool = &state.db;
+    delete_task(pool, task_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// 关联资源到任务的请求

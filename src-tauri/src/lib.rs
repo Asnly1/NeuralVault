@@ -7,8 +7,8 @@ use tauri::{Emitter, Listener, Manager};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 pub use commands::{
-    capture_resource, create_task, get_assets_path, get_dashboard, get_task_resources,
-    link_resource, read_clipboard, seed_demo_data, unlink_resource,
+    capture_resource, create_task, delete_task_command, get_assets_path, get_dashboard,
+    get_task_resources, link_resource, read_clipboard, seed_demo_data, unlink_resource,
 };
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -128,6 +128,7 @@ pub fn run() {
             greet,
             capture_resource,
             create_task,
+            delete_task_command,
             get_dashboard,
             get_task_resources,
             seed_demo_data,

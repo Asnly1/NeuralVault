@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/select";
 import { Task, Resource, TaskPriority } from "../types";
 import { TaskCard, ResourceCard, QuickCapture } from "../components";
-import { createTask } from "../api";
+import { createTask, deleteTask } from "../api";
 
 interface DashboardPageProps {
   tasks: Task[];
@@ -96,6 +96,20 @@ export function DashboardPage({
       console.error("创建任务失败:", err);
     } finally {
       setCreating(false);
+    }
+  };
+
+  // 处理删除任务
+  const handleDeleteTask = async (taskId: number) => {
+    if (!confirm("确定要删除这个任务吗？")) {
+      return;
+    }
+
+    try {
+      await deleteTask(taskId);
+      onRefresh();
+    } catch (err) {
+      console.error("删除任务失败:", err);
     }
   };
 
@@ -321,6 +335,7 @@ export function DashboardPage({
                   key={task.task_id}
                   task={task}
                   onClick={() => onSelectTask(task)}
+                  onDelete={handleDeleteTask}
                 />
               ))}
             </div>
