@@ -4,8 +4,28 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Task, Resource } from "../types";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Task, Resource, TaskPriority } from "../types";
 import { TaskCard, ResourceCard, QuickCapture } from "../components";
+import { createTask } from "../api";
 
 interface DashboardPageProps {
   tasks: Task[];
@@ -33,6 +53,51 @@ export function DashboardPage({
   onLinkResource,
 }: DashboardPageProps) {
   const [sortMode, setSortMode] = useState<SortMode>("smart");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  // 创建任务表单状态
+  const [formData, setFormData] = useState({
+    title: "",
+    description: "",
+    priority: "medium" as TaskPriority,
+    due_date: "",
+  });
+
+  // 处理创建任务
+  const handleCreateTask = async () => {
+    if (!formData.title.trim()) {
+      return;
+    }
+
+    setCreating(true);
+    try {
+      await createTask({
+        title: formData.title,
+        description: formData.description || undefined,
+        priority: formData.priority,
+        due_date: formData.due_date || undefined,
+      });
+
+      // 重置表单
+      setFormData({
+        title: "",
+        description: "",
+        priority: "medium",
+        due_date: "",
+      });
+
+      // 关闭对话框
+      setDialogOpen(false);
+
+      // 刷新数据
+      onRefresh();
+    } catch (err) {
+      console.error("创建任务失败:", err);
+    } finally {
+      setCreating(false);
+    }
+  };
 
   // 过滤出活跃任务（todo）
   const activeTasks = useMemo(() => {
@@ -146,6 +211,106 @@ export function DashboardPage({
               >
                 手动排序
               </Button>
+              <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="h-8 w-8 p-0"
+                    title="创建任务"
+                  >
+                    +
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[500px]">
+                  <DialogHeader>
+                    <DialogTitle>创建新任务</DialogTitle>
+                    <DialogDescription>
+                      填写任务信息，创建后将出现在待办列表中
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="title">
+                        标题 <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id="title"
+                        placeholder="输入任务标题"
+                        value={formData.title}
+                        onChange={(e) =>
+                          setFormData({ ...formData, title: e.target.value })
+                        }
+                        autoFocus
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="description">描述（可选）</Label>
+                      <Textarea
+                        id="description"
+                        placeholder="详细描述任务内容"
+                        value={formData.description}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            description: e.target.value,
+                          })
+                        }
+                        rows={3}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="priority">优先级</Label>
+                        <Select
+                          value={formData.priority}
+                          onValueChange={(value: TaskPriority) =>
+                            setFormData({ ...formData, priority: value })
+                          }
+                        >
+                          <SelectTrigger id="priority">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="high">高</SelectItem>
+                            <SelectItem value="medium">中</SelectItem>
+                            <SelectItem value="low">低</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="due_date">截止日期（可选）</Label>
+                        <Input
+                          id="due_date"
+                          type="date"
+                          value={formData.due_date}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              due_date: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => setDialogOpen(false)}
+                      disabled={creating}
+                    >
+                      取消
+                    </Button>
+                    <Button
+                      onClick={handleCreateTask}
+                      disabled={!formData.title.trim() || creating}
+                    >
+                      {creating ? "创建中..." : "创建任务"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
 

@@ -223,7 +223,7 @@ pub struct AppState {
 | ----------------------- | ------------------ | -------------------------------------------------------- |
 | `CaptureRequest`        | 快速捕获请求       | content, display_name, file_path, file_type, source_meta |
 | `CaptureResponse`       | 捕获响应           | resource_id, resource_uuid                               |
-| `CreateTaskRequest`     | 创建任务请求       | title, description, status, priority, due_date           |
+| `CreateTaskRequest`     | 创建任务请求       | title (必填), description, status, priority, due_date    |
 | `CreateTaskResponse`    | 创建任务响应       | task                                                     |
 | `DashboardData`         | 看板数据           | tasks, resources                                         |
 | `LinkResourceRequest`   | 关联资源请求       | task_id, resource_id, visibility_scope, local_alias      |

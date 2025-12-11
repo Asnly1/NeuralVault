@@ -41,7 +41,7 @@ pub struct CaptureResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateTaskRequest {
-    pub title: Option<String>,
+    pub title: String, // 必填：任务标题
     pub description: Option<String>,
     pub status: Option<TaskStatus>,
     pub priority: Option<TaskPriority>,
@@ -395,7 +395,7 @@ pub async fn create_task(
             uuid: &uuid,
             parent_task_id: None,
             root_task_id: None,
-            title: payload.title.as_deref(),
+            title: Some(&payload.title), // title 现在是必填的
             description: payload.description.as_deref(),
             suggested_subtasks: None,
             status,

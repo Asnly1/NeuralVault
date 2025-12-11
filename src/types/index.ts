@@ -106,7 +106,7 @@ export const navItems: { key: PageType; icon: string; label: string }[] = [
  * 创建任务请求 (对应 Rust: CreateTaskRequest)
  */
 export interface CreateTaskRequest {
-  title?: string;
+  title: string; // 必填：任务标题
   description?: string;
   status?: TaskStatus;
   priority?: TaskPriority;
