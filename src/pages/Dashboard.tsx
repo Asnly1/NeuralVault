@@ -34,14 +34,9 @@ export function DashboardPage({
 }: DashboardPageProps) {
   const [sortMode, setSortMode] = useState<SortMode>("smart");
 
-  // 过滤出活跃任务（inbox, todo, doing）
+  // 过滤出活跃任务（todo）
   const activeTasks = useMemo(() => {
-    return tasks.filter(
-      (task) =>
-        task.status === "inbox" ||
-        task.status === "todo" ||
-        task.status === "doing"
-    );
+    return tasks.filter((task) => task.status === "todo");
   }, [tasks]);
 
   // 排序任务

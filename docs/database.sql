@@ -27,7 +27,7 @@ CREATE TABLE tasks (
     suggested_subtasks JSON,
     
     -- 任务状态管理
-    status TEXT DEFAULT 'inbox' CHECK (status IN ('inbox','todo','doing','done','archived')),
+    status TEXT DEFAULT 'todo' CHECK (status IN ('todo','done')),
     priority TEXT DEFAULT 'Medium' CHECK (priority IN ('High','Medium','Low')),
     due_date DATETIME,
     

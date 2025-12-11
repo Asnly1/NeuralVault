@@ -20,7 +20,7 @@
 
 这个窗口通常采用 **侧边栏导航 (Sidebar Navigation)** 的布局。包含以下几个主要页面：
 
-#### Page A: 智能看板 (Dashboard / Inbox)
+#### Page A: 智能看板 (Dashboard)
 
 “主页面”，但比单纯的 Upload + Todo 更丰富。
 

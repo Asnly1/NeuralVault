@@ -5,13 +5,7 @@ import { z } from "zod";
 // ============================================
 
 // as const: 这个数组里的值是固定死的，永远不会变，也不允许被修改，请把它当作字面量处理，而不是普通的字符串数组
-export const taskStatusValues = [
-  "inbox",
-  "todo",
-  "doing",
-  "done",
-  "archived",
-] as const;
+export const taskStatusValues = ["todo", "done"] as const;
 
 export const taskPriorityValues = ["high", "medium", "low"] as const;
 
@@ -67,10 +61,10 @@ export type Task = z.infer<typeof taskSchema>;
 export type Resource = z.infer<typeof resourceSchema>;
 export type DashboardData = z.infer<typeof dashboardSchema>;
 // typeof taskStatusValues: 获取这个JavaScript 变量在 TypeScript 层面对应的类型
-// 因为你加了 as const，所以它的类型是： readonly ["inbox", "todo", "doing", ...]
+// 因为你加了 as const，所以它的类型是： readonly ["todo", "done"]
 // [number]: 请给我这个数组里任意数字索引位置上的元素的类型
 // 因为数组的索引是数字（0, 1, 2...），所以这就相当于把数组里所有的值拿出来，拼成一个联合类型
-// 结果：type TaskStatus = "inbox" | "todo" | "doing" | "done" | "archived";
+// 结果：type TaskStatus = "todo" | "done";
 export type TaskStatus = (typeof taskStatusValues)[number];
 export type TaskPriority = (typeof taskPriorityValues)[number];
 export type ResourceType = (typeof resourceTypeValues)[number];

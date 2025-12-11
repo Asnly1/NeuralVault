@@ -163,7 +163,7 @@ pub struct AppState {
 
 | 枚举类型                       | 可选值                                | 说明             |
 | ------------------------------ | ------------------------------------- | ---------------- |
-| `TaskStatus`                   | inbox/todo/doing/done/archived        | 任务状态         |
+| `TaskStatus`                   | todo/done                             | 任务状态         |
 | `TaskPriority`                 | High/Medium/Low                       | 任务优先级       |
 | `ResourceSyncStatus`           | pending/synced/dirty/error            | 资源同步状态     |
 | `ResourceProcessingStage`      | todo/chunking/embedding/done          | 资源处理阶段     |
@@ -189,7 +189,7 @@ pub struct AppState {
 | `init_pool()`                   | `db_path: impl AsRef<Path>`  | `Result<SqlitePool>`          | 初始化数据库连接池并运行迁移            |
 | `insert_task()`                 | `pool, NewTask<'_>`          | `Result<i64>`                 | 插入任务并返回 `task_id`                |
 | `get_task_by_id()`              | `pool, task_id`              | `Result<TaskRecord>`          | 根据 ID 查询任务                        |
-| `list_active_tasks()`           | `pool`                       | `Result<Vec<TaskRecord>>`     | 查询活跃任务（inbox/todo/doing）        |
+| `list_active_tasks()`           | `pool`                       | `Result<Vec<TaskRecord>>`     | 查询活跃任务（todo）                    |
 | `insert_resource()`             | `pool, NewResource<'_>`      | `Result<i64>`                 | 插入资源并返回 `resource_id`            |
 | `get_resource_by_id()`          | `pool, resource_id`          | `Result<ResourceRecord>`      | 根据 ID 查询资源                        |
 | `list_unclassified_resources()` | `pool`                       | `Result<Vec<ResourceRecord>>` | 查询未分类资源                          |

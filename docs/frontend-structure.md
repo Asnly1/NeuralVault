@@ -51,7 +51,7 @@ src/
 定义所有 TypeScript 类型、Zod Schema 与常量。
 
 - Schema：`taskSchema`、`resourceSchema`、`dashboardSchema`，均用 `z.coerce.date()` 将日期规范化。
-- 枚举值：`taskStatusValues`（inbox/todo/doing/done/archived）、`taskPriorityValues`、`resourceTypeValues`、`classificationValues`。
+- 枚举值：`taskStatusValues`（todo/done）、`taskPriorityValues`、`resourceTypeValues`、`classificationValues`。
 - 数据类型：`Task`、`Resource`、`DashboardData`、`TaskStatus`、`TaskPriority`、`ResourceType`、`PageType`（"dashboard" | "workspace" | "settings"）。
 - API 类型：`CreateTaskRequest/Response`、`CaptureRequest/Response`、`LinkResourceRequest/Response`、`TaskResourcesResponse`、`SeedResponse`、`CaptureSourceMeta`。
 - 剪贴板类型：`ClipboardContent`（Image/Files/Text/Html/Empty）、`ReadClipboardResponse`。
@@ -223,7 +223,7 @@ const PDFViewer = lazy(() =>
 
 **1. 智能待办列表**
 
-- 展示所有活跃任务（inbox/todo/doing 状态）
+- 展示所有活跃任务（todo 状态）
 - 支持两种排序模式切换：
   - **智能排序**：基于优先级权重（high=3, medium=2, low=1）+ 截止日期紧迫程度
   - **手动排序**：按创建时间降序排列

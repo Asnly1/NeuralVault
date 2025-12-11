@@ -51,7 +51,7 @@ backend/
    3. POST: /chat/session/new 创建一个新的会话，绑定特定的 Task 或 Resource。
       1. Request: { "task_id": 12, "title": "关于部署的讨论" }
 4. agent.py:
-   1. POST: /agent/decompose 任务拆解。读取 Task 标题和描述以及相关 context，生成建议的子任务列表。存到 suggested_subtasks 里面。异步展示。任务先创建成功（进入 Inbox），然后 UI 上显示一个“✨ AI 正在分析...”的微动画，分析完了悄悄把建议挂在旁边，而不是阻断用户操作。
+   1. POST: /agent/decompose 任务拆解。读取 Task 标题和描述以及相关 context，生成建议的子任务列表。存到 suggested_subtasks 里面。异步展示。任务先创建成功（状态为 todo），然后 UI 上显示一个“✨ AI 正在分析...”的微动画，分析完了悄悄把建议挂在旁边，而不是阻断用户操作。
       1. Request: { "model": "gpt-4o-mini", "task_id": 1, "title": "Develop A FastAPI Web App", "description":"xxx", "context": "main.py" }
       2. Response: {
          "suggested_subtasks": [

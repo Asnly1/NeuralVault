@@ -384,7 +384,7 @@ pub async fn create_task(
     state: State<'_, AppState>,
     payload: CreateTaskRequest,
 ) -> Result<CreateTaskResponse, String> {
-    let status = payload.status.unwrap_or(TaskStatus::Inbox);
+    let status = payload.status.unwrap_or(TaskStatus::Todo);
     let priority = payload.priority.unwrap_or(TaskPriority::Medium);
 
     let uuid = Uuid::new_v4().to_string();
@@ -523,7 +523,7 @@ pub async fn seed_demo_data(state: State<'_, AppState>) -> Result<SeedResponse, 
         (
             "梳理需求列表",
             "整理上周访谈要点，准备下周评审。",
-            TaskStatus::Inbox,
+            TaskStatus::Todo,
             TaskPriority::High,
             Some("2024-12-31"),
         ),
@@ -537,7 +537,7 @@ pub async fn seed_demo_data(state: State<'_, AppState>) -> Result<SeedResponse, 
         (
             "实现 Capture PoC",
             "验证 HUD 捕获流程并写出技术风险。",
-            TaskStatus::Doing,
+            TaskStatus::Done,
             TaskPriority::High,
             Some("2024-12-20"),
         ),

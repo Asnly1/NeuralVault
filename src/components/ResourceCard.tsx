@@ -83,11 +83,7 @@ export function ResourceCard({
                   className="cursor-pointer"
                 >
                   <span className="mr-2">
-                    {task.status === "inbox"
-                      ? "📥"
-                      : task.status === "todo"
-                      ? "📋"
-                      : "⚡"}
+                    {task.status === "todo" ? "📋" : "✓"}
                   </span>
                   <span className="truncate">{task.title || "无标题"}</span>
                 </DropdownMenuItem>

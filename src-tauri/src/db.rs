@@ -25,11 +25,8 @@ pub static MIGRATOR: Migrator = sqlx::migrate!();
 //  这告诉 sqlx 把枚举变体映射为小写字符串存入数据库
 #[serde(rename_all = "lowercase")]
 pub enum TaskStatus {
-    Inbox,
     Todo,
-    Doing,
     Done,
-    Archived,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Type, Serialize, Deserialize)]
@@ -261,7 +258,7 @@ pub async fn list_active_tasks(pool: &SqlitePool) -> Result<Vec<TaskRecord>, sql
     sqlx::query_as::<_, TaskRecord>(
         "SELECT task_id, uuid, parent_task_id, root_task_id, title, description, suggested_subtasks, status, priority, due_date, created_at, user_updated_at, system_updated_at, is_deleted, deleted_at, user_id \
          FROM tasks \
-         WHERE status IN ('inbox','todo','doing') AND is_deleted = 0 \
+         WHERE status = 'todo' AND is_deleted = 0 \
          ORDER BY created_at DESC",
     )
     .fetch_all(pool)
@@ -439,7 +436,7 @@ mod tests {
                 root_task_id: None,
                 suggested_subtasks: None,
                 due_date: None,
-                status: TaskStatus::Inbox,
+                status: TaskStatus::Todo,
                 priority: TaskPriority::Medium,
                 user_id: 1,
             },
@@ -450,7 +447,7 @@ mod tests {
         let task = get_task_by_id(&pool, task_id).await.unwrap();
         assert_eq!(task.uuid, task_uuid);
         assert_eq!(task.title.as_deref(), Some("Demo Task"));
-        assert_eq!(task.status, TaskStatus::Inbox);
+        assert_eq!(task.status, TaskStatus::Todo);
         assert_eq!(task.user_id, 1);
         assert!(!task.is_deleted);
 
