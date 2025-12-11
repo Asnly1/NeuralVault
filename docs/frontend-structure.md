@@ -219,7 +219,54 @@ const PDFViewer = lazy(() =>
 
 #### `Dashboard.tsx` (Page A)
 
-智能看板：按 `inbox/todo/doing` 分列渲染 `TaskCard`，顶部状态 + 刷新/生成数据按钮，内嵌 `QuickCapture`，底部显示未分类资源列表（支持下拉关联到任务）。
+智能看板：采用 Notion 风格的现代化设计，包含三个主要部分：
+
+**1. 智能待办列表**
+
+- 展示所有活跃任务（inbox/todo/doing 状态）
+- 支持两种排序模式切换：
+  - **智能排序**：基于优先级权重（high=3, medium=2, low=1）+ 截止日期紧迫程度
+  - **手动排序**：按创建时间降序排列
+- 使用响应式网格布局展示任务卡片（1-3 列自适应）
+- 显示任务计数徽章
+- 空状态友好提示
+
+**2. 快速捕获**
+
+- 内嵌 `QuickCapture` 组件
+- 支持文本输入、图片粘贴、文件上传
+- 提供操作提示文字
+
+**3. 待分类资源**
+
+- 网格布局展示未分类资源（1-5 列自适应）
+- 每个资源卡片支持下拉菜单关联到任务
+- AI 建议提示（资源数量 > 0 时显示）
+- 快捷键提示（Alt + Space 唤起 HUD）
+- 空状态引导文字
+
+**顶部功能栏**
+
+- 同步状态显示（同步中/已同步）
+- 刷新按钮
+- 生成演示数据按钮
+- 错误提示横幅
+
+**Props 接口**
+
+```tsx
+interface DashboardPageProps {
+  tasks: Task[];
+  resources: Resource[];
+  loading: boolean;
+  error: string | null;
+  onCapture: (content: string, filePath?: string) => Promise<void>;
+  onSeed: () => void;
+  onRefresh: () => void;
+  onSelectTask: (task: Task) => void;
+  onLinkResource: (resourceId: number, taskId: number) => Promise<void>;
+}
+```
 
 #### `Workspace.tsx` (Page B)
 

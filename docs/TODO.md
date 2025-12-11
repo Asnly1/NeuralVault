@@ -8,3 +8,6 @@
    2. ✅ react-zoom-pan-pinch 实现图片预览
    3. ✅ react-pdf-highlighter-extended 实现 pdf 阅读（支持文本高亮和区域截图）
 7. ✅ HUD 粘贴文件/图片
+8. dashboard 中的任务增删
+   1. 增加：在三种任务类别（收件箱/待办/
+9. workspace 任务资源的增删
