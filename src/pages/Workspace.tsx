@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Task, Resource, priorityConfig, resourceTypeIcons } from "../types";
-import { fetchTaskResources, getAssetsPath } from "../api";
+import { fetchTaskResources, getAssetsPath, unlinkResource } from "../api";
 import { TiptapEditor } from "../components";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -34,6 +34,9 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
   const [editorContent, setEditorContent] = useState("");
   const [isModified, setIsModified] = useState(false);
   const [assetsPath, setAssetsPath] = useState<string>("");
+  const [hoveredResourceId, setHoveredResourceId] = useState<number | null>(
+    null
+  );
 
   // Load assets path on mount
   useEffect(() => {
@@ -108,6 +111,34 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
     setEditorContent(content);
     setIsModified(true);
   }, []);
+
+  // 处理删除资源（取消关联）
+  const handleDeleteResource = useCallback(
+    async (resourceId: number, e: React.MouseEvent) => {
+      e.stopPropagation(); // 阻止触发 resource 点击事件
+
+      if (!selectedTask) return;
+      if (!confirm("确定要从此任务中移除该资源吗？")) {
+        return;
+      }
+
+      try {
+        await unlinkResource(selectedTask.task_id, resourceId);
+
+        // 如果删除的是当前选中的资源，清空选中状态
+        if (selectedResource?.resource_id === resourceId) {
+          setSelectedResource(null);
+        }
+
+        // 重新加载资源列表
+        const data = await fetchTaskResources(selectedTask.task_id);
+        setLinkedResources(data.resources);
+      } catch (err) {
+        console.error("删除资源失败:", err);
+      }
+    },
+    [selectedTask, selectedResource]
+  );
 
   const isEditable = (resource: Resource | null): boolean => {
     if (!resource) return false;
@@ -402,26 +433,52 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
                 ) : linkedResources.length > 0 ? (
                   <div className="space-y-1">
                     {linkedResources.map((resource) => (
-                      <button
+                      <div
                         key={resource.resource_id}
-                        className={cn(
-                          "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left text-sm transition-colors",
-                          selectedResource?.resource_id === resource.resource_id
-                            ? "bg-secondary"
-                            : "hover:bg-muted"
-                        )}
-                        onClick={() => handleResourceClick(resource)}
+                        className="relative group"
+                        onMouseEnter={() =>
+                          setHoveredResourceId(resource.resource_id)
+                        }
+                        onMouseLeave={() => setHoveredResourceId(null)}
                       >
-                        <span>{resourceTypeIcons[resource.file_type]}</span>
-                        <span className="truncate flex-1">
-                          {resource.display_name || "未命名文件"}
-                        </span>
-                        {isEditable(resource) && (
-                          <Badge variant="outline" className="text-xs shrink-0">
-                            可编辑
-                          </Badge>
+                        <button
+                          className={cn(
+                            "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left text-sm transition-colors",
+                            selectedResource?.resource_id ===
+                              resource.resource_id
+                              ? "bg-secondary"
+                              : "hover:bg-muted"
+                          )}
+                          onClick={() => handleResourceClick(resource)}
+                        >
+                          <span>{resourceTypeIcons[resource.file_type]}</span>
+                          <span className="truncate flex-1">
+                            {resource.display_name || "未命名文件"}
+                          </span>
+                          {isEditable(resource) && (
+                            <Badge
+                              variant="outline"
+                              className="text-xs shrink-0"
+                            >
+                              可编辑
+                            </Badge>
+                          )}
+                        </button>
+                        {/* 删除按钮 */}
+                        {hoveredResourceId === resource.resource_id && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute top-0.5 right-0.5 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10 hover:text-destructive z-10"
+                            onClick={(e) =>
+                              handleDeleteResource(resource.resource_id, e)
+                            }
+                            title="从任务中移除"
+                          >
+                            <span className="text-base">🗑️</span>
+                          </Button>
                         )}
-                      </button>
+                      </div>
                     ))}
                   </div>
                 ) : (
