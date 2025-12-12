@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Task, Resource, priorityConfig, resourceTypeIcons } from "../types";
+import { Trash2 } from "lucide-react";
 import { fetchTaskResources, getAssetsPath, unlinkResource } from "../api";
 import { TiptapEditor } from "../components";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
@@ -140,10 +141,7 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
     [selectedTask, selectedResource]
   );
 
-  const isEditable = (resource: Resource | null): boolean => {
-    if (!resource) return false;
-    return resource.file_type === "text";
-  };
+
 
   const renderEditorArea = () => {
     if (!selectedResource) {
@@ -455,14 +453,6 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
                           <span className="truncate flex-1">
                             {resource.display_name || "未命名文件"}
                           </span>
-                          {isEditable(resource) && (
-                            <Badge
-                              variant="outline"
-                              className="text-xs shrink-0"
-                            >
-                              可编辑
-                            </Badge>
-                          )}
                         </button>
                         {/* 删除按钮 */}
                         {hoveredResourceId === resource.resource_id && (
@@ -475,7 +465,7 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
                             }
                             title="从任务中移除"
                           >
-                            <span className="text-base">🗑️</span>
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         )}
                       </div>

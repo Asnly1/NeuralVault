@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -23,6 +23,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { 
+  Plus, 
+  RotateCcw, 
+  Sparkles, 
+  CheckCircle2, 
+  LayoutGrid, 
+  Zap, 
+  Archive 
+} from "lucide-react";
 import { Task, Resource, TaskPriority } from "../types";
 import { TaskCard, ResourceCard, QuickCapture } from "../components";
 import { createTask, deleteTask } from "../api";
@@ -89,11 +98,11 @@ export function DashboardPage({
 
       // 关闭对话框
       setDialogOpen(false);
-
+      
       // 刷新数据
       onRefresh();
     } catch (err) {
-      console.error("创建任务失败:", err);
+      console.error("Failed to create task:", err);
     } finally {
       setCreating(false);
     }
@@ -101,7 +110,7 @@ export function DashboardPage({
 
   // 处理删除任务
   const handleDeleteTask = async (taskId: number) => {
-    if (!confirm("确定要删除这个任务吗？")) {
+    if (!confirm("Are you sure you want to delete this task?")) {
       return;
     }
 
@@ -109,7 +118,7 @@ export function DashboardPage({
       await deleteTask(taskId);
       onRefresh();
     } catch (err) {
-      console.error("删除任务失败:", err);
+      console.error("Failed to delete task:", err);
     }
   };
 
@@ -160,109 +169,111 @@ export function DashboardPage({
   }, [activeTasks, sortMode]);
 
   return (
-    <ScrollArea className="h-full">
-      <div className="max-w-[1400px] mx-auto p-8 space-y-8">
+    <ScrollArea className="h-full bg-background">
+      <div className="max-w-[1200px] mx-auto p-8 lg:p-12 space-y-12">
         {/* 顶部标题栏 */}
-        <header className="flex items-center justify-between">
-          <div className="space-y-1">
-            <h1 className="text-3xl font-semibold tracking-tight">智能看板</h1>
-            <p className="text-sm text-muted-foreground">
-              今日待办 · 快速捕获 · 智能分类
+        <header className="flex items-end justify-between border-b border-border pb-6">
+          <div className="space-y-2">
+            <h1 className="text-4xl font-bold tracking-tight text-foreground">Dashboard</h1>
+            <p className="text-base text-muted-foreground">
+              Overview of your tasks and captured resources.
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <Badge
-              variant={loading ? "secondary" : "outline"}
-              className="h-7 px-3"
-            >
-              {loading ? "同步中..." : "已同步"}
-            </Badge>
-            <Button
+          <div className="flex items-center gap-2">
+             <Button
               variant="ghost"
-              size="icon"
+              size="sm"
               onClick={onRefresh}
-              title="刷新"
-              className="h-9 w-9"
+              className={`h-8 w-8 p-0 text-muted-foreground ${loading ? 'animate-spin' : ''}`}
+              title="Refresh"
             >
-              <span className="text-lg">↻</span>
+              <RotateCcw className="h-4 w-4" />
             </Button>
-            <Button variant="outline" size="sm" onClick={onSeed}>
-              生成演示数据
+            <Button variant="ghost" size="sm" onClick={onSeed} className="text-muted-foreground h-8">
+              <Sparkles className="h-4 w-4 mr-2" />
+              Seed Data
             </Button>
           </div>
         </header>
 
         {/* 错误提示 */}
         {error && (
-          <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-destructive text-sm">
-            ⚠️ {error}
+          <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-destructive text-sm flex items-center gap-2">
+            <span>⚠️</span> {error}
           </div>
         )}
 
         {/* 第一部分：智能待办列表 */}
-        <section className="space-y-4">
+        <section className="space-y-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <h2 className="text-lg font-semibold">📋 今日待办</h2>
-              <Badge variant="secondary" className="text-xs">
-                {sortedTasks.length} 项任务
+              <div className="p-1.5 bg-orange-100 dark:bg-orange-900/20 rounded-md">
+                 <CheckCircle2 className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+              </div>
+              <h2 className="text-xl font-semibold text-foreground">Active Tasks</h2>
+              <Badge variant="secondary" className="font-normal text-muted-foreground bg-muted/50 ml-2">
+                {sortedTasks.length}
               </Badge>
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                variant={sortMode === "smart" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setSortMode("smart")}
-                className="h-8 text-xs"
-              >
-                智能排序
-              </Button>
-              <Button
-                variant={sortMode === "manual" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setSortMode("manual")}
-                className="h-8 text-xs"
-              >
-                手动排序
-              </Button>
+              <div className="bg-muted/30 p-1 rounded-lg flex gap-1">
+                <Button
+                    variant={sortMode === "smart" ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => setSortMode("smart")}
+                    className="h-7 text-xs px-3 shadow-none"
+                >
+                    Smart Sort
+                </Button>
+                <Button
+                    variant={sortMode === "manual" ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => setSortMode("manual")}
+                    className="h-7 text-xs px-3 shadow-none"
+                >
+                    Manual
+                </Button>
+              </div>
+              
               <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
                 <DialogTrigger asChild>
                   <Button
                     variant="default"
                     size="sm"
-                    className="h-8 w-8 p-0"
-                    title="创建任务"
+                    className="h-8 w-8 p-0 ml-2 rounded-full"
+                    title="Create Task"
                   >
-                    +
+                    <Plus className="h-4 w-4" />
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[500px]">
                   <DialogHeader>
-                    <DialogTitle>创建新任务</DialogTitle>
+                    <DialogTitle>New Task</DialogTitle>
                     <DialogDescription>
-                      填写任务信息，创建后将出现在待办列表中
+                      Add a new item to your todo list.
                     </DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
                     <div className="grid gap-2">
                       <Label htmlFor="title">
-                        标题 <span className="text-destructive">*</span>
+                        Title <span className="text-destructive">*</span>
                       </Label>
                       <Input
                         id="title"
-                        placeholder="输入任务标题"
+                        placeholder="Task title"
                         value={formData.title}
                         onChange={(e) =>
                           setFormData({ ...formData, title: e.target.value })
                         }
                         autoFocus
+                        className="font-medium"
                       />
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="description">描述（可选）</Label>
+                      <Label htmlFor="description">Description</Label>
                       <Textarea
                         id="description"
-                        placeholder="详细描述任务内容"
+                        placeholder="Add details..."
                         value={formData.description}
                         onChange={(e) =>
                           setFormData({
@@ -275,7 +286,7 @@ export function DashboardPage({
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="grid gap-2">
-                        <Label htmlFor="priority">优先级</Label>
+                        <Label htmlFor="priority">Priority</Label>
                         <Select
                           value={formData.priority}
                           onValueChange={(value: TaskPriority) =>
@@ -286,14 +297,14 @@ export function DashboardPage({
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="high">高</SelectItem>
-                            <SelectItem value="medium">中</SelectItem>
-                            <SelectItem value="low">低</SelectItem>
+                            <SelectItem value="high">High</SelectItem>
+                            <SelectItem value="medium">Medium</SelectItem>
+                            <SelectItem value="low">Low</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       <div className="grid gap-2">
-                        <Label htmlFor="due_date">截止日期（可选）</Label>
+                        <Label htmlFor="due_date">Due Date</Label>
                         <Input
                           id="due_date"
                           type="date"
@@ -310,17 +321,17 @@ export function DashboardPage({
                   </div>
                   <DialogFooter>
                     <Button
-                      variant="outline"
+                      variant="ghost"
                       onClick={() => setDialogOpen(false)}
                       disabled={creating}
                     >
-                      取消
+                      Cancel
                     </Button>
                     <Button
                       onClick={handleCreateTask}
                       disabled={!formData.title.trim() || creating}
                     >
-                      {creating ? "创建中..." : "创建任务"}
+                      {creating ? "Creating..." : "Create Task"}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -329,7 +340,7 @@ export function DashboardPage({
           </div>
 
           {sortedTasks.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {sortedTasks.map((task) => (
                 <TaskCard
                   key={task.task_id}
@@ -340,15 +351,15 @@ export function DashboardPage({
               ))}
             </div>
           ) : (
-            <Card className="border-dashed">
-              <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                <div className="text-5xl mb-4 opacity-50">✓</div>
-                <h3 className="text-lg font-medium mb-2">暂无待办任务</h3>
+            <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-border rounded-lg bg-muted/20">
+                <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
+                    <CheckCircle2 className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <h3 className="text-base font-medium mb-1">All caught up</h3>
                 <p className="text-sm text-muted-foreground max-w-sm">
-                  太棒了！你已经完成了所有任务。使用下方的快速捕获输入新的想法或任务。
+                  You have no active tasks. Enjoy your day!
                 </p>
-              </CardContent>
-            </Card>
+            </div>
           )}
         </section>
 
@@ -356,35 +367,41 @@ export function DashboardPage({
 
         {/* 第二部分：快速捕获 */}
         <section className="space-y-4">
-          <div className="flex items-center gap-3">
-            <h2 className="text-lg font-semibold">⚡ 快速捕获</h2>
-            <p className="text-sm text-muted-foreground">
-              输入文字、粘贴图片或上传文件
-            </p>
+          <div className="flex items-center gap-3 mb-2">
+             <div className="p-1.5 bg-blue-100 dark:bg-blue-900/20 rounded-md">
+                 <Zap className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+            <h2 className="text-xl font-semibold">Quick Capture</h2>
           </div>
           <QuickCapture onCapture={onCapture} loading={loading} />
+          <p className="text-xs text-muted-foreground pl-1">
+             Capture thoughts, files, or images instantly.
+          </p>
         </section>
 
         <Separator />
 
         {/* 第三部分：待分类资源 */}
-        <section className="space-y-4">
+        <section className="space-y-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <h2 className="text-lg font-semibold">📂 待分类资源</h2>
-              <Badge variant="outline" className="text-xs">
-                {resources.length} 个文件
+               <div className="p-1.5 bg-purple-100 dark:bg-purple-900/20 rounded-md">
+                 <Archive className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              </div>
+              <h2 className="text-xl font-semibold">Inbox Resources</h2>
+              <Badge variant="secondary" className="font-normal text-muted-foreground bg-muted/50 ml-2">
+                {resources.length}
               </Badge>
             </div>
-            {resources.length > 0 && (
-              <p className="text-sm text-muted-foreground">
-                💡 AI 提示：将相关资源关联到任务以便更好地组织
-              </p>
-            )}
+             {resources.length > 0 && (
+                <span className="text-xs text-muted-foreground hidden sm:block">
+                  Drag or use menu to link to tasks
+                </span>
+             )}
           </div>
 
           {resources.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {resources.map((res) => (
                 <ResourceCard
                   key={res.resource_id}
@@ -395,34 +412,21 @@ export function DashboardPage({
               ))}
             </div>
           ) : (
-            <Card className="border-dashed">
-              <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                <div className="text-5xl mb-4 opacity-50">◇</div>
-                <h3 className="text-lg font-medium mb-2">暂无待分类资源</h3>
-                <p className="text-sm text-muted-foreground max-w-sm mb-3">
-                  通过快速捕获添加文件、图片或文本，AI
-                  将帮助你自动分类和建立关联。
-                </p>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <kbd className="px-2 py-1 rounded bg-muted font-mono">
-                    Alt
-                  </kbd>
-                  <span>+</span>
-                  <kbd className="px-2 py-1 rounded bg-muted font-mono">
-                    Space
-                  </kbd>
-                  <span>快捷键唤起悬浮输入窗</span>
+             <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-border rounded-lg bg-muted/20">
+                <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
+                    <LayoutGrid className="h-6 w-6 text-muted-foreground" />
                 </div>
-              </CardContent>
-            </Card>
+                <h3 className="text-base font-medium mb-1">Inbox is empty</h3>
+                <p className="text-sm text-muted-foreground max-w-sm">
+                  Captured files and texts will appear here for you to organize.
+                </p>
+            </div>
           )}
         </section>
 
-        {/* 页脚提示 */}
-        <footer className="pt-8 pb-4 text-center">
-          <p className="text-xs text-muted-foreground">
-            点击任务卡片进入工作台 · 使用快速捕获添加新内容 · 拖拽资源关联到任务
-          </p>
+        <footer className="pt-12 pb-6 text-center text-xs text-muted-foreground opacity-60">
+           {/* 页脚提示 */}
+           NeuralVault V1.0 • Notion Style Edition
         </footer>
       </div>
     </ScrollArea>

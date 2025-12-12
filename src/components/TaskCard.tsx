@@ -1,8 +1,9 @@
-import { useState } from "react";
+
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Trash2, Calendar, AlertCircle } from "lucide-react";
 import { Task, priorityConfig } from "../types";
 
 interface TaskCardProps {
@@ -12,7 +13,7 @@ interface TaskCardProps {
 }
 
 export function TaskCard({ task, onClick, onDelete }: TaskCardProps) {
-  const [isHovered, setIsHovered] = useState(false);
+
   const isOverdue = task.due_date && new Date(task.due_date) < new Date();
   const priority = priorityConfig[task.priority];
 
@@ -26,67 +27,69 @@ export function TaskCard({ task, onClick, onDelete }: TaskCardProps) {
   return (
     <Card
       className={cn(
-        "cursor-pointer transition-all hover:shadow-md hover:border-primary/50 relative group",
-        isOverdue && "border-destructive/50 bg-destructive/5"
+        "cursor-pointer transition-all border-border shadow-sm hover:shadow-none hover:bg-muted/40 relative group",
+        isOverdue && "border-destructive/30 bg-destructive/5"
       )}
       onClick={onClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
     >
-      {/* 删除按钮 */}
-      {isHovered && onDelete && (
+      {/* Delete Button */}
+      {onDelete && (
         <Button
           variant="ghost"
           size="icon"
-          className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10 hover:text-destructive z-10"
+          className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive z-10"
           onClick={handleDelete}
-          title="删除任务"
+          title="Delete task"
         >
-          <span className="text-base">🗑️</span>
+          <Trash2 className="h-3.5 w-3.5" />
         </Button>
       )}
 
-      <CardHeader className="p-3 pb-2">
-        <div className="flex items-start gap-2 pr-8">
-          <span
-            className="mt-1.5 h-2 w-2 rounded-full shrink-0"
-            style={{ background: priority.color }}
-          />
-          <h4 className="text-sm font-medium leading-tight line-clamp-2">
-            {task.title || "未命名任务"}
+      <CardHeader className="p-3 pb-1">
+        <div className="flex items-start gap-2 pr-6">
+          <div className="mt-1">
+             <div className="w-3.5 h-3.5 rounded-sm border border-foreground/20" />
+          </div>
+          <h4 className={`text-sm font-medium leading-snug ${task.status === 'done' ? 'line-through text-muted-foreground' : ''}`}>
+            {task.title || "Untitled"}
           </h4>
         </div>
       </CardHeader>
 
-      {task.description && (
-        <CardContent className="px-3 pb-2 pt-0">
-          <p className="text-xs text-muted-foreground line-clamp-2">
-            {task.description}
-          </p>
+      {(task.description || task.due_date) && (
+        <CardContent className="px-3 pb-3 pt-1 flex flex-col gap-2">
+          {task.description && (
+             <p className="text-xs text-muted-foreground line-clamp-2 pl-6">
+               {task.description}
+             </p>
+          )}
+          
+          <div className="flex items-center gap-2 pl-6 mt-1">
+            <Badge
+              variant="secondary"
+              className="text-[10px] h-5 px-1.5 font-normal bg-opacity-10 text-muted-foreground border border-transparent"
+              style={{
+                backgroundColor: `${priority.color}10`,
+                color: priority.color,
+              }}
+            >
+              {priority.label}
+            </Badge>
+            {task.due_date && (
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-[10px] h-5 px-1.5 font-normal border-transparent bg-transparent text-muted-foreground gap-1 p-0",
+                  isOverdue && "text-destructive font-medium"
+                )}
+              >
+                {isOverdue ? <AlertCircle className="h-3 w-3" /> : <Calendar className="h-3 w-3" />}
+                {task.due_date.toLocaleDateString("zh-CN")}
+              </Badge>
+            )}
+          </div>
         </CardContent>
       )}
-
-      <CardContent className="flex items-center gap-2 px-3 pb-3 pt-0">
-        <Badge
-          variant="secondary"
-          className="text-xs px-1.5 py-0"
-          style={{
-            backgroundColor: `${priority.color}20`,
-            color: priority.color,
-          }}
-        >
-          {priority.label}
-        </Badge>
-        {task.due_date && (
-          <Badge
-            variant={isOverdue ? "destructive" : "outline"}
-            className="text-xs px-1.5 py-0"
-          >
-            {isOverdue && "⚠ "}
-            {task.due_date.toLocaleDateString("zh-CN")}
-          </Badge>
-        )}
-      </CardContent>
     </Card>
   );
 }

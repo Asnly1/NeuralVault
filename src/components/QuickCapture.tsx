@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Paperclip, ArrowUp, X } from "lucide-react";
 import { readClipboard } from "@/api";
 import { ClipboardContent } from "@/types";
 
@@ -299,90 +300,94 @@ export function QuickCapture({
   return (
     <Wrapper
       className={cn(
-        isHUD &&
-          "bg-background/80 backdrop-blur-lg border rounded-xl shadow-2xl"
+        isHUD 
+          ? "bg-background/80 backdrop-blur-lg border border-border/40 rounded-xl shadow-2xl"
+          : "border border-t-0 border-x-0 border-b-0 shadow-none bg-transparent"
       )}
     >
-      <ContentWrapper className={cn(!isHUD && "p-4", isHUD && "p-3")}>
-        <form onSubmit={handleSubmit} className="space-y-3">
+      <ContentWrapper className={cn(!isHUD && "p-0", isHUD && "p-3")}>
+        <form onSubmit={handleSubmit} className="relative group">
           {/* Selected Files Preview */}
           {selectedFiles.length > 0 && (
-            <div className="space-y-1.5 max-h-32 overflow-y-auto">
+            <div className="flex flex-wrap gap-2 mb-2 p-2">
               {selectedFiles.map((file, index) => (
                 <div
                   key={`${file.path}-${index}`}
-                  className="flex items-center justify-between gap-2 rounded-lg bg-muted px-3 py-1.5"
+                  className="flex items-center gap-2 rounded-md bg-muted/60 border border-border px-2 py-1 text-xs"
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-sm">{getFileIcon(file.name)}</span>
-                    <span className="text-sm truncate">{file.name}</span>
-                  </div>
-                  <Button
+                  <span className="opacity-70">{getFileIcon(file.name)}</span>
+                  <span className="max-w-[150px] truncate">{file.name}</span>
+                  <button
                     type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 shrink-0"
                     onClick={() => handleRemoveFile(index)}
+                    className="ml-1 text-muted-foreground hover:text-foreground"
                   >
-                    ×
-                  </Button>
+                    <X className="h-3 w-3" />
+                  </button>
                 </div>
               ))}
             </div>
           )}
 
-          {/* Textarea */}
-          <Textarea
-            ref={textareaRef}
-            placeholder={placeholder || defaultPlaceholder}
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-            disabled={isLoading}
-            autoFocus={autoFocus}
-            className={cn(
-              "min-h-[40px] resize-none border-0 bg-transparent p-0 focus-visible:ring-0 focus-visible:ring-offset-0",
-              isHUD && "text-base"
-            )}
-            rows={1}
-          />
-
-          {/* Toolbar */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Button
+          <div className={cn(
+            "flex items-center gap-2 rounded-xl border bg-background px-3 py-2 transition-all focus-within:ring-1 focus-within:ring-primary/20",
+            !isHUD && "shadow-sm border-border hover:border-primary/20"
+          )}>
+             <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0 rounded-lg"
                 onClick={handleFileButtonClick}
                 disabled={isLoading}
-                title="选择文件"
+                title="选择文件" 
               >
-                <span className="text-lg">+</span>
+                <Paperclip className="h-4.5 w-4.5" />
               </Button>
-              {isHUD && (
-                <Badge variant="secondary" className="text-xs">
+
+              <Textarea
+                ref={textareaRef}
+                placeholder={placeholder || defaultPlaceholder}
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
+                disabled={isLoading}
+                autoFocus={autoFocus}
+                className={cn(
+                  "min-h-[24px] max-h-[200px] w-full resize-none border-0 bg-transparent p-0 pl-1 placeholder:text-muted-foreground/50 focus-visible:ring-0 focus-visible:ring-offset-0 leading-relaxed",
+                  isHUD && "text-base"
+                )}
+                rows={1}
+              />
+
+              <Button
+                type="submit"
+                size="icon"
+                className={cn(
+                  "h-7 w-7 rounded-full transition-all shrink-0",
+                  canSubmit 
+                    ? "bg-primary text-primary-foreground hover:bg-primary/90" 
+                    : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
+                )}
+                disabled={!canSubmit}
+                title="发送 (Enter)"
+              >
+                 {isLoading ? (
+                  <span className="animate-spin text-xs">⟳</span>
+                ) : (
+                  <ArrowUp className="h-4 w-4" />
+                )}
+              </Button>
+          </div>
+          
+           {isHUD && (
+              <div className="flex justify-end mt-2 px-1">
+                 <Badge variant="outline" className="text-[10px] text-muted-foreground border-transparent">
                   Enter 发送 · Esc 关闭
                 </Badge>
-              )}
-            </div>
-
-            <Button
-              type="submit"
-              size="icon"
-              className="h-8 w-8 rounded-full"
-              disabled={!canSubmit}
-              title="发送 (Enter)"
-            >
-              {isLoading ? (
-                <span className="animate-spin text-sm">○</span>
-              ) : (
-                <span className="text-sm">↑</span>
-              )}
-            </Button>
-          </div>
+              </div>
+           )}
         </form>
       </ContentWrapper>
     </Wrapper>
