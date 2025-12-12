@@ -1,21 +1,28 @@
-import { useMemo, useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
+import {
+  Sparkles,
+  CheckCircle2,
+  LayoutGrid,
+  Plus
+} from "lucide-react";
+
+import { Task, Resource, TaskPriority } from "../types";
+import { TaskCard } from "../components/TaskCard";
+import { ResourceCard } from "../components/ResourceCard";
+import { QuickCapture } from "../components/QuickCapture";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -23,18 +30,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { 
-  Plus, 
-  RotateCcw, 
-  Sparkles, 
-  CheckCircle2, 
-  LayoutGrid, 
-  Zap, 
-  Archive 
-} from "lucide-react";
-import { Task, Resource, TaskPriority } from "../types";
-import { TaskCard, ResourceCard, QuickCapture } from "../components";
-import { createTask, deleteTask } from "../api";
+import { createTask, deleteTask, deleteResource } from "../api";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface DashboardPageProps {
   tasks: Task[];
@@ -42,13 +39,11 @@ interface DashboardPageProps {
   loading: boolean;
   error: string | null;
   onCapture: (content: string, filePath?: string) => Promise<void>;
-  onSeed: () => void;
-  onRefresh: () => void;
+  onSeed: () => Promise<void>;
+  onRefresh: () => Promise<void>;
   onSelectTask: (task: Task) => void;
   onLinkResource: (resourceId: number, taskId: number) => Promise<void>;
 }
-
-type SortMode = "manual" | "smart";
 
 export function DashboardPage({
   tasks,
@@ -56,379 +51,200 @@ export function DashboardPage({
   loading,
   error,
   onCapture,
-  onSeed,
   onRefresh,
   onSelectTask,
   onLinkResource,
 }: DashboardPageProps) {
-  const [sortMode, setSortMode] = useState<SortMode>("smart");
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
+  const [creatingTask, setCreatingTask] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskPriority, setNewTaskPriority] = useState<TaskPriority>("medium");
+  const { t } = useLanguage();
 
-  // 创建任务表单状态
-  const [formData, setFormData] = useState({
-    title: "",
-    description: "",
-    priority: "medium" as TaskPriority,
-    due_date: "",
-  });
+  // Smart Sort: Logic to sort tasks
+  const sortedTasks = useMemo(() => {
+    return [...tasks].sort((a, b) => {
+      // 0. Done tasks at the bottom
+      if (a.status === "done" && b.status !== "done") return 1;
+      if (a.status !== "done" && b.status === "done") return -1;
 
-  // 处理创建任务
-  const handleCreateTask = async () => {
-    if (!formData.title.trim()) {
-      return;
-    }
+      // 1. Priority weight
+      const pWeight = { high: 3, medium: 2, low: 1 };
+      if (pWeight[a.priority] !== pWeight[b.priority]) {
+        return pWeight[b.priority] - pWeight[a.priority];
+      }
 
-    setCreating(true);
-    try {
-      await createTask({
-        title: formData.title,
-        description: formData.description || undefined,
-        priority: formData.priority,
-        due_date: formData.due_date || undefined,
-      });
+      // 2. Due Date (Earlier first)
+      if (a.due_date && b.due_date) {
+        return a.due_date.getTime() - b.due_date.getTime();
+      }
+      if (a.due_date && !b.due_date) return -1;
+      if (!a.due_date && b.due_date) return 1;
 
-      // 重置表单
-      setFormData({
-        title: "",
-        description: "",
-        priority: "medium",
-        due_date: "",
-      });
-
-      // 关闭对话框
-      setDialogOpen(false);
-      
-      // 刷新数据
-      onRefresh();
-    } catch (err) {
-      console.error("Failed to create task:", err);
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  // 处理删除任务
-  const handleDeleteTask = async (taskId: number) => {
-    if (!confirm("Are you sure you want to delete this task?")) {
-      return;
-    }
-
-    try {
-      await deleteTask(taskId);
-      onRefresh();
-    } catch (err) {
-      console.error("Failed to delete task:", err);
-    }
-  };
-
-  // 过滤出活跃任务（todo）
-  const activeTasks = useMemo(() => {
-    return tasks.filter((task) => task.status === "todo");
+      return 0;
+    });
   }, [tasks]);
 
-  // 排序任务
-  const sortedTasks = useMemo(() => {
-    if (sortMode === "manual") {
-      // 手动排序模式：按创建时间降序
-      return [...activeTasks].sort((a, b) => {
-        const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
-        const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
-        return bTime - aTime;
+  const activeTasks = sortedTasks.filter((t) => t.status !== "done");
+  const unlinkedResources = resources.filter((r) => r.classification_status === "unclassified");
+
+  const handleCreateTask = async () => {
+    if (!newTaskTitle.trim()) return;
+    try {
+      await createTask({
+        title: newTaskTitle,
+        priority: newTaskPriority,
       });
-    } else {
-      // 智能排序模式：优先级 + 截止日期
-      return [...activeTasks].sort((a, b) => {
-        // 优先级权重：high=3, medium=2, low=1
-        const priorityWeight = { high: 3, medium: 2, low: 1 };
-        const aWeight = priorityWeight[a.priority] || 0;
-        const bWeight = priorityWeight[b.priority] || 0;
-
-        // 如果优先级不同，按优先级排序
-        if (aWeight !== bWeight) {
-          return bWeight - aWeight;
-        }
-
-        // 如果优先级相同，有截止日期的排在前面
-        if (a.due_date && !b.due_date) return -1;
-        if (!a.due_date && b.due_date) return 1;
-
-        // 都有截止日期，按截止日期排序
-        if (a.due_date && b.due_date) {
-          return (
-            new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
-          );
-        }
-
-        // 都没有截止日期，按创建时间排序
-        const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
-        const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
-        return bTime - aTime;
-      });
+      setCreatingTask(false);
+      setNewTaskTitle("");
+      setNewTaskPriority("medium");
+      onRefresh();
+    } catch (err) {
+      console.error(err);
+      alert("创建任务失败");
     }
-  }, [activeTasks, sortMode]);
+  };
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return t("dashboard", "greetingMorning");
+    if (hour < 18) return t("dashboard", "greeting");
+    return t("dashboard", "greetingEvening");
+  };
 
   return (
-    <ScrollArea className="h-full bg-background">
-      <div className="max-w-[1200px] mx-auto p-8 lg:p-12 space-y-12">
-        {/* 顶部标题栏 */}
-        <header className="flex items-end justify-between border-b border-border pb-6">
-          <div className="space-y-2">
-            <h1 className="text-4xl font-bold tracking-tight text-foreground">Dashboard</h1>
-            <p className="text-base text-muted-foreground">
-              Overview of your tasks and captured resources.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-             <Button
-              variant="ghost"
-              size="sm"
-              onClick={onRefresh}
-              className={`h-8 w-8 p-0 text-muted-foreground ${loading ? 'animate-spin' : ''}`}
-              title="Refresh"
-            >
-              <RotateCcw className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="sm" onClick={onSeed} className="text-muted-foreground h-8">
-              <Sparkles className="h-4 w-4 mr-2" />
-              Seed Data
-            </Button>
-          </div>
+    <div className="h-full flex flex-col max-w-[1200px] mx-auto w-full p-8 lg:p-12 space-y-10 overflow-auto">
+      {/* 1. Header & Quick Capture */}
+      <section className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <header className="flex flex-col gap-2">
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+            {getGreeting()}, User
+          </h1>
+          <p className="text-muted-foreground text-base">
+            {t("dashboard", "quickCapture")}
+          </p>
         </header>
+        
+        <div className="max-w-2xl">
+           <QuickCapture onCapture={onCapture} />
+        </div>
+      </section>
 
-        {/* 错误提示 */}
-        {error && (
-          <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-destructive text-sm flex items-center gap-2">
-            <span>⚠️</span> {error}
+      {/* 2. Tasks Area */}
+      <section className="space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-100">
+        <div className="flex items-center justify-between border-b pb-3">
+          <div className="flex items-center gap-2 text-foreground">
+            <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
+            <h2 className="text-lg font-medium">{t("dashboard", "tasks")}</h2>
+            <Badge variant="secondary" className="ml-2 font-normal text-xs bg-muted text-muted-foreground hover:bg-muted">
+              {activeTasks.length} Pending
+            </Badge>
+          </div>
+          
+          <Dialog open={creatingTask} onOpenChange={setCreatingTask}>
+            <DialogTrigger asChild>
+              <Button size="sm" className="h-8 rounded-full px-3 shadow-none bg-foreground text-background hover:bg-foreground/90 transition-all">
+                <Plus className="h-3.5 w-3.5 mr-1.5" />
+                {t("dashboard", "createTask")}
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>{t("dashboard", "createTask")}</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Task Title</Label>
+                  <Input
+                    value={newTaskTitle}
+                    onChange={(e) => setNewTaskTitle(e.target.value)}
+                    placeholder="Task title..."
+                    autoFocus
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Priority</Label>
+                  <Select
+                    value={newTaskPriority}
+                    onValueChange={(v: TaskPriority) => setNewTaskPriority(v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="low">Low</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setCreatingTask(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleCreateTask}>Create</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        {loading ? (
+             <div className="flex items-center justify-center h-20 text-muted-foreground text-sm">Loading...</div>
+        ): error ? (
+           <div className="text-destructive text-sm bg-destructive/10 p-4 rounded-md">{error}</div>
+        ) : activeTasks.length === 0 ? (
+           <div className="flex flex-col items-center justify-center h-32 text-muted-foreground border border-dashed rounded-lg bg-muted/20">
+             <Sparkles className="h-8 w-8 mb-2 opacity-20" />
+             <p className="text-sm font-medium">{t("dashboard", "noTasks")}</p>
+           </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {activeTasks.map((task) => (
+              <TaskCard
+                key={task.task_id}
+                task={task}
+                onClick={() => onSelectTask(task)}
+                onDelete={async (id) => {
+                  if (confirm("Delete this task?")) {
+                    await deleteTask(id);
+                    onRefresh();
+                  }
+                }}
+              />
+            ))}
           </div>
         )}
+      </section>
 
-        {/* 第一部分：智能待办列表 */}
-        <section className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-1.5 bg-orange-100 dark:bg-orange-900/20 rounded-md">
-                 <CheckCircle2 className="h-5 w-5 text-orange-600 dark:text-orange-400" />
-              </div>
-              <h2 className="text-xl font-semibold text-foreground">Active Tasks</h2>
-              <Badge variant="secondary" className="font-normal text-muted-foreground bg-muted/50 ml-2">
-                {sortedTasks.length}
-              </Badge>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="bg-muted/30 p-1 rounded-lg flex gap-1">
-                <Button
-                    variant={sortMode === "smart" ? "secondary" : "ghost"}
-                    size="sm"
-                    onClick={() => setSortMode("smart")}
-                    className="h-7 text-xs px-3 shadow-none"
-                >
-                    Smart Sort
-                </Button>
-                <Button
-                    variant={sortMode === "manual" ? "secondary" : "ghost"}
-                    size="sm"
-                    onClick={() => setSortMode("manual")}
-                    className="h-7 text-xs px-3 shadow-none"
-                >
-                    Manual
-                </Button>
-              </div>
-              
-              <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="h-8 w-8 p-0 ml-2 rounded-full"
-                    title="Create Task"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[500px]">
-                  <DialogHeader>
-                    <DialogTitle>New Task</DialogTitle>
-                    <DialogDescription>
-                      Add a new item to your todo list.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-4 py-4">
-                    <div className="grid gap-2">
-                      <Label htmlFor="title">
-                        Title <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        id="title"
-                        placeholder="Task title"
-                        value={formData.title}
-                        onChange={(e) =>
-                          setFormData({ ...formData, title: e.target.value })
-                        }
-                        autoFocus
-                        className="font-medium"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="description">Description</Label>
-                      <Textarea
-                        id="description"
-                        placeholder="Add details..."
-                        value={formData.description}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            description: e.target.value,
-                          })
-                        }
-                        rows={3}
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="grid gap-2">
-                        <Label htmlFor="priority">Priority</Label>
-                        <Select
-                          value={formData.priority}
-                          onValueChange={(value: TaskPriority) =>
-                            setFormData({ ...formData, priority: value })
-                          }
-                        >
-                          <SelectTrigger id="priority">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="high">High</SelectItem>
-                            <SelectItem value="medium">Medium</SelectItem>
-                            <SelectItem value="low">Low</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="due_date">Due Date</Label>
-                        <Input
-                          id="due_date"
-                          type="date"
-                          value={formData.due_date}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              due_date: e.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button
-                      variant="ghost"
-                      onClick={() => setDialogOpen(false)}
-                      disabled={creating}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={handleCreateTask}
-                      disabled={!formData.title.trim() || creating}
-                    >
-                      {creating ? "Creating..." : "Create Task"}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </div>
+      {/* 3. Resources Area */}
+      <section className="space-y-6 pb-10 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200">
+         <div className="flex items-center gap-2 text-foreground border-b pb-3">
+            <LayoutGrid className="h-5 w-5 text-muted-foreground" />
+            <h2 className="text-lg font-medium">{t("dashboard", "resources")}</h2>
+             <Badge variant="secondary" className="ml-2 font-normal text-xs bg-muted text-muted-foreground hover:bg-muted">
+              {unlinkedResources.length} Inbox
+            </Badge>
           </div>
 
-          {sortedTasks.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {sortedTasks.map((task) => (
-                <TaskCard
-                  key={task.task_id}
-                  task={task}
-                  onClick={() => onSelectTask(task)}
-                  onDelete={handleDeleteTask}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-border rounded-lg bg-muted/20">
-                <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
-                    <CheckCircle2 className="h-6 w-6 text-muted-foreground" />
-                </div>
-                <h3 className="text-base font-medium mb-1">All caught up</h3>
-                <p className="text-sm text-muted-foreground max-w-sm">
-                  You have no active tasks. Enjoy your day!
-                </p>
-            </div>
-          )}
-        </section>
-
-        <Separator />
-
-        {/* 第二部分：快速捕获 */}
-        <section className="space-y-4">
-          <div className="flex items-center gap-3 mb-2">
-             <div className="p-1.5 bg-blue-100 dark:bg-blue-900/20 rounded-md">
-                 <Zap className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              </div>
-            <h2 className="text-xl font-semibold">Quick Capture</h2>
-          </div>
-          <QuickCapture onCapture={onCapture} loading={loading} />
-          <p className="text-xs text-muted-foreground pl-1">
-             Capture thoughts, files, or images instantly.
-          </p>
-        </section>
-
-        <Separator />
-
-        {/* 第三部分：待分类资源 */}
-        <section className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-               <div className="p-1.5 bg-purple-100 dark:bg-purple-900/20 rounded-md">
-                 <Archive className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-              </div>
-              <h2 className="text-xl font-semibold">Inbox Resources</h2>
-              <Badge variant="secondary" className="font-normal text-muted-foreground bg-muted/50 ml-2">
-                {resources.length}
-              </Badge>
-            </div>
-             {resources.length > 0 && (
-                <span className="text-xs text-muted-foreground hidden sm:block">
-                  Drag or use menu to link to tasks
-                </span>
-             )}
-          </div>
-
-          {resources.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {resources.map((res) => (
-                <ResourceCard
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+             {unlinkedResources.map(res => (
+                <ResourceCard 
                   key={res.resource_id}
                   resource={res}
-                  tasks={tasks}
-                  onLinkToTask={onLinkResource}
+                  tasks={activeTasks} // pass tasks for linking
+                  onLinkToTask={async (resourceId, taskId) => {
+                     await onLinkResource(resourceId, taskId);
+                  }}
+                  onDelete={async (id) => {
+                    if (confirm("Delete this resource?")) {
+                      await deleteResource(id);
+                      onRefresh();
+                    }
+                  }}
                 />
-              ))}
-            </div>
-          ) : (
-             <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-border rounded-lg bg-muted/20">
-                <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
-                    <LayoutGrid className="h-6 w-6 text-muted-foreground" />
-                </div>
-                <h3 className="text-base font-medium mb-1">Inbox is empty</h3>
-                <p className="text-sm text-muted-foreground max-w-sm">
-                  Captured files and texts will appear here for you to organize.
-                </p>
-            </div>
-          )}
-        </section>
-
-        <footer className="pt-12 pb-6 text-center text-xs text-muted-foreground opacity-60">
-           {/* 页脚提示 */}
-           NeuralVault V1.0 • Notion Style Edition
-        </footer>
-      </div>
-    </ScrollArea>
+             ))}
+          </div>
+      </section>
+    </div>
   );
 }

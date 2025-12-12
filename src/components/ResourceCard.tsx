@@ -17,7 +17,8 @@ import {
   MoreHorizontal,
   Paperclip,
   CheckCircle2,
-  Circle
+  Circle,
+  Trash2
 } from "lucide-react";
 import { Resource, Task, ResourceType } from "../types";
 
@@ -25,6 +26,7 @@ interface ResourceCardProps {
   resource: Resource;
   tasks?: Task[];
   onLinkToTask?: (resourceId: number, taskId: number) => Promise<void>;
+  onDelete?: (resourceId: number) => Promise<void>;
 }
 
 const iconMap: Record<ResourceType, React.ReactNode> = {
@@ -40,6 +42,7 @@ export function ResourceCard({
   resource,
   tasks = [],
   onLinkToTask,
+  onDelete,
 }: ResourceCardProps) {
   const [linking, setLinking] = useState(false);
 
@@ -55,7 +58,7 @@ export function ResourceCard({
   };
 
   return (
-    <Card className="group transition-all border-border shadow-sm hover:shadow-none hover:bg-muted/40 overflow-hidden">
+    <Card className="group transition-all border-border shadow-sm hover:shadow-none hover:bg-muted/40 overflow-hidden relative">
       <CardContent className="flex items-center gap-3 p-3">
         {/* File Icon */}
         <div className="shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">
@@ -74,41 +77,59 @@ export function ResourceCard({
           )}
         </div>
 
-        {/* Link Button with Dropdown */}
-        {onLinkToTask && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-all text-muted-foreground data-[state=open]:opacity-100"
-                disabled={linking || tasks.length === 0}
-              >
-                {linking ? (
-                  <span className="animate-spin text-xs">⟳</span>
-                ) : (
-                  <MoreHorizontal className="h-4 w-4" />
-                )}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Link to task</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {tasks.length > 0 ? tasks.map((task) => (
-                <DropdownMenuItem
-                  key={task.task_id}
-                  onClick={() => handleSelectTask(task.task_id)}
-                  className="cursor-pointer gap-2"
+        {/* Actions Group */}
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          {/* Link Task */}
+          {onLinkToTask && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
+                  disabled={linking || tasks.length === 0}
                 >
-                  {task.status === "todo" ? <Circle className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3 text-green-500" />}
-                  <span className="truncate text-sm">{task.title || "Untitled"}</span>
-                </DropdownMenuItem>
-              )) : (
-                 <div className="p-2 text-xs text-muted-foreground text-center">No active tasks</div>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+                  {linking ? (
+                    <span className="animate-spin text-xs">⟳</span>
+                  ) : (
+                    <MoreHorizontal className="h-4 w-4" />
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Link to task</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {tasks.length > 0 ? tasks.map((task) => (
+                  <DropdownMenuItem
+                    key={task.task_id}
+                    onClick={() => handleSelectTask(task.task_id)}
+                    className="cursor-pointer gap-2"
+                  >
+                    {task.status === "todo" ? <Circle className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3 text-green-500" />}
+                    <span className="truncate text-sm">{task.title || "Untitled"}</span>
+                  </DropdownMenuItem>
+                )) : (
+                   <div className="p-2 text-xs text-muted-foreground text-center">No active tasks</div>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
+           {/* Delete Action */}
+           {onDelete && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(resource.resource_id);
+              }}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

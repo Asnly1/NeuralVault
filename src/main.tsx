@@ -18,8 +18,12 @@ function Root() {
   return <App />;
 }
 
+import { LanguageProvider } from "./contexts/LanguageContext";
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <Root />
+    <LanguageProvider>
+      <Root />
+    </LanguageProvider>
   </React.StrictMode>
 );

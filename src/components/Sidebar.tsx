@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+
 
 import {
   LayoutDashboard,
@@ -9,92 +9,81 @@ import {
   Search,
   ChevronsLeft,
 } from "lucide-react";
-import { PageType, navItems } from "../types";
+import { PageType } from "../types";
+
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface SidebarProps {
   currentPage: PageType;
   onNavigate: (page: PageType) => void;
 }
 
-const iconMap: Record<string, React.ReactNode> = {
-  dashboard: <LayoutDashboard className="h-4 w-4" />,
-  workspace: <Briefcase className="h-4 w-4" />,
-  settings: <Settings className="h-4 w-4" />,
-};
-
 export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
+  const { t } = useLanguage();
+
+  const navItems: { key: PageType; icon: React.ReactNode; label: string }[] = [
+    { key: "dashboard", icon: <LayoutDashboard className="h-4 w-4" />, label: t("sidebar", "dashboard") },
+    { key: "workspace", icon: <Briefcase className="h-4 w-4" />, label: t("sidebar", "workspace") },
+    { key: "settings", icon: <Settings className="h-4 w-4" />, label: t("sidebar", "settings") },
+  ];
+
   return (
-    <aside className="group flex h-screen w-60 flex-col border-r border-border bg-[#F7F7F5] dark:bg-[#202020] transition-all duration-300">
-      {/* Workspace / User Header */}
-      <div className="flex h-12 items-center px-4 hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer transition-colors m-2 rounded-md">
-        <Avatar className="h-5 w-5 mr-3 rounded-sm">
-          <AvatarFallback className="rounded-sm bg-orange-500 text-white text-[10px]">
+    <aside className="w-60 bg-sidebar border-r border-border flex flex-col h-full shrink-0 transition-all duration-300">
+      {/* Header */}
+      <div className="p-4 h-14 flex items-center border-b border-border/40">
+        <div className="flex items-center gap-2 px-2 w-full">
+          <div className="h-5 w-5 rounded bg-orange-500 flex items-center justify-center text-[10px] text-white font-bold shrink-0">
             N
-          </AvatarFallback>
-        </Avatar>
-        <span className="text-sm font-medium text-foreground truncate">
-          NeuralVault
-        </span>
-        <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
-           <ChevronsLeft className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <span className="font-medium text-sm truncate">NeuralVault</span>
+          <ChevronsLeft className="ml-auto h-4 w-4 text-muted-foreground/50 hover:text-foreground cursor-pointer" />
         </div>
       </div>
 
-      {/* Action List (Search, etc - Aesthetic only for now) */}
-      <div className="px-2 pb-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start text-muted-foreground font-normal h-8 px-3"
-        >
-          <Search className="mr-2 h-4 w-4" />
-          <span className="text-xs">Search</span>
-          <span className="ml-auto text-[10px] opacity-60">⌘K</span>
-        </Button>
+      {/* Search / Quick Actions */}
+      <div className="px-3 py-2">
+        <div className="relative group cursor-pointer">
+          <Search className="absolute left-2.5 top-2 h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+          <div className="h-8 w-full rounded-md bg-muted/50 border border-transparent px-8 py-1.5 text-xs text-muted-foreground group-hover:bg-muted group-hover:border-border/50 transition-all flex items-center">
+            {t("sidebar", "searchPlaceholder")}
+          </div>
+        </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-2 space-y-0.5">
-        <div className="px-3 py-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-          Menu
+      <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto">
+        <div className="text-[11px] font-medium text-muted-foreground px-2 py-1.5 mb-0.5">
+          {t("sidebar", "menu").toUpperCase()}
         </div>
         {navItems.map((item) => (
           <Button
             key={item.key}
             variant="ghost"
-            size="sm"
-            onClick={() => onNavigate(item.key)}
             className={cn(
-              "w-full justify-start h-8 px-3 font-medium text-sm transition-colors",
+              "w-full justify-start h-8 mb-0.5 text-sm font-normal px-2.5 transition-colors",
               currentPage === item.key
-                ? "bg-black/5 dark:bg-white/10 text-foreground"
+                ? "bg-accent/80 text-accent-foreground font-medium"
                 : "text-muted-foreground hover:bg-black/5 dark:hover:bg-white/5 hover:text-foreground"
             )}
+            onClick={() => onNavigate(item.key)}
           >
-            <span className="mr-2 opacity-80">
-              {iconMap[item.key] || <div className="h-4 w-4" />}
+            <span className={cn("mr-2", currentPage === item.key ? "text-foreground" : "text-muted-foreground")}>
+              {item.icon}
             </span>
             {item.label}
           </Button>
         ))}
 
-        {/* Placeholder for favorites or other sections */}
-        <div className="mt-6 px-3 py-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider group-hover:block">
-          Favorites
-        </div>
-        <Button
-           variant="ghost"
-           size="sm" 
-           className="w-full justify-start text-muted-foreground font-normal h-8 px-3"
-           disabled
-        >
-          <div className="mr-2 h-4 w-4 flex items-center justify-center">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+        {/* Favorites Section (Placeholder) */}
+        <div className="mt-6">
+          <div className="text-[11px] font-medium text-muted-foreground px-2 py-1.5 mb-0.5">
+            {t("sidebar", "favorites").toUpperCase()}
           </div>
-          <span className="text-sm opacity-60">No favorites yet</span>
-        </Button>
+          <div className="px-2 py-1">
+             <span className="text-xs text-muted-foreground/60 pl-2">• &nbsp; {t("sidebar", "noFavorites")}</span>
+          </div>
+        </div>
       </nav>
-
     </aside>
   );
 }

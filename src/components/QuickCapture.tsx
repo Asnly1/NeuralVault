@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Paperclip, ArrowUp, X } from "lucide-react";
 import { readClipboard } from "@/api";
 import { ClipboardContent } from "@/types";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 // variant: 组件变体，用于添加不同的 CSS 类
 // - "card": Dashboard 中的卡片样式（默认）
@@ -55,13 +56,14 @@ export function QuickCapture({
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { t } = useLanguage();
 
   const isHUD = variant === "hud";
 
   // 默认 placeholder
   const defaultPlaceholder = isHUD
-    ? "快速捕获... Enter 发送，Esc 关闭"
-    : "输入内容，按 Enter 发送...";
+    ? t("dashboard", "quickCapture")
+    : t("dashboard", "quickCapture");
 
   // 自动调整 textarea 高度
   useEffect(() => {

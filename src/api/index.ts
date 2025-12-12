@@ -109,6 +109,14 @@ export const fetchTaskResources = async (
   return parsed;
 };
 
+/**
+ * 删除资源
+ * @param resourceId - 资源 ID
+ */
+export const deleteResource = async (resourceId: number): Promise<void> => {
+  return await invoke("delete_resource", { resourceId });
+};
+
 // ============================================
 // Demo Data API
 // ============================================

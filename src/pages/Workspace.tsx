@@ -12,6 +12,7 @@ import { fetchTaskResources, getAssetsPath, unlinkResource } from "../api";
 import { TiptapEditor } from "../components";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 // 懒加载 PDF 组件，避免启动时加载
 const PDFViewer = lazy(() =>
@@ -38,6 +39,8 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
   const [hoveredResourceId, setHoveredResourceId] = useState<number | null>(
     null
   );
+
+  const { t } = useLanguage();
 
   // Load assets path on mount
   useEffect(() => {
@@ -336,11 +339,11 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <span className="text-6xl mb-6 text-muted-foreground">⬡</span>
-        <h2 className="text-xl font-semibold mb-2">选择一个任务开始工作</h2>
+        <h2 className="text-xl font-semibold mb-2">{t("workspace", "selectTaskPrompt")}</h2>
         <p className="text-muted-foreground mb-6">
-          从看板页面点击任务卡片进入工作台
+          {t("workspace", "selectTaskDesc")}
         </p>
-        <Button onClick={onBack}>返回看板</Button>
+        <Button onClick={onBack}>{t("workspace", "backToDashboard")}</Button>
       </div>
     );
   }
@@ -350,13 +353,13 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
       {/* Header */}
       <header className="flex items-center gap-4 px-4 py-3 border-b shrink-0">
         <Button variant="ghost" size="sm" onClick={onBack}>
-          ← 返回看板
+          ← {t("workspace", "backToDashboard")}
         </Button>
         <Separator orientation="vertical" className="h-5" />
         <div className="flex items-center gap-2 text-sm">
-          <span className="text-muted-foreground">任务</span>
+          <span className="text-muted-foreground">{t("dashboard", "tasks")}</span>
           <span className="text-muted-foreground">/</span>
-          <span className="font-medium">{selectedTask.title || "未命名"}</span>
+          <span className="font-medium">{selectedTask.title || t("common", "untitled")}</span>
           {selectedResource && (
             <>
               <span className="text-muted-foreground">/</span>
@@ -382,7 +385,7 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
             <div className="p-4 space-y-6">
               {/* Task Details */}
               <div>
-                <h3 className="text-sm font-semibold mb-3">任务详情</h3>
+                <h3 className="text-sm font-semibold mb-3">{t("workspace", "taskDetails")}</h3>
                 <Card>
                   <CardContent className="p-3 space-y-3">
                     <h4 className="font-medium">
@@ -419,7 +422,7 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
               {/* Linked Resources */}
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold">关联资源</h3>
+                  <h3 className="text-sm font-semibold">{t("workspace", "linkedResources")}</h3>
                   {linkedResources.length > 0 && (
                     <Badge variant="secondary" className="text-xs">
                       {linkedResources.length}
@@ -427,7 +430,7 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
                   )}
                 </div>
                 {loadingResources ? (
-                  <p className="text-sm text-muted-foreground">加载中...</p>
+                  <p className="text-sm text-muted-foreground">Loading...</p>
                 ) : linkedResources.length > 0 ? (
                   <div className="space-y-1">
                     {linkedResources.map((resource) => (
@@ -508,8 +511,8 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
         {/* Right: Chat Panel */}
         <aside className="w-72 border-l flex flex-col shrink-0">
           <div className="px-4 py-3 border-b shrink-0">
-            <h3 className="font-semibold">AI 助手</h3>
-            <p className="text-xs text-muted-foreground">当前任务上下文</p>
+            <h3 className="font-semibold">{t("workspace", "aiAssistant")}</h3>
+            <p className="text-xs text-muted-foreground">{t("workspace", "context")}</p>
           </div>
 
           <ScrollArea className="flex-1">
@@ -528,7 +531,7 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
           <div className="p-4 border-t shrink-0">
             <div className="flex gap-2">
               <Input
-                placeholder="输入消息... 使用 @ 引用文件"
+                placeholder={t("workspace", "inputPlaceholder")}
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 className="flex-1"
