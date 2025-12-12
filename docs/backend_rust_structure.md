@@ -308,7 +308,7 @@ pub struct AppState {
 | `tasks`              | 任务表                    | task_id, uuid, title, status, priority, due_date, parent_task_id, root_task_id     |
 | `resources`          | 资源表                    | resource_id, uuid, file_hash, file_type, content, file_path, classification_status |
 | `task_resource_link` | 任务-资源关联表（多对多） | task_id, resource_id, visibility_scope, local_alias                                |
-| `context_chunks`     | 向量化分块表              | chunk_id, resource_id, chunk_text, chroma_uuid, embedding_hash                     |
+| `context_chunks`     | 向量化分块表              | chunk_id, resource_id, chunk_text, qdrant_uuid, embedding_hash                     |
 | `chat_sessions`      | 聊天会话表                | session_id, session_type, task_id, title                                           |
 | `chat_messages`      | 聊天消息表                | message_id, session_id, role, content                                              |
 
@@ -316,7 +316,7 @@ pub struct AppState {
 
 - **任务表**：`due_date`、`status`、`created_at`、`parent_task_id`、`root_task_id`
 - **资源表**：`sync_status`、唯一索引 `(file_hash, user_id)` WHERE `is_deleted = 0`（防止重复上传）
-- **分块表**：`chroma_uuid`、`resource_id + chunk_index`、`embedding_hash`
+- **分块表**：`qdrant_uuid`、`resource_id + chunk_index`、`embedding_hash`
 - **会话表**：`task_id + created_at`
 
 ##### 外键约束

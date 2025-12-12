@@ -82,13 +82,13 @@ CREATE TABLE resources (
     indexed_hash TEXT, -- 记录上一次成功切片时的 Hash
     processing_hash TEXT, -- 记录开始切片时的 Hash。处理完写回时对比：如果 current_hash != processing_hash，说明文件变了，丢弃本次结果，标记为 dirty，重新入队
     -- 流程：取任务 → 设置 processing_hash → 真正处理 → 最后一次性写 indexed_hash/sync_status/last_indexed_at/processing_stage； 错误时写last_error
-    -- 数据库内部用，和chroma保持一致，不暴露给后端API
+    -- 数据库内部用，和qdrant保持一致，不暴露给后端API
     sync_status TEXT DEFAULT 'pending' CHECK (sync_status IN ('pending', 'synced', 'dirty', 'error')),
     last_indexed_at DATETIME,
     last_error TEXT, --存储上次失败的信息
     
     -- 资源处理状态（暴露给后端API）
-    -- UI 层展示processing_stage。如果 Chroma 没同步完，给出警告。
+    -- UI 层展示processing_stage。如果 qdrant 没同步完，给出警告。
     processing_stage TEXT DEFAULT 'todo' CHECK(processing_stage IN ('todo','chunking','embedding','done')),
 
     -- Page A 的分类状态
@@ -139,7 +139,7 @@ CREATE TABLE context_chunks (
     bbox TEXT,                   -- (可选) 预留给 PDF 高亮坐标 JSON
     
     -- 向量数据库关联
-    chroma_uuid TEXT UNIQUE,     -- 指向 ChromaDB 的 ID
+    qdrant_uuid TEXT UNIQUE,     -- 指向 qdrantDB 的 ID
     embedding_hash TEXT,         -- 校验向量是否过期
     embedding_model TEXT,
     embedding_at DATETIME,
@@ -149,7 +149,7 @@ CREATE TABLE context_chunks (
     FOREIGN KEY(resource_id) REFERENCES resources(resource_id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_context_chunks_chroma ON context_chunks(chroma_uuid);
+CREATE INDEX idx_context_chunks_qdrant ON context_chunks(qdrant_uuid);
 CREATE INDEX idx_chunks_resource_order ON context_chunks(resource_id, chunk_index);
 CREATE INDEX idx_chunks_embedding_hash ON context_chunks(embedding_hash);
 

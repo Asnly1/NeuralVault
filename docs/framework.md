@@ -89,6 +89,6 @@
 - **Database:**
   - **Tools:** Rust: SQLx; Python: SQLModel
   - **Relational:** SQLite (单文件，易部署)。
-  - **Vector:** ChromaDB (本地向量检索)。
+  - **Vector:** Qdrant (本地向量检索)。
 - **LLM Framework:** **LlamaIndex**。
   - 理由：比 LangChain 更擅长处理数据索引和 RAG 任务。

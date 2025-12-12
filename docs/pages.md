@@ -118,6 +118,6 @@
 **第二版**:
 
 1. Quick Capture (Rust): 极速存入 SQLite，不经过 AI。
-2. Background Worker (Python): Rust 调用 Python -> Python 调用 Embedding 模型 -> 存入 ChromaDB -> 简单分类（Tagging）。
+2. Background Worker (Python): Rust 调用 Python -> Python 调用 Embedding 模型 -> 存入 Qdrant -> 简单分类（Tagging）。
 3. Retrieval (Page B): 进入任务详情页时，仅显示关联的文件和“可能相关的历史任务”。
 4. Chat (Page B): 能针对当前挂载的文件进行问答。

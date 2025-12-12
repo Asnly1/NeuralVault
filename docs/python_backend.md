@@ -4,7 +4,7 @@ backend/
 │ ├── main.py # FastAPI 入口，生命周期管理
 │ ├── core/ # 核心配置
 │ │ ├── config.py # 环境变量，路径配置
-│ │ ├── db.py # SQLite (SQLModel) & ChromaDB 单例连接池
+│ │ ├── db.py # SQLite (SQLModel) & Qdrant 单例连接池
 │ │ └── events.py # 启动/关闭时的钩子（如开启 WAL 模式）
 │ │
 │ ├── api/ # 接口层 (Routes)
@@ -21,7 +21,7 @@ backend/
 │ │
 │ ├── services/ # 业务逻辑层 (核心大脑)
 │ │ ├── file_service.py # 文件解析 (PDF/Image/Epub) -> Text
-│ │ ├── vector_service.py# Chunking & Embedding -> ChromaDB
+│ │ ├── vector_service.py# Chunking & Embedding -> Qdrant
 │ │ ├── llm_service.py # 封装 OpenAI/Ollama 接口
 │ │ └── agent_service.py # 任务拆解、自动打标签逻辑
 │ │
@@ -41,7 +41,7 @@ backend/
    2. GET: /ingest/status/{resource_id} 查询某个资源的 AI 处理状态。
       1. Respone: { "status": "todo" | "chunking" | "embedding" | "done" }
 2. search.py:
-   1. POST: /search/hybrid: 执行混合检索。同时查询 ChromaDB 和 SQLite FTS。MVP 先暂时使用 语义+FTS5 去重，不使用 RRF
+   1. POST: /search/hybrid: 执行混合检索。同时查询 Qdrant 和 SQLite FTS。MVP 先暂时使用 语义+FTS5 去重，不使用 RRF
       1. Request: { "query": "深度学习", "top_k": 20, "filters": { "task_id": 5, "file_type": "pdf" } }
    2. （预留）POST: /search/rerank 对检索结果进行重排序。
 3. chat.py:

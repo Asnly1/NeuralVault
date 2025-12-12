@@ -128,7 +128,7 @@ CREATE TABLE context_chunks (
     page_number INTEGER,
     bbox TEXT,
 
-    chroma_uuid TEXT UNIQUE,
+    qdrant_uuid TEXT UNIQUE,
     embedding_hash TEXT,
     embedding_model TEXT,
     embedding_at DATETIME,
@@ -138,7 +138,7 @@ CREATE TABLE context_chunks (
     FOREIGN KEY(resource_id) REFERENCES resources(resource_id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_context_chunks_chroma ON context_chunks(chroma_uuid);
+CREATE INDEX idx_context_chunks_qdrant ON context_chunks(qdrant_uuid);
 CREATE INDEX idx_chunks_resource_order ON context_chunks(resource_id, chunk_index);
 CREATE INDEX idx_chunks_embedding_hash ON context_chunks(embedding_hash);
 
