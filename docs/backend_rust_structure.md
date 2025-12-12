@@ -7,8 +7,29 @@ src-tauri/
 ├── src/
 │   ├── main.rs              # 应用入口
 │   ├── lib.rs               # 库入口，Tauri 应用设置与初始化
-│   ├── commands.rs          # Tauri 命令（前端调用的接口）
-│   └── db.rs                # 数据库模型、枚举与操作函数
+│   ├── app_state.rs         # 全局应用状态定义
+│   ├── db/                  # 数据库模块
+│   │   ├── mod.rs          # 模块导出
+│   │   ├── types.rs        # 数据库类型定义（枚举、结构体）
+│   │   ├── pool.rs         # 数据库连接池初始化
+│   │   ├── tasks.rs        # 任务相关数据库操作
+│   │   ├── resources.rs    # 资源相关数据库操作
+│   │   └── tests.rs        # 数据库集成测试
+│   ├── commands/            # Tauri 命令模块
+│   │   ├── mod.rs          # 模块导出
+│   │   ├── types.rs        # 请求/响应类型定义
+│   │   ├── tasks.rs        # 任务相关命令
+│   │   ├── resources.rs    # 资源捕获相关命令
+│   │   ├── clipboard.rs    # 剪贴板相关命令
+│   │   └── dashboard.rs    # Dashboard 相关命令
+│   ├── utils/               # 工具函数模块
+│   │   ├── mod.rs          # 模块导出
+│   │   ├── hash.rs         # 哈希计算工具
+│   │   ├── file.rs         # 文件操作工具
+│   │   └── notification.rs # Python 后端通知
+│   └── window/              # 窗口管理模块
+│       ├── mod.rs          # 模块导出
+│       └── hud.rs          # HUD 窗口管理
 ├── migrations/
 │   └── 20241006120000_init.sql  # 数据库初始化 SQL 脚本
 ├── capabilities/
@@ -97,41 +118,42 @@ fn main() {
 
 #### `lib.rs`
 
-库入口，负责 Tauri 应用的完整初始化与全局状态管理。
+库入口，简化后只负责应用的组装和启动，具体功能委托给各个子模块。
 
 ##### 核心功能
 
 1. **数据库初始化**
 
-   - 在应用数据目录创建 `neuralvault.sqlite3`
-   - 使用 SQLx 连接池（最大 5 个连接）
-   - 运行数据库迁移（`migrations/` 目录）
-   - 插入默认用户（`user_id = 1`）
+   - 调用 `db::init_pool()` 初始化数据库连接池
+   - 将连接池注入到 `AppState` 并由 Tauri 管理
 
-2. **全局快捷键**
+2. **HUD 窗口设置**
 
-   - 快捷键：`Option + Space`（macOS）/ `Alt + Space`（Windows/Linux）
-   - 功能：切换 HUD 窗口显示/隐藏
-   - 触发时发送 `hud-focus` 事件到前端
+   - 调用 `window::setup_hud()` 设置全局快捷键和事件监听
 
-3. **HUD 窗口管理**
+3. **插件初始化**
 
-   - 监听前端 `hud-blur` 事件，自动隐藏 HUD
-   - 提供 `toggle_hud` 和 `hide_hud` 命令供前端调用
+   - Shell、Opener、Dialog、Global Shortcut 插件
 
-4. **插件初始化**
+4. **命令注册**
+   - 注册所有可供前端调用的 Tauri 命令
 
-   - Shell 插件（执行系统命令）
-   - Opener 插件（打开文件/链接）
-   - Dialog 插件（文件选择对话框）
-   - Global Shortcut 插件（全局快捷键）
+##### 模块组织
 
-5. **命令注册**
-   - 注册所有可供前端调用的 Tauri 命令（见 `commands.rs`）
+- 从 `commands/` 导入所有命令函数
+- 从 `window/` 导入 HUD 管理函数
+- 从 `app_state` 导入 `AppState`
 
-##### 全局状态
+---
+
+#### `app_state.rs`
+
+全局应用状态定义，通过 Tauri 的状态管理在所有命令间共享。
 
 ```rust
+use crate::db::DbPool;
+
+#[derive(Clone)]
 pub struct AppState {
     pub db: DbPool,  // SQLx 数据库连接池
 }
@@ -139,23 +161,24 @@ pub struct AppState {
 
 通过 `State<AppState>` 在命令间共享数据库连接。
 
-##### 数据流
-
-```
-启动 -> 初始化数据库 -> 注册快捷键 -> 监听事件 -> 启动窗口
-         ↓
-    SQLite 连接池
-         ↓
-    注入到 AppState
-         ↓
-    所有命令通过 State<AppState> 访问数据库
-```
-
 ---
 
-#### `db.rs`
+### `db/` 模块
 
-数据库层，定义所有模型、枚举与数据访问函数。
+数据库层，按功能拆分为多个子模块，清晰组织数据库相关代码。
+
+#### 模块结构
+
+- **`types.rs`**: 所有数据库类型定义（枚举、结构体、类型别名）
+- **`pool.rs`**: 数据库连接池初始化和配置
+- **`tasks.rs`**: 任务相关的数据库操作
+- **`resources.rs`**: 资源相关的数据库操作
+- **`tests.rs`**: 集成测试（仅在测试时编译）
+- **`mod.rs`**: 导出所有公共接口
+
+#### `db/types.rs`
+
+定义所有数据库相关的类型，包括枚举和结构体。
 
 ##### 类型定义
 
@@ -294,6 +317,72 @@ pub struct AppState {
 
 ---
 
+### `utils/` 模块
+
+工具函数模块，提供通用的辅助功能。
+
+#### 模块结构
+
+- **`hash.rs`**: SHA-256 哈希计算
+- **`file.rs`**: 文件操作相关工具函数
+- **`notification.rs`**: Python 后端异步通知
+- **`mod.rs`**: 导出所有工具函数
+
+#### `utils/hash.rs`
+
+哈希计算工具。
+
+**函数**：
+
+- `compute_sha256(bytes: &[u8]) -> String`: 计算 SHA-256 哈希值
+
+#### `utils/file.rs`
+
+文件操作相关的工具函数。
+
+**函数**：
+
+- `parse_file_type(raw: Option<&str>) -> ResourceFileType`: 解析文件类型字符串
+- `get_extension(path: &str) -> Option<String>`: 从文件路径提取扩展名
+- `get_assets_dir(app: &AppHandle) -> Result<PathBuf, String>`: 获取 assets 目录路径，如果不存在则创建
+
+#### `utils/notification.rs`
+
+Python 后端通知。
+
+**函数**：
+
+- `notify_python(resource_uuid: String)`: 异步通知 Python 后端处理资源
+
+---
+
+### `window/` 模块
+
+窗口管理模块，处理 HUD 窗口的显示、隐藏和快捷键。
+
+#### 模块结构
+
+- **`hud.rs`**: HUD 窗口管理逻辑
+- **`mod.rs`**: 导出窗口管理功能
+
+#### `window/hud.rs`
+
+HUD 窗口管理实现。
+
+**命令**：
+
+- `toggle_hud()`: 切换 HUD 窗口显示/隐藏
+- `hide_hud()`: 隐藏 HUD 窗口
+
+**设置函数**：
+
+- `setup_hud(app: &App)`: 设置 HUD 窗口的全局快捷键和事件监听
+  - 注册 `Option + Space` (macOS) / `Alt + Space` (Windows/Linux) 快捷键
+  - 监听 `hud-blur` 事件自动隐藏窗口
+  - 发送 `hud-focus` 事件通知前端
+
+---
+
 ### `migrations/`
 
 #### `20241006120000_init.sql`
@@ -382,12 +471,12 @@ Tauri IPC 层
   ↓
 命令路由 (lib.rs)
   ↓
-commands.rs (业务逻辑)
-  ↓
-db.rs (数据访问)
-  ↓
-SQLite 数据库
-  ↓
+commands/* (业务逻辑)
+  ├─→ utils/* (工具函数)
+  └─→ db/* (数据访问)
+       ↓
+   SQLite 数据库
+       ↓
 返回 Result<Response, String>
   ↓
 前端接收 Promise
@@ -398,7 +487,7 @@ SQLite 数据库
 ```
 用户按 Option+Space
   ↓
-全局快捷键触发 (lib.rs)
+全局快捷键触发 (window/hud.rs)
   ↓
 切换 HUD 窗口显示
   ↓
@@ -408,15 +497,15 @@ SQLite 数据库
   ↓
 用户输入并捕获
   ↓
-调用 capture_resource
+调用 capture_resource (commands/resources.rs)
   ↓
-存入数据库
+存入数据库 (db/resources.rs)
   ↓
-异步通知 Python
+异步通知 Python (utils/notification.rs)
   ↓
 前端发送 hud-blur 事件
   ↓
-后端隐藏 HUD 窗口
+后端隐藏 HUD 窗口 (window/hud.rs)
 ```
 
 ### 文件捕获流程
@@ -424,17 +513,17 @@ SQLite 数据库
 ```
 前端选择文件/粘贴图片
   ↓
-调用 capture_resource
+调用 capture_resource (commands/resources.rs)
   ↓
-读取文件字节
+读取文件字节 (utils/file.rs)
   ↓
-计算 SHA-256 hash
+计算 SHA-256 hash (utils/hash.rs)
   ↓
 复制文件到 assets/{uuid}.{ext}
   ↓
-插入 resources 表（存相对路径）
+插入 resources 表（存相对路径） (db/resources.rs)
   ↓
-异步通知 Python (http://127.0.0.1:8000/ingest/notify)
+异步通知 Python (utils/notification.rs)
   ↓
 返回 resource_id 和 resource_uuid
 ```
@@ -442,9 +531,9 @@ SQLite 数据库
 ### 资源关联流程
 
 ```
-前端调用 link_resource
+前端调用 link_resource (commands/resources.rs)
   ↓
-插入 task_resource_link 表
+插入 task_resource_link 表 (db/resources.rs)
   ↓
 更新 resources.classification_status = 'linked'
   ↓
@@ -490,7 +579,14 @@ SQLite 数据库
 - **统一错误类型**：所有命令返回 `Result<T, String>`，便于前端处理
 - **详细错误信息**：使用 `.map_err(|e| e.to_string())` 转换错误，提供可读的错误消息
 
-### 7. Asset 协议配置
+### 7. 模块化设计
+
+- **按功能分离**：db、commands、utils、window 各司其职
+- **清晰的边界**：每个模块通过 mod.rs 明确导出的公共接口
+- **易于维护**：新增功能时只需修改对应模块
+- **代码复用**：utils 模块提供可复用的工具函数
+
+### 8. Asset 协议配置
 
 - **用途**：允许前端通过 `convertFileSrc` API 访问应用数据目录中的文件
 - **配置位置**：`tauri.conf.json` 的 `app.security.assetProtocol`
@@ -502,9 +598,9 @@ SQLite 数据库
 
 ## 测试
 
-### 单元测试
+### 集成测试
 
-位于 `db.rs` 的 `#[cfg(test)]` 模块：
+位于 `db/tests.rs` 模块：
 
 - **数据库初始化测试**：验证 WAL 模式启用
 - **CRUD 测试**：测试任务和资源的插入、查询、关联操作
@@ -517,29 +613,51 @@ cd src-tauri
 cargo test
 ```
 
+测试覆盖：
+
+- `db::tests::tests::init_db_runs_migrations_and_enables_wal`: 数据库初始化
+- `db::tests::tests::insert_and_query_task_and_resource`: 任务和资源的完整流程
+
 ---
 
 ## 开发建议
 
 ### 1. 新增命令
 
-1. 在 `commands.rs` 中定义新命令函数
-2. 添加 `#[tauri::command]` 宏
-3. 在 `lib.rs` 的 `invoke_handler` 中注册命令
-4. 在前端 `api/index.ts` 中添加对应的 TypeScript 封装
+1. 根据功能选择合适的模块（tasks/resources/clipboard/dashboard）
+2. 在对应的 `commands/*.rs` 中定义新命令函数
+3. 添加 `#[tauri::command]` 宏
+4. 在 `commands/mod.rs` 中导出（如果是新文件）
+5. 在 `lib.rs` 的 `invoke_handler` 中注册命令
+6. 在前端 `api/index.ts` 中添加对应的 TypeScript 封装
 
-### 2. 新增数据库字段
+### 2. 新增数据库操作
+
+1. 根据操作类型选择 `db/tasks.rs` 或 `db/resources.rs`
+2. 定义新的数据库操作函数
+3. 在 `db/mod.rs` 中确保已导出（通过 `pub use`）
+4. 在对应的命令模块中调用
+5. 更新 `db/tests.rs` 添加测试用例
+
+### 3. 新增数据库字段
 
 1. 在 `migrations/` 中创建新的迁移文件（格式：`YYYYMMDDHHMMSS_description.sql`）
-2. 在 `db.rs` 中更新结构体定义
-3. 更新相关的查询和插入函数
+2. 在 `db/types.rs` 中更新结构体定义
+3. 在 `db/tasks.rs` 或 `db/resources.rs` 中更新相关的查询和插入函数
 4. 运行测试确保迁移正确
 
-### 3. 新增枚举类型
+### 4. 新增枚举类型
 
-1. 在 `db.rs` 中定义枚举，添加 `#[sqlx(rename_all = "...")]` 和 `#[serde(rename_all = "...")]`
+1. 在 `db/types.rs` 中定义枚举，添加 `#[sqlx(rename_all = "...")]` 和 `#[serde(rename_all = "...")]`
 2. 在数据库迁移中添加 `CHECK` 约束
 3. 在前端 `types/index.ts` 中同步添加类型定义
+
+### 5. 新增工具函数
+
+1. 根据功能选择 `utils/` 下的合适模块或创建新模块
+2. 实现工具函数
+3. 在 `utils/mod.rs` 中导出
+4. 在需要的命令中导入使用
 
 ### 4. 调试技巧
 
@@ -566,17 +684,35 @@ cargo test
 ```
 main.rs
   └─→ lib.rs
-      ├─→ commands.rs
-      │   ├─→ db.rs (数据访问)
-      │   ├─→ clipboard-rs (剪贴板)
-      │   ├─→ sha2 (哈希计算)
-      │   ├─→ uuid (生成 UUID)
-      │   └─→ reqwest (HTTP 通知)
+      ├─→ app_state.rs (全局状态)
+      ├─→ db/ (数据库模块)
+      │   ├─→ types.rs (类型定义)
+      │   ├─→ pool.rs (连接池)
+      │   ├─→ tasks.rs (任务操作)
+      │   ├─→ resources.rs (资源操作)
+      │   └─→ tests.rs (测试)
+      ├─→ commands/ (命令模块)
+      │   ├─→ types.rs (请求/响应类型)
+      │   ├─→ tasks.rs (任务命令)
+      │   ├─→ resources.rs (资源命令)
+      │   ├─→ clipboard.rs (剪贴板命令)
+      │   └─→ dashboard.rs (Dashboard命令)
+      ├─→ utils/ (工具模块)
+      │   ├─→ hash.rs (SHA-256)
+      │   ├─→ file.rs (文件操作)
+      │   └─→ notification.rs (Python通知)
+      ├─→ window/ (窗口模块)
+      │   └─→ hud.rs (HUD管理)
       └─→ tauri plugins
           ├─→ global-shortcut (快捷键)
           ├─→ dialog (文件选择)
           ├─→ opener (打开文件)
           └─→ shell (执行命令)
+
+依赖关系：
+commands/* ─→ db/*
+commands/* ─→ utils/*
+window/hud.rs ─→ tauri plugins
 ```
 
 ---
@@ -641,8 +777,6 @@ rm ~/Library/Application\ Support/com.hovsco.neuralvault/neuralvault.sqlite3
 
 - 检查 Python 后端是否运行在 `http://127.0.0.1:8000`
 - 捕获失败不影响本地存储，可以稍后手动触发处理
-
----
 
 ## 参考资料
 

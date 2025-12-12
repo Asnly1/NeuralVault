@@ -1,0 +1,130 @@
+use sqlx::types::Json;
+
+use super::{DbPool, LinkResourceParams, NewResource, ResourceRecord};
+
+pub async fn insert_resource(
+    pool: &DbPool,
+    params: NewResource<'_>,
+) -> Result<i64, sqlx::Error> {
+    // 显式写入同步/处理/分类状态，便于调试；不要依赖 DB 默认值
+    let result = sqlx::query(
+        "INSERT INTO resources (uuid, source_meta, file_hash, file_type, content, display_name, file_path, file_size_bytes, indexed_hash, processing_hash, sync_status, last_indexed_at, last_error, processing_stage, classification_status, user_id) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(params.uuid)
+    .bind(params.source_meta.map(Json))
+    .bind(params.file_hash)
+    .bind(params.file_type)
+    .bind(params.content)
+    .bind(params.display_name)
+    .bind(params.file_path)
+    .bind(params.file_size_bytes)
+    .bind(params.indexed_hash)
+    .bind(params.processing_hash)
+    .bind(params.sync_status)
+    .bind(params.last_indexed_at)
+    .bind(params.last_error)
+    .bind(params.processing_stage)
+    .bind(params.classification_status)
+    .bind(params.user_id)
+    .execute(pool)
+    .await?;
+
+    Ok(result.last_insert_rowid())
+}
+
+pub async fn get_resource_by_id(
+    pool: &DbPool,
+    resource_id: i64,
+) -> Result<ResourceRecord, sqlx::Error> {
+    sqlx::query_as::<_, ResourceRecord>(
+        "SELECT resource_id, uuid, source_meta, file_hash, file_type, content, display_name, \
+                file_path, file_size_bytes, indexed_hash, processing_hash, sync_status, last_indexed_at, last_error, processing_stage, classification_status, created_at, is_deleted, deleted_at, user_id \
+         FROM resources WHERE resource_id = ?",
+    )
+    .bind(resource_id)
+    .fetch_one(pool)
+    .await
+}
+
+pub async fn list_unclassified_resources(
+    pool: &DbPool,
+) -> Result<Vec<ResourceRecord>, sqlx::Error> {
+    sqlx::query_as::<_, ResourceRecord>(
+        "SELECT resource_id, uuid, source_meta, file_hash, file_type, content, display_name, \
+                file_path, file_size_bytes, indexed_hash, processing_hash, sync_status, last_indexed_at, last_error, processing_stage, classification_status, created_at, is_deleted, deleted_at, user_id \
+         FROM resources \
+         WHERE classification_status = 'unclassified' AND is_deleted = 0 \
+         ORDER BY created_at DESC",
+    )
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn link_resource_to_task(
+    pool: &DbPool,
+    params: LinkResourceParams<'_>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "INSERT INTO task_resource_link (task_id, resource_id, visibility_scope, local_alias) \
+         VALUES (?, ?, ?, ?)",
+    )
+    .bind(params.task_id)
+    .bind(params.resource_id)
+    .bind(params.visibility_scope)
+    .bind(params.local_alias)
+    .execute(pool)
+    .await?;
+
+    sqlx::query("UPDATE resources SET classification_status = 'linked' WHERE resource_id = ?")
+        .bind(params.resource_id)
+        .execute(pool)
+        .await?;
+
+    Ok(())
+}
+
+/// 取消资源与任务的关联，并将资源状态改回 unclassified
+pub async fn unlink_resource_from_task(
+    pool: &DbPool,
+    task_id: i64,
+    resource_id: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM task_resource_link WHERE task_id = ? AND resource_id = ?")
+        .bind(task_id)
+        .bind(resource_id)
+        .execute(pool)
+        .await?;
+
+    // 检查资源是否还有其他关联，如果没有则恢复为 unclassified
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM task_resource_link WHERE resource_id = ?")
+        .bind(resource_id)
+        .fetch_one(pool)
+        .await?;
+
+    if count == 0 {
+        sqlx::query("UPDATE resources SET classification_status = 'unclassified' WHERE resource_id = ?")
+            .bind(resource_id)
+            .execute(pool)
+            .await?;
+    }
+
+    Ok(())
+}
+
+pub async fn list_resources_for_task(
+    pool: &DbPool,
+    task_id: i64,
+) -> Result<Vec<ResourceRecord>, sqlx::Error> {
+    sqlx::query_as::<_, ResourceRecord>(
+        "SELECT r.resource_id, r.uuid, r.source_meta, r.file_hash, r.file_type, r.content, \
+                r.display_name, r.file_path, r.file_size_bytes, r.indexed_hash, r.processing_hash, \
+                r.sync_status, r.last_indexed_at, r.last_error, r.processing_stage, r.classification_status, r.created_at, r.is_deleted, r.deleted_at, r.user_id \
+         FROM resources r \
+         INNER JOIN task_resource_link l ON l.resource_id = r.resource_id \
+         WHERE l.task_id = ?",
+    )
+    .bind(task_id)
+    .fetch_all(pool)
+    .await
+}
