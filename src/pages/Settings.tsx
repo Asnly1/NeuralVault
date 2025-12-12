@@ -1,11 +1,24 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Palette } from "lucide-react";
 
-export function SettingsPage() {
+interface SettingsPageProps {
+  theme: "light" | "dark" | "system";
+  onThemeChange: (theme: "light" | "dark" | "system") => void;
+}
+
+export function SettingsPage({ theme, onThemeChange }: SettingsPageProps) {
   const [apiKey, setApiKey] = useState("");
   const [modelPath, setModelPath] = useState("");
   const [enableLocal, setEnableLocal] = useState(false);
@@ -23,6 +36,38 @@ export function SettingsPage() {
 
       {/* Settings Content */}
       <div className="flex-1 space-y-6 overflow-auto">
+        
+        {/* Appearance Configuration */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Palette className="h-5 w-5" />
+              外观
+            </CardTitle>
+            <CardDescription>自定义应用的主题颜色</CardDescription>
+          </CardHeader>
+          <CardContent>
+             <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <label className="text-sm font-medium">主题模式</label>
+                <p className="text-xs text-muted-foreground">
+                  选择应用外观主题
+                </p>
+              </div>
+              <Select value={theme} onValueChange={(val: "light" | "dark" | "system") => onThemeChange(val)}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="选择主题" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="light">☀️ 浅色模式</SelectItem>
+                  <SelectItem value="dark">🌙 深色模式</SelectItem>
+                  <SelectItem value="system">💻 跟随系统</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* API Configuration */}
         <Card>
           <CardHeader>

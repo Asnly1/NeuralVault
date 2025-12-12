@@ -41,6 +41,35 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [seeding, setSeeding] = useState(false);
+  
+  // Theme state
+  const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
+
+  // Apply theme class to document
+  useEffect(() => {
+    const root = window.document.documentElement;
+    root.classList.remove("light", "dark");
+
+    if (theme === "system") {
+      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light";
+      root.classList.add(systemTheme);
+
+      // Listen for system theme changes
+      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+      const handleChange = (e: MediaQueryListEvent) => {
+        const newSystemTheme = e.matches ? "dark" : "light";
+        root.classList.remove("light", "dark");
+        root.classList.add(newSystemTheme);
+      };
+
+      mediaQuery.addEventListener("change", handleChange);
+      return () => mediaQuery.removeEventListener("change", handleChange);
+    } else {
+      root.classList.add(theme);
+    }
+  }, [theme]);
 
   const reloadData = useCallback(async () => {
     setLoading(true);
@@ -193,7 +222,9 @@ function App() {
           />
         )}
 
-        {currentPage === "settings" && <SettingsPage />}
+        {currentPage === "settings" && (
+          <SettingsPage theme={theme} onThemeChange={setTheme} />
+        )}
       </main>
     </div>
   );
