@@ -13,6 +13,8 @@ pub use commands::{
     capture_resource, create_task, soft_delete_resource_command, soft_delete_task_command,
     get_assets_path, get_dashboard, get_task_resources, hard_delete_resource_command,
     hard_delete_task_command, link_resource, read_clipboard, seed_demo_data, unlink_resource,
+    mark_task_as_done_command, mark_task_as_todo_command, update_task_priority_command,
+    update_task_due_date_command, update_task_title_command, update_task_description_command,
 };
 pub use window::{hide_hud, toggle_hud};
 
@@ -75,7 +77,13 @@ pub fn run() {
             toggle_hud,
             hide_hud,
             read_clipboard,
-            get_assets_path
+            get_assets_path,
+            mark_task_as_done_command,
+            mark_task_as_todo_command,
+            update_task_priority_command,
+            update_task_due_date_command,
+            update_task_title_command,
+            update_task_description_command
         ])
         // 启动应用
         // tauri::generate_context!()：这个宏会读取你的 tauri.conf.json 配置文件，并在编译时将其转化为代码。它告诉构建器应用的名称、版本、图标等信息。

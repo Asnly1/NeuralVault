@@ -64,6 +64,73 @@ export const hardDeleteTask = async (taskId: number): Promise<void> => {
   return await invoke("hard_delete_task_command", { taskId });
 };
 
+/**
+ * 将任务状态从 'todo' 转换为 'done'
+ * @param taskId - 任务 ID
+ */
+export const markTaskAsDone = async (taskId: number): Promise<void> => {
+  return await invoke("mark_task_as_done_command", { taskId });
+};
+
+/**
+ * 将任务状态从 'done' 转换为 'todo'
+ * @param taskId - 任务 ID
+ */
+export const markTaskAsTodo = async (taskId: number): Promise<void> => {
+  return await invoke("mark_task_as_todo_command", { taskId });
+};
+
+/**
+ * 更新任务优先级
+ * @param taskId - 任务 ID
+ * @param priority - 优先级 ('high' | 'medium' | 'low')
+ */
+export const updateTaskPriority = async (
+  taskId: number,
+  priority: string
+): Promise<void> => {
+  return await invoke("update_task_priority_command", { taskId, priority });
+};
+
+/**
+ * 更新任务的截止日期
+ * @param taskId - 任务 ID
+ * @param dueDate - 截止日期 (YYYY-MM-DD HH:mm:ss 格式，或 null 清除)
+ */
+export const updateTaskDueDate = async (
+  taskId: number,
+  dueDate: string | null
+): Promise<void> => {
+  return await invoke("update_task_due_date_command", { taskId, dueDate });
+};
+
+/**
+ * 更新任务标题
+ * @param taskId - 任务 ID
+ * @param title - 新标题
+ */
+export const updateTaskTitle = async (
+  taskId: number,
+  title: string
+): Promise<void> => {
+  return await invoke("update_task_title_command", { taskId, title });
+};
+
+/**
+ * 更新任务描述
+ * @param taskId - 任务 ID
+ * @param description - 新描述 (或 null 清除)
+ */
+export const updateTaskDescription = async (
+  taskId: number,
+  description: string | null
+): Promise<void> => {
+  return await invoke("update_task_description_command", {
+    taskId,
+    description,
+  });
+};
+
 // ============================================
 // Resource API
 // ============================================

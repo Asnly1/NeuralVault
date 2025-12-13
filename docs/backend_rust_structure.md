@@ -213,6 +213,14 @@ pub struct AppState {
 | `insert_task()`                 | `pool, NewTask<'_>`          | `Result<i64>`                 | 插入任务并返回 `task_id`                |
 | `get_task_by_id()`              | `pool, task_id`              | `Result<TaskRecord>`          | 根据 ID 查询任务                        |
 | `list_active_tasks()`           | `pool`                       | `Result<Vec<TaskRecord>>`     | 查询活跃任务（todo）                    |
+| `soft_delete_task()`            | `pool, task_id`              | `Result<()>`                  | 软删除任务（设置 is_deleted = 1）       |
+| `hard_delete_task()`            | `pool, task_id`              | `Result<()>`                  | 硬删除任务（物理删除及级联数据）        |
+| `mark_task_as_done()`           | `pool, task_id`              | `Result<()>`                  | 将任务状态从 'todo' 转换为 'done'       |
+| `mark_task_as_todo()`           | `pool, task_id`              | `Result<()>`                  | 将任务状态从 'done' 转换为 'todo'       |
+| `update_task_priority()`        | `pool, task_id, priority`    | `Result<()>`                  | 更新任务优先级                          |
+| `update_task_due_date()`        | `pool, task_id, due_date`    | `Result<()>`                  | 更新任务截止日期                        |
+| `update_task_title()`           | `pool, task_id, title`       | `Result<()>`                  | 更新任务标题                            |
+| `update_task_description()`     | `pool, task_id, description` | `Result<()>`                  | 更新任务描述                            |
 | `insert_resource()`             | `pool, NewResource<'_>`      | `Result<i64>`                 | 插入资源并返回 `resource_id`            |
 | `get_resource_by_id()`          | `pool, resource_id`          | `Result<ResourceRecord>`      | 根据 ID 查询资源                        |
 | `list_unclassified_resources()` | `pool`                       | `Result<Vec<ResourceRecord>>` | 查询未分类资源                          |
@@ -258,17 +266,27 @@ pub struct AppState {
 
 ##### 命令列表
 
-| 命令                 | 参数                          | 返回值                          | 说明                                     |
-| -------------------- | ----------------------------- | ------------------------------- | ---------------------------------------- |
-| `capture_resource`   | `app, state, CaptureRequest`  | `Result<CaptureResponse>`       | 快速捕获文本/文件，计算 hash，存入数据库 |
-| `create_task`        | `state, CreateTaskRequest`    | `Result<CreateTaskResponse>`    | 创建任务                                 |
-| `get_dashboard`      | `state`                       | `Result<DashboardData>`         | 返回活跃任务 + 未分类资源                |
-| `link_resource`      | `state, LinkResourceRequest`  | `Result<LinkResourceResponse>`  | 关联资源到任务                           |
-| `unlink_resource`    | `state, task_id, resource_id` | `Result<LinkResourceResponse>`  | 取消关联                                 |
-| `get_task_resources` | `state, task_id`              | `Result<TaskResourcesResponse>` | 获取任务关联的资源列表                   |
-| `seed_demo_data`     | `state`                       | `Result<SeedResponse>`          | 生成演示数据（3 个任务 + 3 个资源）      |
-| `read_clipboard`     | `app`                         | `Result<ReadClipboardResponse>` | 读取系统剪贴板（图片/文件/HTML/文本）    |
-| `get_assets_path`    | `app`                         | `Result<String>`                | 获取 assets 目录的完整路径               |
+| 命令                              | 参数                          | 返回值                          | 说明                                     |
+| --------------------------------- | ----------------------------- | ------------------------------- | ---------------------------------------- |
+| `capture_resource`                | `app, state, CaptureRequest`  | `Result<CaptureResponse>`       | 快速捕获文本/文件，计算 hash，存入数据库 |
+| `create_task`                     | `state, CreateTaskRequest`    | `Result<CreateTaskResponse>`    | 创建任务                                 |
+| `soft_delete_task_command`        | `state, task_id`              | `Result<()>`                    | 软删除任务（设置 is_deleted = 1）        |
+| `hard_delete_task_command`        | `state, task_id`              | `Result<()>`                    | 硬删除任务（物理删除及级联数据）         |
+| `mark_task_as_done_command`       | `state, task_id`              | `Result<()>`                    | 将任务状态从 'todo' 转换为 'done'        |
+| `mark_task_as_todo_command`       | `state, task_id`              | `Result<()>`                    | 将任务状态从 'done' 转换为 'todo'        |
+| `update_task_priority_command`    | `state, task_id, priority`    | `Result<()>`                    | 更新任务优先级（用户自由选择）           |
+| `update_task_due_date_command`    | `state, task_id, due_date`    | `Result<()>`                    | 更新任务截止日期                         |
+| `update_task_title_command`       | `state, task_id, title`       | `Result<()>`                    | 更新任务标题                             |
+| `update_task_description_command` | `state, task_id, description` | `Result<()>`                    | 更新任务描述                             |
+| `get_dashboard`                   | `state`                       | `Result<DashboardData>`         | 返回活跃任务 + 未分类资源                |
+| `link_resource`                   | `state, LinkResourceRequest`  | `Result<LinkResourceResponse>`  | 关联资源到任务                           |
+| `unlink_resource`                 | `state, task_id, resource_id` | `Result<LinkResourceResponse>`  | 取消关联                                 |
+| `get_task_resources`              | `state, task_id`              | `Result<TaskResourcesResponse>` | 获取任务关联的资源列表                   |
+| `soft_delete_resource_command`    | `state, resource_id`          | `Result<()>`                    | 软删除资源（设置 is_deleted = 1）        |
+| `hard_delete_resource_command`    | `state, resource_id`          | `Result<()>`                    | 硬删除资源（物理删除数据库记录和文件）   |
+| `seed_demo_data`                  | `state`                       | `Result<SeedResponse>`          | 生成演示数据（3 个任务 + 3 个资源）      |
+| `read_clipboard`                  | `app`                         | `Result<ReadClipboardResponse>` | 读取系统剪贴板（图片/文件/HTML/文本）    |
+| `get_assets_path`                 | `app`                         | `Result<String>`                | 获取 assets 目录的完整路径               |
 
 ##### 核心逻辑详解
 

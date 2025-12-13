@@ -1,6 +1,6 @@
 use sqlx::types::Json;
 
-use super::{DbPool, NewTask, TaskRecord};
+use super::{DbPool, NewTask, TaskRecord, TaskPriority};
 
 // <'_>: 让编译器自动推导生命周期
 pub async fn insert_task(pool: &DbPool, params: NewTask<'_>) -> Result<i64, sqlx::Error> {
@@ -72,5 +72,81 @@ pub async fn hard_delete_task(pool: &DbPool, task_id: i64) -> Result<(), sqlx::E
         .bind(task_id)
         .execute(pool)
         .await?;
+    Ok(())
+}
+
+/// 将任务状态从 'todo' 转换为 'done'
+pub async fn mark_task_as_done(pool: &DbPool, task_id: i64) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE tasks SET status = 'done', user_updated_at = CURRENT_TIMESTAMP \
+         WHERE task_id = ? AND status = 'todo' AND is_deleted = 0",
+    )
+    .bind(task_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// 将任务状态从 'done' 转换为 'todo'
+pub async fn mark_task_as_todo(pool: &DbPool, task_id: i64) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE tasks SET status = 'todo', user_updated_at = CURRENT_TIMESTAMP \
+         WHERE task_id = ? AND status = 'done' AND is_deleted = 0",
+    )
+    .bind(task_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// 更新任务优先级
+pub async fn update_task_priority(pool: &DbPool, task_id: i64, priority: TaskPriority) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE tasks SET priority = ?, user_updated_at = CURRENT_TIMESTAMP \
+         WHERE task_id = ? AND is_deleted = 0",
+    )
+    .bind(priority)
+    .bind(task_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// 更新任务的截止日期
+pub async fn update_task_due_date(pool: &DbPool, task_id: i64, due_date: Option<&str>) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE tasks SET due_date = ?, user_updated_at = CURRENT_TIMESTAMP \
+         WHERE task_id = ? AND is_deleted = 0",
+    )
+    .bind(due_date)
+    .bind(task_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// 更新任务标题
+pub async fn update_task_title(pool: &DbPool, task_id: i64, title: &str) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE tasks SET title = ?, user_updated_at = CURRENT_TIMESTAMP \
+         WHERE task_id = ? AND is_deleted = 0",
+    )
+    .bind(title)
+    .bind(task_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// 更新任务描述
+pub async fn update_task_description(pool: &DbPool, task_id: i64, description: Option<&str>) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE tasks SET description = ?, user_updated_at = CURRENT_TIMESTAMP \
+         WHERE task_id = ? AND is_deleted = 0",
+    )
+    .bind(description)
+    .bind(task_id)
+    .execute(pool)
+    .await?;
     Ok(())
 }
