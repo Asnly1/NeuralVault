@@ -124,8 +124,14 @@ export function CalendarPage({ tasks, onRefresh }: CalendarPageProps) {
           {/* Calendar days */}
           {calendarDays.map((day, index) => {
             const dayTasks = getTasksForDate(day);
-            const hasMoreTasks = dayTasks.length > 3;
-            const displayTasks = dayTasks.slice(0, 3);
+            // Sort tasks: todo first, then done
+            const sortedTasks = [...dayTasks].sort((a, b) => {
+              if (a.status === 'todo' && b.status === 'done') return -1;
+              if (a.status === 'done' && b.status === 'todo') return 1;
+              return 0;
+            });
+            const hasMoreTasks = sortedTasks.length > 2;
+            const displayTasks = sortedTasks.slice(0, 2);
             const isCurrentMonthDay = isCurrentMonth(day);
             const isTodayDay = isToday(day);
 
@@ -133,14 +139,14 @@ export function CalendarPage({ tasks, onRefresh }: CalendarPageProps) {
               <div
                 key={index}
                 className={`
-                  border rounded-lg p-2 min-h-[120px] flex flex-col
+                  border rounded-lg p-1.5 min-h-[120px] flex flex-col
                   ${!isCurrentMonthDay ? "bg-muted/30" : "bg-card"}
                   ${isTodayDay ? "border-primary border-2" : ""}
                 `}
               >
                 {/* Date number */}
                 <div className={`
-                  text-sm font-medium mb-2
+                  text-sm font-medium mb-1
                   ${!isCurrentMonthDay ? "text-muted-foreground" : ""}
                   ${isTodayDay ? "text-primary font-bold" : ""}
                 `}>
@@ -153,7 +159,7 @@ export function CalendarPage({ tasks, onRefresh }: CalendarPageProps) {
                     <div
                       key={task.task_id}
                       onClick={(e) => handleToggleTask(task, e)}
-                      className="text-xs p-1.5 rounded cursor-pointer hover:bg-accent/50 transition-colors truncate"
+                      className="text-xs p-1 rounded cursor-pointer hover:bg-accent/50 transition-colors truncate"
                       style={{
                         backgroundColor: `${priorityConfig[task.priority].color}15`,
                         borderLeft: `2px solid ${priorityConfig[task.priority].color}`,
@@ -188,10 +194,10 @@ export function CalendarPage({ tasks, onRefresh }: CalendarPageProps) {
                   {hasMoreTasks && (
                     <button
                       onClick={(e) => handleShowAllTasks(day, e)}
-                      className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 p-1 rounded hover:bg-accent/50 w-full transition-colors"
+                      className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 p-0.5 rounded hover:bg-accent/50 w-full transition-colors mt-0.5"
                     >
                       <MoreHorizontal className="h-3 w-3" />
-                      <span>还有 {dayTasks.length - 3} 个任务</span>
+                      <span>还有 {sortedTasks.length - 2} 个任务</span>
                     </button>
                   )}
                 </div>

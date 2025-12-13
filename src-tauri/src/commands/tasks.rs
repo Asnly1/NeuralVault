@@ -7,7 +7,7 @@ use crate::{
         hard_delete_task, soft_delete_task, get_task_by_id, insert_task, NewTask, 
         TaskPriority, TaskStatus, mark_task_as_done, mark_task_as_todo, 
         update_task_priority, update_task_due_date, update_task_title, 
-        update_task_description, list_tasks_by_date,
+        update_task_description, list_tasks_by_date, list_all_tasks,
     },
 };
 
@@ -163,6 +163,17 @@ pub async fn get_tasks_by_date(
 ) -> Result<Vec<crate::db::TaskRecord>, String> {
     let pool = &state.db;
     list_tasks_by_date(pool, &date)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 获取所有任务（包括 todo 和 done 状态），用于 Calendar 视图
+#[tauri::command]
+pub async fn get_all_tasks(
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::db::TaskRecord>, String> {
+    let pool = &state.db;
+    list_all_tasks(pool)
         .await
         .map_err(|e| e.to_string())
 }

@@ -142,6 +142,14 @@ export const fetchTasksByDate = async (date: string): Promise<Task[]> => {
   return z.array(taskSchema).parse(raw);
 };
 
+/**
+ * 获取所有任务（包括 todo 和 done 状态），用于 Calendar 视图
+ */
+export const fetchAllTasks = async (): Promise<Task[]> => {
+  const raw = await invoke("get_all_tasks");
+  return z.array(taskSchema).parse(raw);
+};
+
 // ============================================
 // Resource API
 // ============================================

@@ -50,6 +50,18 @@ pub async fn list_active_tasks(pool: &DbPool) -> Result<Vec<TaskRecord>, sqlx::E
     .await
 }
 
+/// 查询所有任务（包括 todo 和 done 状态），用于 Calendar 视图
+pub async fn list_all_tasks(pool: &DbPool) -> Result<Vec<TaskRecord>, sqlx::Error> {
+    sqlx::query_as::<_, TaskRecord>(
+        "SELECT task_id, uuid, parent_task_id, root_task_id, title, description, suggested_subtasks, status, priority, due_date, created_at, user_updated_at, system_updated_at, is_deleted, deleted_at, user_id \
+         FROM tasks \
+         WHERE is_deleted = 0 AND due_date IS NOT NULL \
+         ORDER BY due_date ASC, priority DESC",
+    )
+    .fetch_all(pool)
+    .await
+}
+
 /// 查询指定 due_date 的所有任务
 pub async fn list_tasks_by_date(pool: &DbPool, date: &str) -> Result<Vec<TaskRecord>, sqlx::Error> {
     sqlx::query_as::<_, TaskRecord>(

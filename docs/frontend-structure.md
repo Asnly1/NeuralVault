@@ -80,7 +80,8 @@ src/
 | `toggleHUD()`/`hideHUD()` | -                      | `Promise<void>`                  | 控制悬浮 HUD 的显示/隐藏              |
 | `readClipboard()`         | -                      | `Promise<ReadClipboardResponse>` | 读取系统剪贴板（图片/文件/文本/HTML） |
 | `getAssetsPath()`         | -                      | `Promise<string>`                | 获取 assets 目录的完整路径            |
-| `fetchTasksByDate()`      | `date: string`         | `Promise<Task[]>`                | 获取指定日期的所有任务              |
+| `fetchTasksByDate()`      | `date: string`         | `Promise<Task[]>`                | 获取指定日期的所有任务                |
+| `fetchAllTasks()`         | -                      | `Promise<Task[]>`                | 获取所有任务（包括 todo 和 done），用于 Calendar 视图 |
 
 ---
 
@@ -392,14 +393,14 @@ interface DashboardPageProps {
 **核心功能**：
 
 - **全屏月历布局**：7×6 网格，显示当前月份的所有日期
-- **任务直接显示**：每个日期格子内最多显示前 3 个任务
-- **溢出处理**：超过 3 个任务时显示"还有 X 个任务"按钮
+- **任务直接显示**：每个日期格子内最多显示前 2 个任务
+- **溢出处理**：超过 2 个任务时显示"还有 X 个任务"按钮
 - **任务列表对话框**：点击溢出按钮弹出 `TasksDialog` 显示该日所有任务
 - **状态切换**：直接点击任务可切换 todo/done 状态
 - **可视化标识**：
   - 今天日期：特殊边框高亮
   - 优先级颜色：每个任务有左侧颜色条
-  - 完成状态：已完成任务显示删除线和半透明
+  - 完成状态：已完成任务显示删除线、勾选框和半透明效果
 
 **月份导航**：
 
@@ -408,7 +409,7 @@ interface DashboardPageProps {
 
 **数据管理**：
 
-- 使用 `fetchTasksByDate` API 查询指定日期的任务（后端查询）
+- 使用 `fetchAllTasks` API 查询所有任务（包括 todo 和 done 状态）
 - 前端按日期分组任务用于快速查找
 - 使用 `date-fns` 处理日期计算和格式化
 
@@ -416,7 +417,7 @@ interface DashboardPageProps {
 
 ```tsx
 interface CalendarPageProps {
-  tasks: Task[]; // 所有任务列表
+  tasks: Task[]; // 所有任务列表（包括 todo 和 done）
   onRefresh: () => void; // 刷新回调
 }
 ```
@@ -427,6 +428,7 @@ interface CalendarPageProps {
 - 同时显示 todo 和 done 状态任务
 - 点击任务直接切换状态，无需进入编辑
 - 溢出任务通过对话框查看，保持界面简洁
+- 每个格子最多显示2个任务，优化空间利用
 
 #### `Workspace.tsx` (Page B)
 

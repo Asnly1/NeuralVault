@@ -8,6 +8,7 @@ import {
   quickCapture,
   seedDemoData,
   linkResource,
+  fetchAllTasks,
 } from "./api";
 import { Sidebar } from "./components";
 import { DashboardPage, WorkspacePage, CalendarPage, SettingsPage } from "./pages";
@@ -36,6 +37,7 @@ function getFileTypeFromPath(filePath: string): string {
 function App() {
   const [currentPage, setCurrentPage] = useState<PageType>("dashboard");
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [allTasks, setAllTasks] = useState<Task[]>([]); // For calendar view (includes done tasks)
   const [resources, setResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,6 +80,9 @@ function App() {
       const data = await fetchDashboardData();
       setTasks(data.tasks);
       setResources(data.resources);
+      // Also fetch all tasks (including done) for calendar
+      const all = await fetchAllTasks();
+      setAllTasks(all);
     } catch (err) {
       console.error(err);
       if (err instanceof z.ZodError) {
@@ -175,6 +180,9 @@ function App() {
         if (!ignore) {
           setTasks(data.tasks);
           setResources(data.resources);
+          // Also fetch all tasks for calendar
+          const all = await fetchAllTasks();
+          setAllTasks(all);
         }
       } catch (err) {
         if (!ignore) {
@@ -224,7 +232,7 @@ function App() {
 
         {currentPage === "calendar" && (
           <CalendarPage
-            tasks={tasks}
+            tasks={allTasks}
             onRefresh={reloadData}
           />
         )}
