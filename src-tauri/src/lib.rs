@@ -15,7 +15,7 @@ pub use commands::{
     hard_delete_task_command, link_resource, read_clipboard, seed_demo_data, unlink_resource,
     mark_task_as_done_command, mark_task_as_todo_command, update_task_priority_command,
     update_task_due_date_command, update_task_title_command, update_task_description_command,
-    get_today_completed_tasks,
+    get_tasks_by_date,
 };
 pub use window::{hide_hud, toggle_hud};
 
@@ -85,7 +85,7 @@ pub fn run() {
             update_task_due_date_command,
             update_task_title_command,
             update_task_description_command,
-            get_today_completed_tasks
+            get_tasks_by_date
         ])
         // 启动应用
         // tauri::generate_context!()：这个宏会读取你的 tauri.conf.json 配置文件，并在编译时将其转化为代码。它告诉构建器应用的名称、版本、图标等信息。

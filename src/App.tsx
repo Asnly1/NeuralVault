@@ -10,7 +10,7 @@ import {
   linkResource,
 } from "./api";
 import { Sidebar } from "./components";
-import { DashboardPage, WorkspacePage, SettingsPage } from "./pages";
+import { DashboardPage, WorkspacePage, CalendarPage, SettingsPage } from "./pages";
 
 // 根据文件扩展名推断文件类型
 function getFileTypeFromPath(filePath: string): string {
@@ -219,6 +219,13 @@ function App() {
           <WorkspacePage
             selectedTask={selectedTask}
             onBack={handleBackToDashboard}
+          />
+        )}
+
+        {currentPage === "calendar" && (
+          <CalendarPage
+            tasks={tasks}
+            onRefresh={reloadData}
           />
         )}
 

@@ -5,9 +5,13 @@ export const translations = {
     sidebar: {
       dashboard: "看板",
       workspace: "工作台",
+      calendar: "日历",
       settings: "设置",
       search: "搜索...",
       favorites: "收藏",
+      searchPlaceholder: "搜索...",
+      menu: "菜单",
+      noFavorites: "暂无收藏",
     },
     settings: {
       title: "设置",
@@ -75,9 +79,13 @@ export const translations = {
     sidebar: {
       dashboard: "Dashboard",
       workspace: "Workspace",
+      calendar: "Calendar",
       settings: "Settings",
       search: "Search...",
       favorites: "Favorites",
+      searchPlaceholder: "Search...",
+      menu: "Menu",
+      noFavorites: "No favorites",
     },
     settings: {
       title: "Settings",

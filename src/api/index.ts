@@ -134,10 +134,11 @@ export const updateTaskDescription = async (
 };
 
 /**
- * 获取今天已完成的任务
+ * 获取指定 due_date 的所有任务
+ * @param date - 日期字符串，格式: YYYY-MM-DD
  */
-export const fetchTodayCompletedTasks = async (): Promise<Task[]> => {
-  const raw = await invoke("get_today_completed_tasks");
+export const fetchTasksByDate = async (date: string): Promise<Task[]> => {
+  const raw = await invoke("get_tasks_by_date", { date });
   return z.array(taskSchema).parse(raw);
 };
 

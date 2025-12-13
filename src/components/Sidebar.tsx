@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard,
   Briefcase,
+  Calendar,
   Settings,
   Search,
   ChevronsLeft,
 } from "lucide-react";
-import { PageType } from "../types";
+import { PageType, navItems } from "../types";
 
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -21,11 +22,13 @@ interface SidebarProps {
 export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
   const { t } = useLanguage();
 
-  const navItems: { key: PageType; icon: React.ReactNode; label: string }[] = [
-    { key: "dashboard", icon: <LayoutDashboard className="h-4 w-4" />, label: t("sidebar", "dashboard") },
-    { key: "workspace", icon: <Briefcase className="h-4 w-4" />, label: t("sidebar", "workspace") },
-    { key: "settings", icon: <Settings className="h-4 w-4" />, label: t("sidebar", "settings") },
-  ];
+  // Icon mapping for each page type
+  const iconMap: Record<PageType, React.ReactNode> = {
+    dashboard: <LayoutDashboard className="h-4 w-4" />,
+    workspace: <Briefcase className="h-4 w-4" />,
+    calendar: <Calendar className="h-4 w-4" />,
+    settings: <Settings className="h-4 w-4" />,
+  };
 
   return (
     <aside className="w-60 bg-sidebar border-r border-border flex flex-col h-full shrink-0 transition-all duration-300">
@@ -68,9 +71,9 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
             onClick={() => onNavigate(item.key)}
           >
             <span className={cn("mr-2", currentPage === item.key ? "text-foreground" : "text-muted-foreground")}>
-              {item.icon}
+              {iconMap[item.key]}
             </span>
-            {item.label}
+            {t("sidebar", item.key)}
           </Button>
         ))}
 

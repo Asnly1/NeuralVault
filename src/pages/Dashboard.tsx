@@ -9,7 +9,7 @@ import { TaskCard } from "../components/TaskCard";
 import { ResourceCard } from "../components/ResourceCard";
 import { QuickCapture } from "../components/QuickCapture";
 import { TaskEditCard } from "../components/TaskEditCard";
-import { CompletedTasksDialog } from "../components/CompletedTasksDialog";
+import { TasksDialog } from "../components/TasksDialog";
 import { softDeleteTask, softDeleteResource } from "../api";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -172,10 +172,11 @@ export function DashboardPage({
       />
 
       {/* Completed Tasks Dialog */}
-      <CompletedTasksDialog
+      <TasksDialog
         open={completedDialogOpen}
         onOpenChange={setCompletedDialogOpen}
         onTaskUpdated={onRefresh}
+        showOnlyCompleted={true}
       />
 
       {/* 3. Resources Area */}

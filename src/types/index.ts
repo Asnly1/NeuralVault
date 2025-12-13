@@ -68,7 +68,7 @@ export type DashboardData = z.infer<typeof dashboardSchema>;
 export type TaskStatus = (typeof taskStatusValues)[number];
 export type TaskPriority = (typeof taskPriorityValues)[number];
 export type ResourceType = (typeof resourceTypeValues)[number];
-export type PageType = "dashboard" | "workspace" | "settings";
+export type PageType = "dashboard" | "workspace" | "calendar" | "settings";
 
 // ============================================
 // Constants
@@ -95,6 +95,7 @@ export const resourceTypeIcons: Record<ResourceType, string> = {
 export const navItems: { key: PageType; icon: string; label: string }[] = [
   { key: "dashboard", icon: "◈", label: "看板" },
   { key: "workspace", icon: "⬡", label: "工作台" },
+  { key: "calendar", icon: "📅", label: "日历" },
   { key: "settings", icon: "⚙", label: "设置" },
 ];
 
