@@ -4,28 +4,12 @@ import { Badge } from "@/components/ui/badge";
 
 import { Sparkles, CheckCircle2, LayoutGrid, Plus } from "lucide-react";
 
-import { Task, Resource, TaskPriority } from "../types";
+import { Task, Resource } from "../types";
 import { TaskCard } from "../components/TaskCard";
 import { ResourceCard } from "../components/ResourceCard";
 import { QuickCapture } from "../components/QuickCapture";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { createTask, softDeleteTask, softDeleteResource } from "../api";
+import { TaskEditCard } from "../components/TaskEditCard";
+import { softDeleteTask, softDeleteResource } from "../api";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 interface DashboardPageProps {
@@ -50,10 +34,7 @@ export function DashboardPage({
   onSelectTask,
   onLinkResource,
 }: DashboardPageProps) {
-  const [creatingTask, setCreatingTask] = useState(false);
-  const [newTaskTitle, setNewTaskTitle] = useState("");
-  const [newTaskPriority, setNewTaskPriority] =
-    useState<TaskPriority>("medium");
+  const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const { t } = useLanguage();
 
   // Smart Sort: Logic to sort tasks
@@ -84,23 +65,6 @@ export function DashboardPage({
   const unlinkedResources = resources.filter(
     (r) => r.classification_status === "unclassified"
   );
-
-  const handleCreateTask = async () => {
-    if (!newTaskTitle.trim()) return;
-    try {
-      await createTask({
-        title: newTaskTitle,
-        priority: newTaskPriority,
-      });
-      setCreatingTask(false);
-      setNewTaskTitle("");
-      setNewTaskPriority("medium");
-      onRefresh();
-    } catch (err) {
-      console.error(err);
-      alert("创建任务失败");
-    }
-  };
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -141,58 +105,14 @@ export function DashboardPage({
             </Badge>
           </div>
 
-          <Dialog open={creatingTask} onOpenChange={setCreatingTask}>
-            <DialogTrigger asChild>
-              <Button
-                size="sm"
-                className="h-8 rounded-full px-3 shadow-none bg-foreground text-background hover:bg-foreground/90 transition-all"
-              >
-                <Plus className="h-3.5 w-3.5 mr-1.5" />
-                {t("dashboard", "createTask")}
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{t("dashboard", "createTask")}</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>Task Title</Label>
-                  <Input
-                    value={newTaskTitle}
-                    onChange={(e) => setNewTaskTitle(e.target.value)}
-                    placeholder="Task title..."
-                    autoFocus
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Priority</Label>
-                  <Select
-                    value={newTaskPriority}
-                    onValueChange={(v: TaskPriority) => setNewTaskPriority(v)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="low">Low</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setCreatingTask(false)}
-                >
-                  Cancel
-                </Button>
-                <Button onClick={handleCreateTask}>Create</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <Button
+            size="sm"
+            className="h-8 rounded-full px-3 shadow-none bg-foreground text-background hover:bg-foreground/90 transition-all"
+            onClick={() => setCreateTaskOpen(true)}
+          >
+            <Plus className="h-3.5 w-3.5 mr-1.5" />
+            {t("dashboard", "createTask")}
+          </Button>
         </div>
 
         {loading ? (
@@ -221,11 +141,19 @@ export function DashboardPage({
                     onRefresh();
                   }
                 }}
+                onUpdate={onRefresh}
               />
             ))}
           </div>
         )}
       </section>
+
+      {/* Create/Edit Task Dialog */}
+      <TaskEditCard
+        open={createTaskOpen}
+        onOpenChange={setCreateTaskOpen}
+        onSuccess={onRefresh}
+      />
 
       {/* 3. Resources Area */}
       <section className="space-y-6 pb-10 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200">
