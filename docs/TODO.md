@@ -13,8 +13,8 @@
    2. 删除任务：当鼠标浮选到某个任务上时，在右边出现一个垃圾桶符号，点击即可删除
 9. ✅ workspace 任务资源的删除：在 workspace 左侧当鼠标浮选到某个资源上时，在右边出现一个垃圾桶符号，点击即可删除
 10. ✅ Dashboard 中用户点击任务直接跳转到对应的 Workspace,但是悬浮到 TaskCard 上会在垃圾桶的旁边显示三个点，点击之后可以编辑 status, priority, title, description, due_date。请你创建一个 TaskEditCard 组件来实现这个功能，顺便把当前创建任务的功能也使用这个组件完成
-11. 添加一个 Calender Page，用户可以在日历上查看任务，以及任务的完成情况。每个任务出现在对应的 due_date 上,如果完成了就划掉。用户可以点击每个任务来切换 todo/done
+11. ✅ 添加一个 Calender Page，用户可以在日历上查看任务，以及任务的完成情况。每个任务出现在对应的 due_date 上,如果完成了就划掉。用户可以点击每个任务来切换 todo/done
 12. ✅ 在 Dashboard 的右上角添加一个按钮，点击可以查看今天已完成的任务，用户可以通过点击来重新回到 todo 状态。你可以创建一个新的 Component 来实现这个功能，新的 Component 里面可以包裹 TaskCard
 13. Dashboard 中实现这个功能：拖拽资源到某个任务上即可实现绑定
-14. 实现 Sidebar 的自定义大小，用户可以拖拽分界线来控制大小，点击右上角的按钮可以关闭 Sidebar
+14. ✅ 实现 Sidebar 的自定义大小，用户可以拖拽分界线来控制大小，点击右上角的按钮可以关闭 Sidebar
 15. 实现 Workspace 三块区域的自定义大小，用户可以拖拽分界线来控制大小（就像 Vscode 一样）

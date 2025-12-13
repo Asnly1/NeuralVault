@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-
+import { useState, useRef, useEffect } from "react";
 
 import {
   LayoutDashboard,
@@ -9,6 +9,7 @@ import {
   Settings,
   Search,
   ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import { PageType, navItems } from "../types";
 
@@ -17,10 +18,27 @@ import { useLanguage } from "@/contexts/LanguageContext";
 interface SidebarProps {
   currentPage: PageType;
   onNavigate: (page: PageType) => void;
+  isCollapsed: boolean;
+  width: number;
+  onToggleCollapse: () => void;
+  onWidthChange: (width: number) => void;
 }
 
-export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
+const MIN_WIDTH = 150;
+const MAX_WIDTH = 400;
+
+export function Sidebar({ 
+  currentPage, 
+  onNavigate, 
+  isCollapsed, 
+  width, 
+  onToggleCollapse, 
+  onWidthChange 
+}: SidebarProps) {
   const { t } = useLanguage();
+  const [isResizing, setIsResizing] = useState(false);
+  const [tempWidth, setTempWidth] = useState<number | null>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
 
   // Icon mapping for each page type
   const iconMap: Record<PageType, React.ReactNode> = {
@@ -30,8 +48,77 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
     settings: <Settings className="h-4 w-4" />,
   };
 
+  // Handle mouse down on resize handle
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+    setTempWidth(width); // Initialize temp width
+  };
+
+  // Handle resize
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      
+      const newWidth = e.clientX;
+      if (newWidth >= MIN_WIDTH && newWidth <= MAX_WIDTH) {
+        // Only update local state during drag for smooth performance
+        setTempWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      // Save to parent state and localStorage only when drag ends
+      if (tempWidth !== null) {
+        onWidthChange(tempWidth);
+      }
+      setIsResizing(false);
+      setTempWidth(null);
+    };
+
+    if (isResizing) {
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    }
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [isResizing, onWidthChange]);
+
+  // Floating expand button when collapsed
+  if (isCollapsed) {
+    return (
+      <div className="fixed left-0 top-1/2 -translate-y-1/2 z-50">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onToggleCollapse}
+          className="h-12 w-6 rounded-r-lg rounded-l-none bg-sidebar border border-l-0 border-border hover:bg-accent shadow-lg"
+        >
+          <ChevronsRight className="h-4 w-4" />
+        </Button>
+      </div>
+    );
+  }
+
+  // Use temp width during drag for better performance
+  const currentWidth = tempWidth !== null ? tempWidth : width;
+
   return (
-    <aside className="w-60 bg-sidebar border-r border-border flex flex-col h-full shrink-0 transition-all duration-300">
+    <aside 
+      ref={sidebarRef}
+      style={{ width: `${currentWidth}px` }}
+      className={cn(
+        "bg-sidebar border-r border-border flex flex-col h-full shrink-0 relative",
+        !isResizing && "transition-all duration-300" // Disable transition during drag
+      )}
+    >
       {/* Header */}
       <div className="p-4 h-14 flex items-center border-b border-border/40">
         <div className="flex items-center gap-2 px-2 w-full">
@@ -39,7 +126,10 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
             N
           </div>
           <span className="font-medium text-sm truncate">NeuralVault</span>
-          <ChevronsLeft className="ml-auto h-4 w-4 text-muted-foreground/50 hover:text-foreground cursor-pointer" />
+          <ChevronsLeft 
+            className="ml-auto h-4 w-4 text-muted-foreground/50 hover:text-foreground cursor-pointer transition-colors" 
+            onClick={onToggleCollapse}
+          />
         </div>
       </div>
 
@@ -87,6 +177,17 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
           </div>
         </div>
       </nav>
+
+      {/* Resize Handle */}
+      <div
+        className={cn(
+          "absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-accent transition-colors group",
+          isResizing && "bg-accent"
+        )}
+        onMouseDown={handleMouseDown}
+      >
+        <div className="absolute top-0 right-0 w-4 h-full -mr-1.5" />
+      </div>
     </aside>
   );
 }

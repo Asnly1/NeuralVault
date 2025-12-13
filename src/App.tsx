@@ -46,6 +46,16 @@ function App() {
   
   // Theme state
   const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
+  
+  // Sidebar state
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    const saved = localStorage.getItem("neuralvault_sidebar_collapsed");
+    return saved ? JSON.parse(saved) : false;
+  });
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem("neuralvault_sidebar_width");
+    return saved ? parseInt(saved, 10) : 240;
+  });
 
   // Apply theme class to document
   useEffect(() => {
@@ -170,6 +180,21 @@ function App() {
     [reloadData]
   );
 
+  // Handle sidebar toggle
+  const handleToggleSidebar = useCallback(() => {
+    setSidebarCollapsed((prev: boolean) => {
+      const newValue = !prev;
+      localStorage.setItem("neuralvault_sidebar_collapsed", JSON.stringify(newValue));
+      return newValue;
+    });
+  }, []);
+
+  // Handle sidebar width change
+  const handleSidebarWidthChange = useCallback((width: number) => {
+    setSidebarWidth(width);
+    localStorage.setItem("neuralvault_sidebar_width", width.toString());
+  }, []);
+
   useEffect(() => {
     let ignore = false;
 
@@ -206,7 +231,14 @@ function App() {
     <div className="flex h-screen bg-background text-foreground">
       {/* Sidebar: 是一个函数，接收一个参数（通常称为 props，这里被解构成了 { currentPage, onNavigate }） */}
       {/* onNavigate: 一个接受PageType并返回void的函数吗 */}
-      <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} />
+      <Sidebar 
+        currentPage={currentPage} 
+        onNavigate={setCurrentPage}
+        isCollapsed={sidebarCollapsed}
+        width={sidebarWidth}
+        onToggleCollapse={handleToggleSidebar}
+        onWidthChange={handleSidebarWidthChange}
+      />
 
       <main className="flex-1 min-w-0 overflow-hidden">
         {currentPage === "dashboard" && (

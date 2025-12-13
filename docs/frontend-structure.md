@@ -93,12 +93,28 @@ src/
 
 侧边栏导航组件，使用共享的 `navItems` 从 `types/index.ts` 导入，支持当前态高亮。包括Dashboard、Workspace、Calendar、Settings 四个页面。
 
+**核心功能**：
+
+- **可调整大小**：拖拽右侧边缘可以调整侧边栏宽度（150px - 400px）
+- **可折叠/展开**：点击右上角 ChevronsLeft 图标可以折叠/展开侧边栏
+- **状态持久化**：侧边栏宽度和折叠状态保存到 localStorage
+- **悬浮展开按钮**：侧边栏折叠时，左侧显示悬浮展开按钮
+- **视觉反馈**：拖拽时显示高亮效果和 col-resize 光标
+
 ```tsx
 interface SidebarProps {
   currentPage: PageType; // 当前页面
   onNavigate: (page: PageType) => void; // 导航回调
+  isCollapsed: boolean; // 是否折叠
+  width: number; // 侧边栏宽度（像素）
+  onToggleCollapse: () => void; // 折叠/展开回调
+  onWidthChange: (width: number) => void; // 宽度变化回调
 }
 ```
+
+**localStorage Keys**：
+- `neuralvault_sidebar_collapsed`: 折叠状态（boolean）
+- `neuralvault_sidebar_width`: 侧边栏宽度（number，默认 240px）
 
 #### `TaskCard.tsx`
 
