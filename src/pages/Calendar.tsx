@@ -60,11 +60,6 @@ export function CalendarPage({ tasks, onRefresh }: CalendarPageProps) {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1));
   };
 
-  // Go to today
-  const goToToday = () => {
-    setCurrentMonth(new Date());
-  };
-
   // Toggle task status
   const handleToggleTask = async (task: Task, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -81,7 +76,8 @@ export function CalendarPage({ tasks, onRefresh }: CalendarPageProps) {
   };
 
   // Open dialog with all tasks for a date
-  const handleShowAllTasks = (date: Date) => {
+  const handleShowAllTasks = (date: Date, e: React.MouseEvent) => {
+    e.stopPropagation();
     setSelectedDate(date);
     setDialogOpen(true);
   };
@@ -107,9 +103,6 @@ export function CalendarPage({ tasks, onRefresh }: CalendarPageProps) {
           <div className="flex items-center gap-2">
             <Button variant="outline" size="icon" onClick={previousMonth}>
               <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="sm" onClick={goToToday}>
-              今天
             </Button>
             <Button variant="outline" size="icon" onClick={nextMonth}>
               <ChevronRight className="h-4 w-4" />
@@ -194,7 +187,7 @@ export function CalendarPage({ tasks, onRefresh }: CalendarPageProps) {
                   {/* Show more button */}
                   {hasMoreTasks && (
                     <button
-                      onClick={() => handleShowAllTasks(day)}
+                      onClick={(e) => handleShowAllTasks(day, e)}
                       className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 p-1 rounded hover:bg-accent/50 w-full transition-colors"
                     >
                       <MoreHorizontal className="h-3 w-3" />

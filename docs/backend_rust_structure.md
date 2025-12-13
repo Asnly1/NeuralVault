@@ -222,6 +222,7 @@ pub struct AppState {
 | `update_task_due_date()`        | `pool, task_id, due_date`    | `Result<()>`                  | 更新任务截止日期                        |
 | `update_task_title()`           | `pool, task_id, title`       | `Result<()>`                  | 更新任务标题                            |
 | `update_task_description()`     | `pool, task_id, description` | `Result<()>`                  | 更新任务描述                            |
+| `list_tasks_by_date()`          | `pool, date: &str`           | `Result<Vec<TaskRecord>>`     | 查询指定日期的所有任务（根据 due_date） |
 | `insert_resource()`             | `pool, NewResource<'_>`      | `Result<i64>`                 | 插入资源并返回 `resource_id`            |
 | `get_resource_by_id()`          | `pool, resource_id`          | `Result<ResourceRecord>`      | 根据 ID 查询资源                        |
 | `list_unclassified_resources()` | `pool`                       | `Result<Vec<ResourceRecord>>` | 查询未分类资源                          |
@@ -279,7 +280,7 @@ pub struct AppState {
 | `update_task_due_date_command`    | `state, task_id, due_date`    | `Result<()>`                    | 更新任务截止日期                         |
 | `update_task_title_command`       | `state, task_id, title`       | `Result<()>`                    | 更新任务标题                             |
 | `update_task_description_command` | `state, task_id, description` | `Result<()>`                    | 更新任务描述                             |
-| `get_today_completed_tasks`       | `state`                       | `Result<Vec<TaskRecord>>`       | 获取今天已完成的任务列表                 |
+| `get_tasks_by_date`               | `state, date`                 | `Result<Vec<TaskRecord>>`       | 获取指定日期（due_date）的所有任务  |
 | `get_dashboard`                   | `state`                       | `Result<DashboardData>`         | 返回活跃任务 + 未分类资源                |
 | `link_resource`                   | `state, LinkResourceRequest`  | `Result<LinkResourceResponse>`  | 关联资源到任务                           |
 | `unlink_resource`                 | `state, task_id, resource_id` | `Result<LinkResourceResponse>`  | 取消关联                                 |
@@ -312,21 +313,21 @@ pub struct AppState {
 
 **异步通知 Python**：捕获成功后异步调用 `http://127.0.0.1:8000/ingest/notify`，失败不影响主流程
 
-###### `get_today_completed_tasks`
+###### `get_tasks_by_date`
 
-获取今天已完成的任务列表，用于在 Dashboard 中展示今日成就。
+获取指定日期的所有任务，用于日历外面显示和任务列表对话框。
 
 **查询逻辑**：
 
-- 筛选条件：`status = 'done' AND DATE(user_updated_at) = DATE('now')`
-- 排序：按 `user_updated_at DESC`（最近完成的在前）
-- 使用 `user_updated_at` 字段判断完成时间（该字段在任务状态变更时更新）
+- 筛选条件：`DATE(due_date) = DATE(?)`
+- 排序：按 `due_date ASC, priority DESC`（最早截止且最高优先级在前）
+- 支持查询任意日期，不只限于今天
 
 **使用场景**：
 
-- Dashboard 页面的"今日已完成"对话框
-- 用户可以点击查看今天完成的所有任务
-- 支持将任务重新标记为 todo 状态
+- Calendar 页面显示每天的任务
+- 查看具体日期的所有任务列表
+- Dashboard 页面显示今天已完成的任务（传入今天日期，前端过滤 done 状态）
 
 ###### `read_clipboard`
 

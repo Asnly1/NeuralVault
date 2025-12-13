@@ -14,7 +14,7 @@ src/
 │   ├── Sidebar.tsx       # 侧边栏导航
 │   ├── TaskCard.tsx      # 任务卡片（可点击方框切换状态、悬浮显示编辑按钮）
 │   ├── TaskEditCard.tsx  # 任务编辑组件（支持创建/编辑双模式、Notion 风格日期选择器）
-│   ├── CompletedTasksDialog.tsx  # 已完成任务对话框
+│   ├── TasksDialog.tsx   # 通用任务对话框（可显示指定日期的任务或已完成任务）
 │   ├── TiptapEditor.tsx  # Markdown 富文本编辑器（基于 Tiptap）
 │   └── ui/               # shadcn/ui 通用组件库
 │       ├── avatar.tsx
@@ -35,6 +35,7 @@ src/
 ├── pages/
 │   ├── Dashboard.tsx     # 智能看板 (Page A)
 │   ├── HUD.tsx           # 悬浮输入窗 (Quick Capture HUD)
+│   ├── Calendar.tsx      # 日历页面 (Page C)
 │   ├── index.ts
 │   ├── Settings.tsx      # 设置 (Page E)
 │   └── Workspace.tsx     # 任务工作台 (Page B)，集成编辑器
@@ -56,10 +57,10 @@ src/
 
 - Schema：`taskSchema`、`resourceSchema`、`dashboardSchema`，均用 `z.coerce.date()` 将日期规范化。
 - 枚举值：`taskStatusValues`（todo/done）、`taskPriorityValues`、`resourceTypeValues`、`classificationValues`。
-- 数据类型：`Task`、`Resource`、`DashboardData`、`TaskStatus`、`TaskPriority`、`ResourceType`、`PageType`（"dashboard" | "workspace" | "settings"）。
+- 数据类型：`Task`、`Resource`、`DashboardData`、`TaskStatus`、`TaskPriority`、`ResourceType`、`PageType`（"dashboard" | "workspace" | "calendar" | "settings"）。
 - API 类型：`CreateTaskRequest/Response`、`CaptureRequest/Response`、`LinkResourceRequest/Response`、`TaskResourcesResponse`、`SeedResponse`、`CaptureSourceMeta`。
 - 剪贴板类型：`ClipboardContent`（Image/Files/Text/Html/Empty）、`ReadClipboardResponse`。
-- 常量：`priorityConfig`（中文标签 + 颜色）、`resourceTypeIcons`（emoji 图标）、`navItems`（Sidebar 菜单）。
+- 常量：`priorityConfig`（中文标签 + 颜色）、`resourceTypeIcons`（emoji 图标）、`navItems`（Sidebar 菜单，包括日历）。
 
 ---
 
@@ -79,6 +80,7 @@ src/
 | `toggleHUD()`/`hideHUD()` | -                      | `Promise<void>`                  | 控制悬浮 HUD 的显示/隐藏              |
 | `readClipboard()`         | -                      | `Promise<ReadClipboardResponse>` | 读取系统剪贴板（图片/文件/文本/HTML） |
 | `getAssetsPath()`         | -                      | `Promise<string>`                | 获取 assets 目录的完整路径            |
+| `fetchTasksByDate()`      | `date: string`         | `Promise<Task[]>`                | 获取指定日期的所有任务              |
 
 ---
 
@@ -88,7 +90,7 @@ src/
 
 #### `Sidebar.tsx`
 
-侧边栏导航组件，映射 `navItems`，支持当前态高亮。
+侧边栏导航组件，使用共享的 `navItems` 从 `types/index.ts` 导入，支持当前态高亮。包括Dashboard、Workspace、Calendar、Settings 四个页面。
 
 ```tsx
 interface SidebarProps {
@@ -166,24 +168,49 @@ interface TaskEditCardProps {
 - 支持月份切换和键盘导航
 - 显示格式化日期（如 "December 16, 2025"）
 
-#### `CompletedTasksDialog.tsx`
+#### `TasksDialog.tsx`
 
-已完成任务对话框组件，展示今日已完成的任务列表。
+通用任务对话框组件，可以显示指定日期的所有任务或仅显示已完成的任务。
 
 **功能特性**：
 
-- 展示今日已完成的所有任务（status = done）
+- 支持两种模式：
+  - **日期模式**：显示指定日期的所有任务（用于 Calendar 页面）
+  - **已完成模式**：显示今天已完成的任务（用于 Dashboard）
 - 支持恢复任务为待办状态
-- 支持删除已完成任务
+- 支持删除任务
 - 空状态友好提示
 - 响应式布局
 
 ```tsx
-interface CompletedTasksDialogProps {
+interface TasksDialogProps {
   open: boolean; // 控制对话框显示
   onOpenChange: (open: boolean) => void;
   onTaskUpdated: () => void; // 任务更新后的回调
+  date?: Date | null; // 可选，指定日期查询该日的任务
+  showOnlyCompleted?: boolean; // 是否只显示已完成的任务
 }
+```
+
+**使用示例**：
+
+```tsx
+// Dashboard 中显示今天已完成的任务
+<TasksDialog
+  open={completedDialogOpen}
+  onOpenChange={setCompletedDialogOpen}
+  onTaskUpdated={onRefresh}
+  showOnlyCompleted={true}
+/>
+
+// Calendar 中显示指定日期的所有任务
+<TasksDialog
+  open={dialogOpen}
+  onOpenChange={setDialogOpen}
+  date={selectedDate}
+  onTaskUpdated={onRefresh}
+  showOnlyCompleted={false}
+/>
 ```
 
 #### `ResourceCard.tsx`
@@ -357,14 +384,55 @@ interface DashboardPageProps {
   onSelectTask: (task: Task) => void;
   onLinkResource: (resourceId: number, taskId: number) => Promise<void>;
 }
+
+#### `Calendar.tsx` (Page C)
+
+日历页面：全屏月历视图，直接在日期格子中展示任务。
+
+**核心功能**：
+
+- **全屏月历布局**：7×6 网格，显示当前月份的所有日期
+- **任务直接显示**：每个日期格子内最多显示前 3 个任务
+- **溢出处理**：超过 3 个任务时显示"还有 X 个任务"按钮
+- **任务列表对话框**：点击溢出按钮弹出 `TasksDialog` 显示该日所有任务
+- **状态切换**：直接点击任务可切换 todo/done 状态
+- **可视化标识**：
+  - 今天日期：特殊边框高亮
+  - 优先级颜色：每个任务有左侧颜色条
+  - 完成状态：已完成任务显示删除线和半透明
+
+**月份导航**：
+
+- 上个月/下个月箭头按钮
+- 顶部显示当前年月
+
+**数据管理**：
+
+- 使用 `fetchTasksByDate` API 查询指定日期的任务（后端查询）
+- 前端按日期分组任务用于快速查找
+- 使用 `date-fns` 处理日期计算和格式化
+
+**Props 接口**：
+
+```tsx
+interface CalendarPageProps {
+  tasks: Task[]; // 所有任务列表
+  onRefresh: () => void; // 刷新回调
+}
 ```
+
+**特点**：
+
+- 极简导航：仅前后切换，无"今天"按钮
+- 同时显示 todo 和 done 状态任务
+- 点击任务直接切换状态，无需进入编辑
+- 溢出任务通过对话框查看，保持界面简洁
 
 #### `Workspace.tsx` (Page B)
 
 任务工作台：三栏布局，已集成编辑器与资源预览。
 
 - **左栏**：当前任务详情 + `fetchTaskResources` 拉取的关联资源列表，点击资源在中栏显示。
-- **中栏**：资源编辑/预览区
   - 文本资源：使用 `TiptapEditor` 进行 Markdown 编辑（实时保存状态提示）
   - PDF 资源：使用 `react-pdf-highlighter-extended` 实现 PDF 阅读和高亮标注
     - PDF.js 渲染引擎
