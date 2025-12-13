@@ -12,6 +12,8 @@ import {
   TaskResourcesResponse,
   ReadClipboardResponse,
   resourceSchema,
+  Task,
+  taskSchema,
 } from "../types";
 import { z } from "zod";
 
@@ -129,6 +131,14 @@ export const updateTaskDescription = async (
     taskId,
     description,
   });
+};
+
+/**
+ * 获取今天已完成的任务
+ */
+export const fetchTodayCompletedTasks = async (): Promise<Task[]> => {
+  const raw = await invoke("get_today_completed_tasks");
+  return z.array(taskSchema).parse(raw);
 };
 
 // ============================================

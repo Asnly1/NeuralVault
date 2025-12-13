@@ -50,6 +50,18 @@ pub async fn list_active_tasks(pool: &DbPool) -> Result<Vec<TaskRecord>, sqlx::E
     .await
 }
 
+/// 查询今天已完成的任务
+pub async fn list_today_completed_tasks(pool: &DbPool) -> Result<Vec<TaskRecord>, sqlx::Error> {
+    sqlx::query_as::<_, TaskRecord>(
+        "SELECT task_id, uuid, parent_task_id, root_task_id, title, description, suggested_subtasks, status, priority, due_date, created_at, user_updated_at, system_updated_at, is_deleted, deleted_at, user_id \
+         FROM tasks \
+         WHERE status = 'done' AND DATE(user_updated_at) = DATE('now') AND is_deleted = 0 \
+         ORDER BY user_updated_at DESC",
+    )
+    .fetch_all(pool)
+    .await
+}
+
 /// 软删除任务（设置 is_deleted = 1）
 pub async fn soft_delete_task(pool: &DbPool, task_id: i64) -> Result<(), sqlx::Error> {
     sqlx::query(

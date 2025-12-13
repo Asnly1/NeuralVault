@@ -9,6 +9,7 @@ import { TaskCard } from "../components/TaskCard";
 import { ResourceCard } from "../components/ResourceCard";
 import { QuickCapture } from "../components/QuickCapture";
 import { TaskEditCard } from "../components/TaskEditCard";
+import { CompletedTasksDialog } from "../components/CompletedTasksDialog";
 import { softDeleteTask, softDeleteResource } from "../api";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -35,6 +36,7 @@ export function DashboardPage({
   onLinkResource,
 }: DashboardPageProps) {
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
+  const [completedDialogOpen, setCompletedDialogOpen] = useState(false);
   const { t } = useLanguage();
 
   // Smart Sort: Logic to sort tasks
@@ -105,14 +107,28 @@ export function DashboardPage({
             </Badge>
           </div>
 
-          <Button
-            size="sm"
-            className="h-8 rounded-full px-3 shadow-none bg-foreground text-background hover:bg-foreground/90 transition-all"
-            onClick={() => setCreateTaskOpen(true)}
-          >
-            <Plus className="h-3.5 w-3.5 mr-1.5" />
-            {t("dashboard", "createTask")}
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* 查看今日已完成任务按钮 */}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 rounded-full px-3 shadow-none"
+              onClick={() => setCompletedDialogOpen(true)}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+              今日已完成
+            </Button>
+
+            {/* 创建任务按钮 */}
+            <Button
+              size="sm"
+              className="h-8 rounded-full px-3 shadow-none bg-foreground text-background hover:bg-foreground/90 transition-all"
+              onClick={() => setCreateTaskOpen(true)}
+            >
+              <Plus className="h-3.5 w-3.5 mr-1.5" />
+              {t("dashboard", "createTask")}
+            </Button>
+          </div>
         </div>
 
         {loading ? (
@@ -153,6 +169,13 @@ export function DashboardPage({
         open={createTaskOpen}
         onOpenChange={setCreateTaskOpen}
         onSuccess={onRefresh}
+      />
+
+      {/* Completed Tasks Dialog */}
+      <CompletedTasksDialog
+        open={completedDialogOpen}
+        onOpenChange={setCompletedDialogOpen}
+        onTaskUpdated={onRefresh}
       />
 
       {/* 3. Resources Area */}

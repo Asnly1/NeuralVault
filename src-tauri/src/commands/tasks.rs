@@ -7,7 +7,7 @@ use crate::{
         hard_delete_task, soft_delete_task, get_task_by_id, insert_task, NewTask, 
         TaskPriority, TaskStatus, mark_task_as_done, mark_task_as_todo, 
         update_task_priority, update_task_due_date, update_task_title, 
-        update_task_description,
+        update_task_description, list_today_completed_tasks,
     },
 };
 
@@ -153,4 +153,15 @@ pub async fn update_task_description_command(
         .await
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// 获取今天已完成的任务
+#[tauri::command]
+pub async fn get_today_completed_tasks(
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::db::TaskRecord>, String> {
+    let pool = &state.db;
+    list_today_completed_tasks(pool)
+        .await
+        .map_err(|e| e.to_string())
 }
