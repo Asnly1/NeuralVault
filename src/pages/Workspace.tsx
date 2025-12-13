@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Task, Resource, priorityConfig, resourceTypeIcons } from "../types";
 import { Trash2 } from "lucide-react";
-import { fetchTaskResources, getAssetsPath, unlinkResource } from "../api";
+import { fetchTaskResources, getAssetsPath, unlinkResource, updateResourceContent, updateResourceDisplayName } from "../api";
 import { TiptapEditor } from "../components";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -44,6 +44,11 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
   const [hoveredResourceId, setHoveredResourceId] = useState<number | null>(
     null
   );
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedDisplayName, setEditedDisplayName] = useState("");
 
   // Panel resize state
   const [leftPanelWidth, setLeftPanelWidth] = useState(() => {
@@ -120,9 +125,14 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
         setEditorContent("");
         setIsModified(false);
       }
+      // 初始化编辑的显示名称
+      setEditedDisplayName(selectedResource.display_name || "");
+      setIsEditingName(false);
     } else {
       setEditorContent("");
       setIsModified(false);
+      setEditedDisplayName("");
+      setIsEditingName(false);
     }
   }, [selectedResource]);
 
@@ -133,7 +143,53 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
   const handleEditorChange = useCallback((content: string) => {
     setEditorContent(content);
     setIsModified(true);
+    setSaveSuccess(false); // 清除保存成功提示
+    setSaveError(null); // 清除错误提示
   }, []);
+
+  // 保存资源内容和显示名称
+  const handleSave = useCallback(async () => {
+    if (!selectedResource || isSaving) return;
+    
+    // 检查是否有任何修改
+    const hasContentChange = isModified;
+    const hasNameChange = editedDisplayName !== (selectedResource.display_name || "");
+    
+    if (!hasContentChange && !hasNameChange) return;
+
+    setIsSaving(true);
+    setSaveError(null);
+    setSaveSuccess(false);
+
+    try {
+      // 分别调用两个独立的 API 函数
+      if (hasContentChange) {
+        await updateResourceContent(selectedResource.resource_id, editorContent);
+      }
+      if (hasNameChange) {
+        await updateResourceDisplayName(selectedResource.resource_id, editedDisplayName);
+      }
+      
+      setIsModified(false);
+      setIsEditingName(false);
+      setSaveSuccess(true);
+
+      // 更新本地资源对象的 display_name
+      if (hasNameChange) {
+        selectedResource.display_name = editedDisplayName;
+      }
+
+      // 3秒后清除保存成功提示
+      setTimeout(() => {
+        setSaveSuccess(false);
+      }, 3000);
+    } catch (err) {
+      console.error("保存失败:", err);
+      setSaveError(err instanceof Error ? err.message : "保存失败");
+    } finally {
+      setIsSaving(false);
+    }
+  }, [selectedResource, isModified, isSaving, editorContent, editedDisplayName]);
 
   // 处理删除资源（取消关联）
   const handleDeleteResource = useCallback(
@@ -235,6 +291,22 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
       document.body.style.userSelect = "";
     };
   }, [isResizingLeft, isResizingRight, tempLeftWidth, tempRightWidth]);
+
+  // 监听 Ctrl+S / Command+S 快捷键
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 检测 Ctrl+S (Windows/Linux) 或 Command+S (macOS)
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault(); // 阻止浏览器默认保存行为
+        handleSave();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [handleSave]);
 
 
 
@@ -467,6 +539,21 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
             ● 未保存
           </Badge>
         )}
+        {isSaving && (
+          <Badge variant="outline" className="ml-auto">
+            保存中...
+          </Badge>
+        )}
+        {saveSuccess && (
+          <Badge variant="default" className="ml-auto bg-green-600">
+            ✓ 已保存
+          </Badge>
+        )}
+        {saveError && (
+          <Badge variant="destructive" className="ml-auto">
+            ✗ {saveError}
+          </Badge>
+        )}
       </header>
 
       {/* Three-column Layout */}
@@ -594,22 +681,59 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
         {/* Center: Editor Area */}
         <main className="flex-1 flex flex-col min-w-0">
           {/* Editor Toolbar */}
-          <div className="flex items-center justify-between px-4 py-2 border-b shrink-0">
-            <span className="text-sm font-medium">
-              {selectedResource
-                ? `${resourceTypeIcons[selectedResource.file_type]} ${
-                    selectedResource.display_name || "未命名"
-                  }`
-                : "工作区"}
-            </span>
+          <div className="flex items-center gap-2 px-4 py-2 border-b shrink-0">
+            {selectedResource ? (
+              isEditingName ? (
+                // 编辑模式：显示输入框
+                <>
+                  <span className="text-sm">
+                    {resourceTypeIcons[selectedResource.file_type]}
+                  </span>
+                  <Input
+                    value={editedDisplayName}
+                    onChange={(e) => setEditedDisplayName(e.target.value)}
+                    onBlur={() => {
+                      // 失焦时如果有修改则保存
+                      if (editedDisplayName !== (selectedResource.display_name || "")) {
+                        handleSave();
+                      } else {
+                        setIsEditingName(false);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.currentTarget.blur(); // 触发保存
+                      } else if (e.key === "Escape") {
+                        setEditedDisplayName(selectedResource.display_name || "");
+                        setIsEditingName(false);
+                      }
+                    }}
+                    className="h-7 text-sm flex-1"
+                    autoFocus
+                  />
+                </>
+              ) : (
+                // 查看模式：显示名称，点击编辑
+                <>
+                  <span className="text-sm font-medium cursor-pointer hover:text-primary" onClick={() => setIsEditingName(true)} title="点击编辑名称">
+                    {resourceTypeIcons[selectedResource.file_type]}{" "}
+                    {selectedResource.display_name || "未命名"}
+                  </span>
+                </>
+              )
+            ) : (
+              <span className="text-sm font-medium">工作区</span>
+            )}
             {selectedResource && selectedResource.file_type === "text" && (
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
-                disabled={!isModified}
+                className="h-8 w-8 ml-auto"
+                disabled={(!isModified && editedDisplayName === (selectedResource.display_name || "")) || isSaving}
+                onClick={handleSave}
+                title={isSaving ? "保存中..." : "保存 (Ctrl+S)"}
               >
-                💾
+                {isSaving ? "⏳" : "💾"}
               </Button>
             )}
           </div>

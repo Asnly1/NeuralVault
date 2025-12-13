@@ -226,6 +226,8 @@ pub struct AppState {
 | `insert_resource()`             | `pool, NewResource<'_>`      | `Result<i64>`                 | 插入资源并返回 `resource_id`                       |
 | `get_resource_by_id()`          | `pool, resource_id`          | `Result<ResourceRecord>`      | 根据 ID 查询资源                                   |
 | `list_unclassified_resources()` | `pool`                       | `Result<Vec<ResourceRecord>>` | 查询未分类资源                                     |
+| `update_resource_content()`     | `pool, resource_id, content` | `Result<()>`                  | 更新资源内容（保存编辑器修改）                     |
+| `update_resource_display_name()` | `pool, resource_id, display_name` | `Result<()>`             | 更新资源显示名称（重命名资源）                     |
 | `link_resource_to_task()`       | `pool, LinkResourceParams`   | `Result<()>`                  | 关联资源到任务，更新分类状态为 linked              |
 | `unlink_resource_from_task()`   | `pool, task_id, resource_id` | `Result<()>`                  | 取消关联，检查是否需恢复为 unclassified            |
 | `list_resources_for_task()`     | `pool, task_id`              | `Result<Vec<ResourceRecord>>` | 查询任务的所有关联资源                             |
@@ -287,6 +289,8 @@ pub struct AppState {
 | `get_task_resources`              | `state, task_id`              | `Result<TaskResourcesResponse>` | 获取任务关联的资源列表                   |
 | `soft_delete_resource_command`    | `state, resource_id`          | `Result<()>`                    | 软删除资源（设置 is_deleted = 1）        |
 | `hard_delete_resource_command`    | `state, resource_id`          | `Result<()>`                    | 硬删除资源（物理删除数据库记录和文件）   |
+| `update_resource_content_command` | `state, resource_id, content` | `Result<()>`                    | 更新资源内容（保存编辑器修改）           |
+| `update_resource_display_name_command` | `state, resource_id, display_name` | `Result<()>`           | 更新资源显示名称（重命名资源）           |
 | `seed_demo_data`                  | `state`                       | `Result<SeedResponse>`          | 生成演示数据（3 个任务 + 3 个资源）      |
 | `read_clipboard`                  | `app`                         | `Result<ReadClipboardResponse>` | 读取系统剪贴板（图片/文件/HTML/文本）    |
 | `get_assets_path`                 | `app`                         | `Result<String>`                | 获取 assets 目录的完整路径               |
@@ -351,6 +355,47 @@ pub struct AppState {
 
 - **返回值**：assets 目录的绝对路径字符串（例如：`/Users/xxx/Library/Application Support/com.hovsco.neuralvault/assets`）
 - **用途**：图片预览等功能需要将数据库中的相对路径转换为完整路径，再通过 Tauri 的 `convertFileSrc` API 转换为浏览器可访问的 URL
+
+###### `update_resource_content_command`
+
+保存文本编辑器中的资源内容修改。
+
+**功能**：
+- 更新指定资源的 `content` 字段
+- 用于 Workspace 中 TiptapEditor 的保存功能
+- 支持 Ctrl+S / Command+S 快捷键触发
+
+**实现**：
+```rust
+pub async fn update_resource_content(
+    pool: &DbPool,
+    resource_id: i64,
+    content: &str,
+) -> Result<(), sqlx::Error>
+```
+
+###### `update_resource_display_name_command`
+
+重命名资源（修改显示名称）。
+
+**功能**：
+- 更新指定资源的 `display_name` 字段
+- 用于 Workspace 中的内联编辑功能
+- 支持点击名称编辑、Enter 保存、Esc 取消
+
+**实现**：
+```rust
+pub async fn update_resource_display_name(
+    pool: &DbPool,
+    resource_id: i64,
+    display_name: &str,
+) -> Result<(), sqlx::Error>
+```
+
+**设计理念**：
+- 将内容更新和名称更新拆分为两个独立函数，符合单一职责原则
+- 前端根据修改类型分别调用对应的 API
+- 如果同时修改内容和名称，依次调用两个函数
 
 ---
 

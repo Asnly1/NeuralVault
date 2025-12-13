@@ -145,6 +145,40 @@ pub async fn soft_delete_resource(
     Ok(())
 }
 
+/// 更新资源内容
+/// 
+/// 用于保存文本编辑器中的更改
+pub async fn update_resource_content(
+    pool: &DbPool,
+    resource_id: i64,
+    content: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE resources SET content = ? WHERE resource_id = ?")
+        .bind(content)
+        .bind(resource_id)
+        .execute(pool)
+        .await?;
+
+    Ok(())
+}
+
+/// 更新资源显示名称
+/// 
+/// 用于重命名资源
+pub async fn update_resource_display_name(
+    pool: &DbPool,
+    resource_id: i64,
+    display_name: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE resources SET display_name = ? WHERE resource_id = ?")
+        .bind(display_name)
+        .bind(resource_id)
+        .execute(pool)
+        .await?;
+
+    Ok(())
+}
+
 /// 硬删除资源（物理删除数据库记录）
 /// 
 /// 注意：由于配置了 ON DELETE CASCADE，删除资源会级联删除：

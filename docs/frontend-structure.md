@@ -82,6 +82,7 @@ src/
 | `getAssetsPath()`         | -                      | `Promise<string>`                | 获取 assets 目录的完整路径            |
 | `fetchTasksByDate()`      | `date: string`         | `Promise<Task[]>`                | 获取指定日期的所有任务                |
 | `fetchAllTasks()`         | -                      | `Promise<Task[]>`                | 获取所有任务（包括 todo 和 done），用于 Calendar 视图 |
+| `updateResourceContent()` | `(resourceId, content)` | `Promise<void>`                  | 更新资源内容（保存编辑器更改）        |
 
 ---
 
@@ -282,6 +283,7 @@ Markdown 富文本编辑器组件，基于 Tiptap + StarterKit + Markdown 扩展
 - **双向绑定**：内容变化实时回调
 - **可编辑控制**：支持只读模式
 - **标题层级**：支持 H1-H6
+- **保存功能**：在 Workspace 中集成，支持 Ctrl+S/Command+S 快捷键保存
 
 ```tsx
 interface TiptapEditorProps {
@@ -291,6 +293,12 @@ interface TiptapEditorProps {
   placeholder?: string;
 }
 ```
+
+**Workspace 集成**：
+- 编辑内容后显示"未保存"徽章
+- 点击保存按钮或按 Ctrl+S/Command+S 保存
+- 显示保存状态：保存中、已保存、保存失败
+- 保存成功后 3 秒自动隐藏提示
 
 #### `PDFViewer.tsx`
 
@@ -609,7 +617,13 @@ interface WorkspacePageProps {
      - 依赖安装：`npm install react-pdf-highlighter-extended pdfjs-dist@4.4.168 --legacy-peer-deps`
      - 懒加载：使用 `React.lazy()` 避免影响应用启动
      - 版本要求：`pdfjs-dist` 必须是 4.4.168，与 `react-pdf-highlighter-extended` 匹配
-7. **保存功能**：文本编辑器的保存功能需要添加 Rust 命令 `update_resource_content`，前端监听 `Ctrl+S` 快捷键触发保存。
+7. **保存功能**：
+   - ✅ **保存功能已完成**：
+     - 后端 API：`update_resource_content_command` Tauri 命令
+     - 前端 API：`updateResourceContent(resourceId, content)` 函数
+     - 快捷键：支持 Ctrl+S/Command+S 保存编辑器内容
+     - 状态提示：显示"未保存"、"保存中..."、"已保存"、"保存失败"状态
+     - 自动刷新：保存成功后 3 秒自动隐藏提示
 8. **剪贴板增强**：可扩展支持复制资源到剪贴板、HTML 格式保留样式等功能。
 9. **UI 组件扩展**：如需新增 shadcn/ui 组件，使用 `npx shadcn-ui@latest add [component]` 命令自动生成。
 10. **任务编辑功能**：

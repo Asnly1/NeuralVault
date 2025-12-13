@@ -219,6 +219,30 @@ export const hardDeleteResource = async (resourceId: number): Promise<void> => {
   return await invoke("hard_delete_resource_command", { resourceId });
 };
 
+/**
+ * 更新资源内容
+ * @param resourceId - 资源 ID
+ * @param content - 新内容（文本或 Markdown）
+ */
+export const updateResourceContent = async (
+  resourceId: number,
+  content: string
+): Promise<void> => {
+  return await invoke("update_resource_content_command", { resourceId, content });
+};
+
+/**
+ * 更新资源显示名称
+ * @param resourceId - 资源 ID
+ * @param displayName - 新显示名称
+ */
+export const updateResourceDisplayName = async (
+  resourceId: number,
+  displayName: string
+): Promise<void> => {
+  return await invoke("update_resource_display_name_command", { resourceId, displayName });
+};
+
 // ============================================
 // Demo Data API
 // ============================================

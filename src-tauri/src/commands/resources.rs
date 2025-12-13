@@ -367,6 +367,42 @@ pub async fn soft_delete_resource_command(
     Ok(LinkResourceResponse { success: true })
 }
 
+/// 更新资源内容
+/// 
+/// 用于保存文本编辑器中的更改
+#[tauri::command]
+pub async fn update_resource_content_command(
+    state: State<'_, AppState>,
+    resource_id: i64,
+    content: String,
+) -> Result<(), String> {
+    let pool = &state.db;
+
+    crate::db::update_resource_content(pool, resource_id, &content)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+/// 更新资源显示名称
+/// 
+/// 用于重命名资源
+#[tauri::command]
+pub async fn update_resource_display_name_command(
+    state: State<'_, AppState>,
+    resource_id: i64,
+    display_name: String,
+) -> Result<(), String> {
+    let pool = &state.db;
+
+    crate::db::update_resource_display_name(pool, resource_id, &display_name)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
 /// 硬删除资源（物理删除数据库记录、级联数据和文件）
 /// 
 /// 会删除：
