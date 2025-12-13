@@ -57,7 +57,7 @@ src/
 
 - Schema：`taskSchema`、`resourceSchema`、`dashboardSchema`，均用 `z.coerce.date()` 将日期规范化。
 - 枚举值：`taskStatusValues`（todo/done）、`taskPriorityValues`、`resourceTypeValues`、`classificationValues`。
-- 数据类型：`Task`、`Resource`、`DashboardData`、`TaskStatus`、`TaskPriority`、`ResourceType`、`PageType`（"dashboard" | "workspace" | "calendar" | "settings"）。
+- 数据类型：`Task`（包含 task_id, title, status, done_date, priority, due_date 等）、`Resource`、`DashboardData`、`TaskStatus`、`TaskPriority`、`ResourceType`、`PageType`（"dashboard" | "workspace" | "calendar" | "settings"）。
 - API 类型：`CreateTaskRequest/Response`、`CaptureRequest/Response`、`LinkResourceRequest/Response`、`TaskResourcesResponse`、`SeedResponse`、`CaptureSourceMeta`。
 - 剪贴板类型：`ClipboardContent`（Image/Files/Text/Html/Empty）、`ReadClipboardResponse`。
 - 常量：`priorityConfig`（中文标签 + 颜色）、`resourceTypeIcons`（emoji 图标）、`navItems`（Sidebar 菜单，包括日历）。
@@ -171,13 +171,11 @@ interface TaskEditCardProps {
 
 #### `TasksDialog.tsx`
 
-通用任务对话框组件，可以显示指定日期的所有任务或仅显示已完成的任务。
+通用任务对话框组件，通过传入 `fetchTasks` 函数完全由调用方控制数据获取和过滤逻辑。
 
 **功能特性**：
 
-- 支持两种模式：
-  - **日期模式**：显示指定日期的所有任务（用于 Calendar 页面）
-  - **已完成模式**：显示今天已完成的任务（用于 Dashboard）
+- 完全解耦的数据获取：通过 `fetchTasks` 函数参数，由调用方决定如何获取和过滤任务
 - 支持恢复任务为待办状态
 - 支持删除任务
 - 空状态友好提示
@@ -187,9 +185,9 @@ interface TaskEditCardProps {
 interface TasksDialogProps {
   open: boolean; // 控制对话框显示
   onOpenChange: (open: boolean) => void;
-  onTaskUpdated: () => void; // 任务更新后的回调
-  date?: Date | null; // 可选，指定日期查询该日的任务
-  showOnlyCompleted?: boolean; // 是否只显示已完成的任务
+  onTaskUpdated?: () => void; // 任务更新后的回调
+  fetchTasks: () => Promise<Task[]>; // 获取和过滤任务的函数，由调用方提供
+  title: string; // 对话框标题
 }
 ```
 
@@ -201,16 +199,29 @@ interface TasksDialogProps {
   open={completedDialogOpen}
   onOpenChange={setCompletedDialogOpen}
   onTaskUpdated={onRefresh}
-  showOnlyCompleted={true}
+  title="今日已完成的任务"
+  fetchTasks={async () => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const tasks = await fetchTasksByDate(today);
+    return tasks.filter(t => 
+      t.status === 'done' && 
+      t.done_date && 
+      isSameDay(new Date(t.done_date), new Date())
+    );
+  }}
 />
 
 // Calendar 中显示指定日期的所有任务
 <TasksDialog
   open={dialogOpen}
   onOpenChange={setDialogOpen}
-  date={selectedDate}
   onTaskUpdated={onRefresh}
-  showOnlyCompleted={false}
+  title={format(selectedDate, 'yyyy年MM月dd日 EEEE', { locale: zhCN })}
+  fetchTasks={async () => {
+    if (!selectedDate) return [];
+    const dateStr = format(selectedDate, 'yyyy-MM-dd');
+    return await fetchTasksByDate(dateStr);
+  }}
 />
 ```
 

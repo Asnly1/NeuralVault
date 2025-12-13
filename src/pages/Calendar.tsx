@@ -5,7 +5,7 @@ import { Task, priorityConfig } from "../types";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
 import { TasksDialog } from "@/components/TasksDialog";
-import { markTaskAsDone, markTaskAsTodo } from "@/api";
+import { markTaskAsDone, markTaskAsTodo, fetchTasksByDate } from "@/api";
 
 interface CalendarPageProps {
   tasks: Task[];
@@ -211,9 +211,17 @@ export function CalendarPage({ tasks, onRefresh }: CalendarPageProps) {
       <TasksDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        date={selectedDate}
         onTaskUpdated={onRefresh}
-        showOnlyCompleted={false}
+        title={
+          selectedDate
+            ? format(selectedDate, "yyyy年MM月dd日 EEEE", { locale: zhCN })
+            : ""
+        }
+        fetchTasks={async () => {
+          if (!selectedDate) return [];
+          const dateStr = format(selectedDate, "yyyy-MM-dd");
+          return await fetchTasksByDate(dateStr);
+        }}
       />
     </div>
   );

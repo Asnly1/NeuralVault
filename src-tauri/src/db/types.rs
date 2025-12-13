@@ -50,6 +50,7 @@ pub struct TaskRecord {
     pub description: Option<String>,
     pub suggested_subtasks: Option<Json<Value>>,
     pub status: TaskStatus,
+    pub done_date: Option<String>,
     pub priority: TaskPriority,
     pub due_date: Option<String>,
     pub created_at: Option<String>,

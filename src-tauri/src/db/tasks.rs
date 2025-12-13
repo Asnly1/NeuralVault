@@ -31,7 +31,7 @@ pub async fn get_task_by_id(pool: &DbPool, task_id: i64) -> Result<TaskRecord, s
     // _ : 让编译器根据传入的 &SqlitePool 推测出连接 SQLite
     // TaskRecord: 把结果映射回 TaskRecord
     sqlx::query_as::<_, TaskRecord>(
-        "SELECT task_id, uuid, parent_task_id, root_task_id, title, description, suggested_subtasks, status, priority, due_date, created_at, user_updated_at, system_updated_at, is_deleted, deleted_at, user_id \
+        "SELECT task_id, uuid, parent_task_id, root_task_id, title, description, suggested_subtasks, status, done_date, priority, due_date, created_at, user_updated_at, system_updated_at, is_deleted, deleted_at, user_id \
          FROM tasks WHERE task_id = ?",
     )
     .bind(task_id)
@@ -41,7 +41,7 @@ pub async fn get_task_by_id(pool: &DbPool, task_id: i64) -> Result<TaskRecord, s
 
 pub async fn list_active_tasks(pool: &DbPool) -> Result<Vec<TaskRecord>, sqlx::Error> {
     sqlx::query_as::<_, TaskRecord>(
-        "SELECT task_id, uuid, parent_task_id, root_task_id, title, description, suggested_subtasks, status, priority, due_date, created_at, user_updated_at, system_updated_at, is_deleted, deleted_at, user_id \
+        "SELECT task_id, uuid, parent_task_id, root_task_id, title, description, suggested_subtasks, status, done_date, priority, due_date, created_at, user_updated_at, system_updated_at, is_deleted, deleted_at, user_id \
          FROM tasks \
          WHERE status = 'todo' AND is_deleted = 0 \
          ORDER BY created_at DESC",
@@ -53,7 +53,7 @@ pub async fn list_active_tasks(pool: &DbPool) -> Result<Vec<TaskRecord>, sqlx::E
 /// 查询所有任务（包括 todo 和 done 状态），用于 Calendar 视图
 pub async fn list_all_tasks(pool: &DbPool) -> Result<Vec<TaskRecord>, sqlx::Error> {
     sqlx::query_as::<_, TaskRecord>(
-        "SELECT task_id, uuid, parent_task_id, root_task_id, title, description, suggested_subtasks, status, priority, due_date, created_at, user_updated_at, system_updated_at, is_deleted, deleted_at, user_id \
+        "SELECT task_id, uuid, parent_task_id, root_task_id, title, description, suggested_subtasks, status, done_date, priority, due_date, created_at, user_updated_at, system_updated_at, is_deleted, deleted_at, user_id \
          FROM tasks \
          WHERE is_deleted = 0 AND due_date IS NOT NULL \
          ORDER BY due_date ASC, priority DESC",
@@ -65,7 +65,7 @@ pub async fn list_all_tasks(pool: &DbPool) -> Result<Vec<TaskRecord>, sqlx::Erro
 /// 查询指定 due_date 的所有任务
 pub async fn list_tasks_by_date(pool: &DbPool, date: &str) -> Result<Vec<TaskRecord>, sqlx::Error> {
     sqlx::query_as::<_, TaskRecord>(
-        "SELECT task_id, uuid, parent_task_id, root_task_id, title, description, suggested_subtasks, status, priority, due_date, created_at, user_updated_at, system_updated_at, is_deleted, deleted_at, user_id \
+        "SELECT task_id, uuid, parent_task_id, root_task_id, title, description, suggested_subtasks, status, done_date, priority, due_date, created_at, user_updated_at, system_updated_at, is_deleted, deleted_at, user_id \
          FROM tasks \
          WHERE DATE(due_date) = DATE(?) AND is_deleted = 0 \
          ORDER BY due_date ASC, priority DESC",
@@ -100,10 +100,10 @@ pub async fn hard_delete_task(pool: &DbPool, task_id: i64) -> Result<(), sqlx::E
     Ok(())
 }
 
-/// 将任务状态从 'todo' 转换为 'done'
+/// 将任务状态从 'todo' 转换为 'done'，并设置 done_date 为当前时间
 pub async fn mark_task_as_done(pool: &DbPool, task_id: i64) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "UPDATE tasks SET status = 'done', user_updated_at = CURRENT_TIMESTAMP \
+        "UPDATE tasks SET status = 'done', done_date = CURRENT_TIMESTAMP, user_updated_at = CURRENT_TIMESTAMP \
          WHERE task_id = ? AND status = 'todo' AND is_deleted = 0",
     )
     .bind(task_id)
@@ -112,10 +112,10 @@ pub async fn mark_task_as_done(pool: &DbPool, task_id: i64) -> Result<(), sqlx::
     Ok(())
 }
 
-/// 将任务状态从 'done' 转换为 'todo'
+/// 将任务状态从 'done' 转换为 'todo'，并清空 done_date
 pub async fn mark_task_as_todo(pool: &DbPool, task_id: i64) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "UPDATE tasks SET status = 'todo', user_updated_at = CURRENT_TIMESTAMP \
+        "UPDATE tasks SET status = 'todo', done_date = NULL, user_updated_at = CURRENT_TIMESTAMP \
          WHERE task_id = ? AND status = 'done' AND is_deleted = 0",
     )
     .bind(task_id)

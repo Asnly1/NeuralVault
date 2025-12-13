@@ -196,39 +196,39 @@ pub struct AppState {
 
 **数据结构**
 
-| 结构体                   | 功能                        | 关键字段                                         |
-| ------------------------ | --------------------------- | ------------------------------------------------ |
-| `TaskRecord`             | 任务表记录                  | task_id, uuid, title, status, priority, due_date |
-| `NewTask<'a>`            | 插入任务的参数              | 生命周期借用，避免字符串复制                     |
-| `ResourceRecord`         | 资源表记录                  | resource_id, uuid, file_hash, file_type, content |
-| `NewResource<'a>`        | 插入资源的参数              | 生命周期借用                                     |
-| `SourceMeta`             | 资源来源元信息（存为 JSON） | url, window_title                                |
-| `LinkResourceParams<'a>` | 关联资源到任务的参数        | task_id, resource_id, visibility_scope           |
+| 结构体                   | 功能                        | 关键字段                                                         |
+| ------------------------ | --------------------------- | ---------------------------------------------------------------- |
+| `TaskRecord`             | 任务表记录                  | task_id, uuid, title, status, done_date, priority, due_date      |
+| `NewTask<'a>`            | 插入任务的参数              | 生命周期借用，避免字符串复制                                     |
+| `ResourceRecord`         | 资源表记录                  | resource_id, uuid, file_hash, file_type, content                 |
+| `NewResource<'a>`        | 插入资源的参数              | 生命周期借用                                                     |
+| `SourceMeta`             | 资源来源元信息（存为 JSON） | url, window_title                                                |
+| `LinkResourceParams<'a>` | 关联资源到任务的参数        | task_id, resource_id, visibility_scope                           |
 
 ##### 核心函数
 
-| 函数                            | 参数                         | 返回值                        | 说明                                    |
-| ------------------------------- | ---------------------------- | ----------------------------- | --------------------------------------- |
-| `init_pool()`                   | `db_path: impl AsRef<Path>`  | `Result<SqlitePool>`          | 初始化数据库连接池并运行迁移            |
-| `insert_task()`                 | `pool, NewTask<'_>`          | `Result<i64>`                 | 插入任务并返回 `task_id`                |
-| `get_task_by_id()`              | `pool, task_id`              | `Result<TaskRecord>`          | 根据 ID 查询任务                        |
-| `list_active_tasks()`           | `pool`                       | `Result<Vec<TaskRecord>>`     | 查询活跃任务（todo）                    |
-| `list_today_completed_tasks()`  | `pool`                       | `Result<Vec<TaskRecord>>`     | 查询今天已完成的任务（done）            |
-| `soft_delete_task()`            | `pool, task_id`              | `Result<()>`                  | 软删除任务（设置 is_deleted = 1）       |
-| `hard_delete_task()`            | `pool, task_id`              | `Result<()>`                  | 硬删除任务（物理删除及级联数据）        |
-| `mark_task_as_done()`           | `pool, task_id`              | `Result<()>`                  | 将任务状态从 'todo' 转换为 'done'       |
-| `mark_task_as_todo()`           | `pool, task_id`              | `Result<()>`                  | 将任务状态从 'done' 转换为 'todo'       |
-| `update_task_priority()`        | `pool, task_id, priority`    | `Result<()>`                  | 更新任务优先级                          |
-| `update_task_due_date()`        | `pool, task_id, due_date`    | `Result<()>`                  | 更新任务截止日期                        |
-| `update_task_title()`           | `pool, task_id, title`       | `Result<()>`                  | 更新任务标题                            |
-| `update_task_description()`     | `pool, task_id, description` | `Result<()>`                  | 更新任务描述                            |
-| `list_tasks_by_date()`          | `pool, date: &str`           | `Result<Vec<TaskRecord>>`     | 查询指定日期的所有任务（根据 due_date） |
-| `insert_resource()`             | `pool, NewResource<'_>`      | `Result<i64>`                 | 插入资源并返回 `resource_id`            |
-| `get_resource_by_id()`          | `pool, resource_id`          | `Result<ResourceRecord>`      | 根据 ID 查询资源                        |
-| `list_unclassified_resources()` | `pool`                       | `Result<Vec<ResourceRecord>>` | 查询未分类资源                          |
-| `link_resource_to_task()`       | `pool, LinkResourceParams`   | `Result<()>`                  | 关联资源到任务，更新分类状态为 linked   |
-| `unlink_resource_from_task()`   | `pool, task_id, resource_id` | `Result<()>`                  | 取消关联，检查是否需恢复为 unclassified |
-| `list_resources_for_task()`     | `pool, task_id`              | `Result<Vec<ResourceRecord>>` | 查询任务的所有关联资源                  |
+| 函数                            | 参数                         | 返回值                        | 说明                                               |
+| ------------------------------- | ---------------------------- | ----------------------------- | -------------------------------------------------- |
+| `init_pool()`                   | `db_path: impl AsRef<Path>`  | `Result<SqlitePool>`          | 初始化数据库连接池并运行迁移                       |
+| `insert_task()`                 | `pool, NewTask<'_>`          | `Result<i64>`                 | 插入任务并返回 `task_id`                           |
+| `get_task_by_id()`              | `pool, task_id`              | `Result<TaskRecord>`          | 根据 ID 查询任务                                   |
+| `list_active_tasks()`           | `pool`                       | `Result<Vec<TaskRecord>>`     | 查询活跃任务（todo）                               |
+| `list_today_completed_tasks()`  | `pool`                       | `Result<Vec<TaskRecord>>`     | 查询今天已完成的任务（done）                       |
+| `soft_delete_task()`            | `pool, task_id`              | `Result<()>`                  | 软删除任务（设置 is_deleted = 1）                  |
+| `hard_delete_task()`            | `pool, task_id`              | `Result<()>`                  | 硬删除任务（物理删除及级联数据）                   |
+| `mark_task_as_done()`           | `pool, task_id`              | `Result<()>`                  | 将任务状态从 'todo' 转换为 'done'，设置 done_date  |
+| `mark_task_as_todo()`           | `pool, task_id`              | `Result<()>`                  | 将任务状态从 'done' 转换为 'todo'，清空 done_date  |
+| `update_task_priority()`        | `pool, task_id, priority`    | `Result<()>`                  | 更新任务优先级                                     |
+| `update_task_due_date()`        | `pool, task_id, due_date`    | `Result<()>`                  | 更新任务截止日期                                   |
+| `update_task_title()`           | `pool, task_id, title`       | `Result<()>`                  | 更新任务标题                                       |
+| `update_task_description()`     | `pool, task_id, description` | `Result<()>`                  | 更新任务描述                                       |
+| `list_tasks_by_date()`          | `pool, date: &str`           | `Result<Vec<TaskRecord>>`     | 查询指定日期的所有任务（根据 due_date）            |
+| `insert_resource()`             | `pool, NewResource<'_>`      | `Result<i64>`                 | 插入资源并返回 `resource_id`                       |
+| `get_resource_by_id()`          | `pool, resource_id`          | `Result<ResourceRecord>`      | 根据 ID 查询资源                                   |
+| `list_unclassified_resources()` | `pool`                       | `Result<Vec<ResourceRecord>>` | 查询未分类资源                                     |
+| `link_resource_to_task()`       | `pool, LinkResourceParams`   | `Result<()>`                  | 关联资源到任务，更新分类状态为 linked              |
+| `unlink_resource_from_task()`   | `pool, task_id, resource_id` | `Result<()>`                  | 取消关联，检查是否需恢复为 unclassified            |
+| `list_resources_for_task()`     | `pool, task_id`              | `Result<Vec<ResourceRecord>>` | 查询任务的所有关联资源                             |
 
 ##### 数据库配置
 

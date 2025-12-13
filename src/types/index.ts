@@ -31,6 +31,7 @@ export const taskSchema = z.object({
   title: z.string().nullable(),
   description: z.string().nullable(),
   status: z.enum(taskStatusValues),
+  done_date: z.coerce.date().nullable(),
   priority: z.enum(taskPriorityValues),
   // coerce: Zod 的“宽容模式”。它会先尝试把输入的数据（可能是字符串、数字）强行转换为 Date 对象，然后再进行校验
   due_date: z.coerce.date().nullable(),

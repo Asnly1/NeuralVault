@@ -10,8 +10,9 @@ import { ResourceCard } from "../components/ResourceCard";
 import { QuickCapture } from "../components/QuickCapture";
 import { TaskEditCard } from "../components/TaskEditCard";
 import { TasksDialog } from "../components/TasksDialog";
-import { softDeleteTask, softDeleteResource } from "../api";
+import { softDeleteTask, softDeleteResource, fetchAllTasks } from "../api";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { isSameDay } from "date-fns";
 
 interface DashboardPageProps {
   tasks: Task[];
@@ -176,7 +177,18 @@ export function DashboardPage({
         open={completedDialogOpen}
         onOpenChange={setCompletedDialogOpen}
         onTaskUpdated={onRefresh}
-        showOnlyCompleted={true}
+        title="今日已完成的任务"
+        fetchTasks={async () => {
+          // 调用API获取所有任务（包括done状态）
+          const allTasks = await fetchAllTasks();
+          // 过滤今日完成的任务
+          return allTasks.filter(
+            (t) =>
+              t.status === "done" &&
+              t.done_date &&
+              isSameDay(new Date(t.done_date), new Date())
+          );
+        }}
       />
 
       {/* 3. Resources Area */}

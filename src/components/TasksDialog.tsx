@@ -4,31 +4,30 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { CheckCircle2, Sparkles, Calendar } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { Task } from "../types";
 import { TaskCard } from "./TaskCard";
-import { fetchTasksByDate, softDeleteTask } from "../api";
-import { format } from "date-fns";
-import { zhCN } from "date-fns/locale";
+import { softDeleteTask } from "../api";
 
 interface TasksDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onTaskUpdated?: () => void;
-  // 可选的日期参数，用于查询指定日期的任务（默认为今天）
-  date?: Date | null;
-  // 是否只显示已完成的任务（默认 false）
-  showOnlyCompleted?: boolean;
+  // 函数负责获取和过滤任务，由调用方决定如何获取数据
+  fetchTasks: () => Promise<Task[]>;
+  // 对话框标题
+  title: string;
 }
 
 export function TasksDialog({
   open,
   onOpenChange,
   onTaskUpdated,
-  date,
-  showOnlyCompleted = false,
+  fetchTasks,
+  title,
 }: TasksDialogProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(false);
@@ -39,19 +38,8 @@ export function TasksDialog({
     setLoading(true);
     setError(null);
     try {
-      // 确定要查询的日期
-      const queryDate = date || new Date();
-      const dateStr = format(queryDate, "yyyy-MM-dd");
-      
-      // 统一使用 fetchTasksByDate
-      const dateTasks = await fetchTasksByDate(dateStr);
-      
-      // 根据 showOnlyCompleted 参数过滤已完成的任务
-      if (showOnlyCompleted) {
-        setTasks(dateTasks.filter(task => task.status === "done"));
-      } else {
-        setTasks(dateTasks);
-      }
+      const fetchedTasks = await fetchTasks();
+      setTasks(fetchedTasks);
     } catch (err) {
       console.error("加载任务失败:", err);
       setError("加载失败，请重试");
@@ -65,7 +53,7 @@ export function TasksDialog({
     if (open) {
       loadTasks();
     }
-  }, [open, date]);
+  }, [open]);
 
   // 任务更新后的处理
   const handleTaskUpdate = async () => {
@@ -76,25 +64,11 @@ export function TasksDialog({
     }
   };
 
-  // 标题和图标
-  const title = showOnlyCompleted
-    ? "今天已完成的任务"
-    : date
-    ? format(date, "yyyy年MM月dd日 EEEE", { locale: zhCN })
-    : format(new Date(), "yyyy年MM月dd日 EEEE", { locale: zhCN });
-  
-  const icon = showOnlyCompleted ? (
-    <CheckCircle2 className="h-5 w-5 text-foreground" />
-  ) : (
-    <Calendar className="h-5 w-5 text-foreground" />
-  );
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {icon}
             {title}
             {!loading && tasks.length > 0 && (
               <span className="text-sm font-normal text-muted-foreground">
@@ -102,6 +76,9 @@ export function TasksDialog({
               </span>
             )}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            {title}的任务列表
+          </DialogDescription>
         </DialogHeader>
 
         {loading ? (
@@ -115,10 +92,7 @@ export function TasksDialog({
         ) : tasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
             <Sparkles className="h-10 w-10 mb-3 opacity-20" />
-            <p className="text-sm font-medium">
-              {showOnlyCompleted ? "今天还没有完成任何任务" : "这一天没有任务"}
-            </p>
-            {showOnlyCompleted && <p className="text-xs mt-1 opacity-70">继续加油！</p>}
+            <p className="text-sm font-medium">暂无任务</p>
           </div>
         ) : (
           <ScrollArea className="max-h-[500px] pr-4">
