@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::{
     app_state::AppState,
-    db::{delete_task, get_task_by_id, insert_task, NewTask, TaskPriority, TaskStatus},
+    db::{hard_delete_task, soft_delete_task, get_task_by_id, insert_task, NewTask, TaskPriority, TaskStatus},
 };
 
 use super::{CreateTaskRequest, CreateTaskResponse};
@@ -44,12 +44,25 @@ pub async fn create_task(
 }
 
 #[tauri::command]
-pub async fn delete_task_command(
+pub async fn soft_delete_task_command(
     state: State<'_, AppState>,
     task_id: i64,
 ) -> Result<(), String> {
     let pool = &state.db;
-    delete_task(pool, task_id)
+    soft_delete_task(pool, task_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// 硬删除任务（物理删除数据库记录和级联数据）
+#[tauri::command]
+pub async fn hard_delete_task_command(
+    state: State<'_, AppState>,
+    task_id: i64,
+) -> Result<(), String> {
+    let pool = &state.db;
+    hard_delete_task(pool, task_id)
         .await
         .map_err(|e| e.to_string())?;
     Ok(())

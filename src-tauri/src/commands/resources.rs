@@ -348,3 +348,63 @@ pub fn get_assets_path(app: AppHandle) -> Result<String, String> {
         .ok_or_else(|| "无法转换路径为字符串".to_string())
         .map(|s| s.to_string())
 }
+
+/// 软删除资源
+/// 
+/// 将资源标记为已删除（is_deleted = 1, deleted_at = 当前时间）
+/// 不会物理删除数据库记录和文件
+#[tauri::command]
+pub async fn soft_delete_resource_command(
+    state: State<'_, AppState>,
+    resource_id: i64,
+) -> Result<LinkResourceResponse, String> {
+    let pool = &state.db;
+
+    crate::db::soft_delete_resource(pool, resource_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(LinkResourceResponse { success: true })
+}
+
+/// 硬删除资源（物理删除数据库记录、级联数据和文件）
+/// 
+/// 会删除：
+/// - 数据库记录和级联数据（task_resource_link, context_chunks）
+/// - assets 目录中的物理文件（如果存在）
+#[tauri::command]
+pub async fn hard_delete_resource_command(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    resource_id: i64,
+) -> Result<LinkResourceResponse, String> {
+    let pool = &state.db;
+
+    // 1. 先获取资源信息，以便删除物理文件
+    let resource = crate::db::get_resource_by_id(pool, resource_id)
+        .await
+        .map_err(|e| format!("获取资源失败: {}", e))?;
+
+    // 2. 删除数据库记录（会级联删除关联记录和分块）
+    crate::db::hard_delete_resource(pool, resource_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // 3. 删除物理文件（如果存在）
+    if let Some(file_path) = resource.file_path {
+        if file_path.starts_with("assets/") {
+            let assets_dir = get_assets_dir(&app)?;
+            let file_name = file_path.strip_prefix("assets/").unwrap_or(&file_path);
+            let full_path = assets_dir.join(file_name);
+
+            // 尝试删除文件，失败不影响主流程
+            if full_path.exists() {
+                if let Err(e) = fs::remove_file(&full_path) {
+                    eprintln!("删除文件失败（已删除数据库记录）: {}", e);
+                }
+            }
+        }
+    }
+
+    Ok(LinkResourceResponse { success: true })
+}

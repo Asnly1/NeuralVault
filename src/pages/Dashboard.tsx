@@ -2,12 +2,7 @@ import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
-import {
-  Sparkles,
-  CheckCircle2,
-  LayoutGrid,
-  Plus
-} from "lucide-react";
+import { Sparkles, CheckCircle2, LayoutGrid, Plus } from "lucide-react";
 
 import { Task, Resource, TaskPriority } from "../types";
 import { TaskCard } from "../components/TaskCard";
@@ -30,7 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { createTask, deleteTask, deleteResource } from "../api";
+import { createTask, softDeleteTask, softDeleteResource } from "../api";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 interface DashboardPageProps {
@@ -57,7 +52,8 @@ export function DashboardPage({
 }: DashboardPageProps) {
   const [creatingTask, setCreatingTask] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
-  const [newTaskPriority, setNewTaskPriority] = useState<TaskPriority>("medium");
+  const [newTaskPriority, setNewTaskPriority] =
+    useState<TaskPriority>("medium");
   const { t } = useLanguage();
 
   // Smart Sort: Logic to sort tasks
@@ -85,7 +81,9 @@ export function DashboardPage({
   }, [tasks]);
 
   const activeTasks = sortedTasks.filter((t) => t.status !== "done");
-  const unlinkedResources = resources.filter((r) => r.classification_status === "unclassified");
+  const unlinkedResources = resources.filter(
+    (r) => r.classification_status === "unclassified"
+  );
 
   const handleCreateTask = async () => {
     if (!newTaskTitle.trim()) return;
@@ -123,9 +121,9 @@ export function DashboardPage({
             {t("dashboard", "quickCapture")}
           </p>
         </header>
-        
+
         <div className="max-w-2xl">
-           <QuickCapture onCapture={onCapture} />
+          <QuickCapture onCapture={onCapture} />
         </div>
       </section>
 
@@ -135,14 +133,20 @@ export function DashboardPage({
           <div className="flex items-center gap-2 text-foreground">
             <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
             <h2 className="text-lg font-medium">{t("dashboard", "tasks")}</h2>
-            <Badge variant="secondary" className="ml-2 font-normal text-xs bg-muted text-muted-foreground hover:bg-muted">
+            <Badge
+              variant="secondary"
+              className="ml-2 font-normal text-xs bg-muted text-muted-foreground hover:bg-muted"
+            >
               {activeTasks.length} Pending
             </Badge>
           </div>
-          
+
           <Dialog open={creatingTask} onOpenChange={setCreatingTask}>
             <DialogTrigger asChild>
-              <Button size="sm" className="h-8 rounded-full px-3 shadow-none bg-foreground text-background hover:bg-foreground/90 transition-all">
+              <Button
+                size="sm"
+                className="h-8 rounded-full px-3 shadow-none bg-foreground text-background hover:bg-foreground/90 transition-all"
+              >
                 <Plus className="h-3.5 w-3.5 mr-1.5" />
                 {t("dashboard", "createTask")}
               </Button>
@@ -179,7 +183,10 @@ export function DashboardPage({
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setCreatingTask(false)}>
+                <Button
+                  variant="outline"
+                  onClick={() => setCreatingTask(false)}
+                >
                   Cancel
                 </Button>
                 <Button onClick={handleCreateTask}>Create</Button>
@@ -189,14 +196,18 @@ export function DashboardPage({
         </div>
 
         {loading ? (
-             <div className="flex items-center justify-center h-20 text-muted-foreground text-sm">Loading...</div>
-        ): error ? (
-           <div className="text-destructive text-sm bg-destructive/10 p-4 rounded-md">{error}</div>
+          <div className="flex items-center justify-center h-20 text-muted-foreground text-sm">
+            Loading...
+          </div>
+        ) : error ? (
+          <div className="text-destructive text-sm bg-destructive/10 p-4 rounded-md">
+            {error}
+          </div>
         ) : activeTasks.length === 0 ? (
-           <div className="flex flex-col items-center justify-center h-32 text-muted-foreground border border-dashed rounded-lg bg-muted/20">
-             <Sparkles className="h-8 w-8 mb-2 opacity-20" />
-             <p className="text-sm font-medium">{t("dashboard", "noTasks")}</p>
-           </div>
+          <div className="flex flex-col items-center justify-center h-32 text-muted-foreground border border-dashed rounded-lg bg-muted/20">
+            <Sparkles className="h-8 w-8 mb-2 opacity-20" />
+            <p className="text-sm font-medium">{t("dashboard", "noTasks")}</p>
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {activeTasks.map((task) => (
@@ -206,7 +217,7 @@ export function DashboardPage({
                 onClick={() => onSelectTask(task)}
                 onDelete={async (id) => {
                   if (confirm("Delete this task?")) {
-                    await deleteTask(id);
+                    await softDeleteTask(id);
                     onRefresh();
                   }
                 }}
@@ -218,32 +229,35 @@ export function DashboardPage({
 
       {/* 3. Resources Area */}
       <section className="space-y-6 pb-10 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200">
-         <div className="flex items-center gap-2 text-foreground border-b pb-3">
-            <LayoutGrid className="h-5 w-5 text-muted-foreground" />
-            <h2 className="text-lg font-medium">{t("dashboard", "resources")}</h2>
-             <Badge variant="secondary" className="ml-2 font-normal text-xs bg-muted text-muted-foreground hover:bg-muted">
-              {unlinkedResources.length} Inbox
-            </Badge>
-          </div>
+        <div className="flex items-center gap-2 text-foreground border-b pb-3">
+          <LayoutGrid className="h-5 w-5 text-muted-foreground" />
+          <h2 className="text-lg font-medium">{t("dashboard", "resources")}</h2>
+          <Badge
+            variant="secondary"
+            className="ml-2 font-normal text-xs bg-muted text-muted-foreground hover:bg-muted"
+          >
+            {unlinkedResources.length} Inbox
+          </Badge>
+        </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-             {unlinkedResources.map(res => (
-                <ResourceCard 
-                  key={res.resource_id}
-                  resource={res}
-                  tasks={activeTasks} // pass tasks for linking
-                  onLinkToTask={async (resourceId, taskId) => {
-                     await onLinkResource(resourceId, taskId);
-                  }}
-                  onDelete={async (id) => {
-                    if (confirm("Delete this resource?")) {
-                      await deleteResource(id);
-                      onRefresh();
-                    }
-                  }}
-                />
-             ))}
-          </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          {unlinkedResources.map((res) => (
+            <ResourceCard
+              key={res.resource_id}
+              resource={res}
+              tasks={activeTasks} // pass tasks for linking
+              onLinkToTask={async (resourceId, taskId) => {
+                await onLinkResource(resourceId, taskId);
+              }}
+              onDelete={async (id) => {
+                if (confirm("Delete this resource?")) {
+                  await softDeleteResource(id);
+                  onRefresh();
+                }
+              }}
+            />
+          ))}
+        </div>
       </section>
     </div>
   );

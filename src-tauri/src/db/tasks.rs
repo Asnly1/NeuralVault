@@ -51,12 +51,26 @@ pub async fn list_active_tasks(pool: &DbPool) -> Result<Vec<TaskRecord>, sqlx::E
 }
 
 /// 软删除任务（设置 is_deleted = 1）
-pub async fn delete_task(pool: &DbPool, task_id: i64) -> Result<(), sqlx::Error> {
+pub async fn soft_delete_task(pool: &DbPool, task_id: i64) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "UPDATE tasks SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE task_id = ?",
+        "UPDATE tasks SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE task_id = ? AND is_deleted = 0",
     )
     .bind(task_id)
     .execute(pool)
     .await?;
+    Ok(())
+}
+
+/// 硬删除任务（物理删除数据库记录）
+/// 
+/// 注意：由于配置了 ON DELETE CASCADE，删除任务会级联删除：
+/// - task_resource_link 表中的关联记录
+/// - chat_sessions 表中的相关会话
+/// - 子任务（如果有 parent_task_id 指向该任务的记录）
+pub async fn hard_delete_task(pool: &DbPool, task_id: i64) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM tasks WHERE task_id = ?")
+        .bind(task_id)
+        .execute(pool)
+        .await?;
     Ok(())
 }

@@ -128,3 +128,39 @@ pub async fn list_resources_for_task(
     .fetch_all(pool)
     .await
 }
+
+/// 软删除资源（设置 is_deleted = 1 和 deleted_at = 当前时间）
+pub async fn soft_delete_resource(
+    pool: &DbPool,
+    resource_id: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE resources SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP \
+         WHERE resource_id = ? AND is_deleted = 0"
+    )
+    .bind(resource_id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+/// 硬删除资源（物理删除数据库记录）
+/// 
+/// 注意：由于配置了 ON DELETE CASCADE，删除资源会级联删除：
+/// - task_resource_link 表中的关联记录
+/// - context_chunks 表中的所有分块记录
+/// 
+/// 注意：此函数不会删除物理文件（assets 目录中的文件）
+/// 如需删除文件，请在调用此函数前先获取 file_path 并手动删除
+pub async fn hard_delete_resource(
+    pool: &DbPool,
+    resource_id: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM resources WHERE resource_id = ?")
+        .bind(resource_id)
+        .execute(pool)
+        .await?;
+
+    Ok(())
+}

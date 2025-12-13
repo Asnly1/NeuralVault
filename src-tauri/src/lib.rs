@@ -10,8 +10,9 @@ use tauri::Manager;
 
 pub use app_state::AppState;
 pub use commands::{
-    capture_resource, create_task, delete_task_command, get_assets_path, get_dashboard,
-    get_task_resources, link_resource, read_clipboard, seed_demo_data, unlink_resource,
+    capture_resource, create_task, soft_delete_resource_command, soft_delete_task_command,
+    get_assets_path, get_dashboard, get_task_resources, hard_delete_resource_command,
+    hard_delete_task_command, link_resource, read_clipboard, seed_demo_data, unlink_resource,
 };
 pub use window::{hide_hud, toggle_hud};
 
@@ -62,7 +63,10 @@ pub fn run() {
             greet,
             capture_resource,
             create_task,
-            delete_task_command,
+            soft_delete_task_command,
+            hard_delete_task_command,
+            soft_delete_resource_command,
+            hard_delete_resource_command,
             get_dashboard,
             get_task_resources,
             seed_demo_data,

@@ -52,8 +52,16 @@ export const createTask = async (
  * 删除任务（软删除）
  * @param taskId - 任务 ID
  */
-export const deleteTask = async (taskId: number): Promise<void> => {
-  return await invoke("delete_task_command", { taskId });
+export const softDeleteTask = async (taskId: number): Promise<void> => {
+  return await invoke("soft_delete_task_command", { taskId });
+};
+
+/**
+ * 硬删除任务（物理删除数据库记录和级联数据）
+ * @param taskId - 任务 ID
+ */
+export const hardDeleteTask = async (taskId: number): Promise<void> => {
+  return await invoke("hard_delete_task_command", { taskId });
 };
 
 // ============================================
@@ -110,11 +118,19 @@ export const fetchTaskResources = async (
 };
 
 /**
- * 删除资源
+ * 删除资源（软删除）
  * @param resourceId - 资源 ID
  */
-export const deleteResource = async (resourceId: number): Promise<void> => {
-  return await invoke("delete_resource", { resourceId });
+export const softDeleteResource = async (resourceId: number): Promise<void> => {
+  return await invoke("soft_delete_resource_command", { resourceId });
+};
+
+/**
+ * 硬删除资源（物理删除数据库记录、级联数据和文件）
+ * @param resourceId - 资源 ID
+ */
+export const hardDeleteResource = async (resourceId: number): Promise<void> => {
+  return await invoke("hard_delete_resource_command", { resourceId });
 };
 
 // ============================================
