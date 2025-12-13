@@ -26,6 +26,11 @@ interface WorkspacePageProps {
   onBack: () => void;
 }
 
+const LEFT_MIN = 150;
+const LEFT_MAX = 400;
+const RIGHT_MIN = 200;
+const RIGHT_MAX = 500;
+
 export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
   const [chatInput, setChatInput] = useState("");
   const [linkedResources, setLinkedResources] = useState<Resource[]>([]);
@@ -39,6 +44,20 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
   const [hoveredResourceId, setHoveredResourceId] = useState<number | null>(
     null
   );
+
+  // Panel resize state
+  const [leftPanelWidth, setLeftPanelWidth] = useState(() => {
+    const saved = localStorage.getItem("neuralvault_workspace_left_width");
+    return saved ? parseInt(saved, 10) : 256;
+  });
+  const [rightPanelWidth, setRightPanelWidth] = useState(() => {
+    const saved = localStorage.getItem("neuralvault_workspace_right_width");
+    return saved ? parseInt(saved, 10) : 288;
+  });
+  const [isResizingLeft, setIsResizingLeft] = useState(false);
+  const [isResizingRight, setIsResizingRight] = useState(false);
+  const [tempLeftWidth, setTempLeftWidth] = useState<number | null>(null);
+  const [tempRightWidth, setTempRightWidth] = useState<number | null>(null);
 
   const { t } = useLanguage();
 
@@ -143,6 +162,79 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
     },
     [selectedTask, selectedResource]
   );
+
+  // Handle left panel resize
+  const handleLeftMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizingLeft(true);
+    setTempLeftWidth(leftPanelWidth);
+  };
+
+  // Handle right panel resize
+  const handleRightMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizingRight(true);
+    setTempRightWidth(rightPanelWidth);
+  };
+
+  // Handle resize drag
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isResizingLeft) {
+        // Get the left edge of the main content area (after sidebar)
+        // We need to find the workspace container's left position
+        const workspaceContainer = document.querySelector('main.flex-1');
+        if (workspaceContainer) {
+          const containerRect = workspaceContainer.getBoundingClientRect();
+          const newWidth = e.clientX - containerRect.left;
+          if (newWidth >= LEFT_MIN && newWidth <= LEFT_MAX) {
+            setTempLeftWidth(newWidth);
+          }
+        }
+      }
+      if (isResizingRight) {
+        const newWidth = window.innerWidth - e.clientX;
+        if (newWidth >= RIGHT_MIN && newWidth <= RIGHT_MAX) {
+          setTempRightWidth(newWidth);
+        }
+      }
+    };
+
+    const handleMouseUp = () => {
+      if (tempLeftWidth !== null) {
+        setLeftPanelWidth(tempLeftWidth);
+        localStorage.setItem(
+          "neuralvault_workspace_left_width",
+          tempLeftWidth.toString()
+        );
+      }
+      if (tempRightWidth !== null) {
+        setRightPanelWidth(tempRightWidth);
+        localStorage.setItem(
+          "neuralvault_workspace_right_width",
+          tempRightWidth.toString()
+        );
+      }
+      setIsResizingLeft(false);
+      setIsResizingRight(false);
+      setTempLeftWidth(null);
+      setTempRightWidth(null);
+    };
+
+    if (isResizingLeft || isResizingRight) {
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    }
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [isResizingLeft, isResizingRight, tempLeftWidth, tempRightWidth]);
 
 
 
@@ -380,7 +472,13 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
       {/* Three-column Layout */}
       <div className="flex flex-1 min-h-0">
         {/* Left: Context Panel */}
-        <aside className="w-64 border-r flex flex-col shrink-0">
+        <aside
+          style={{ width: `${tempLeftWidth !== null ? tempLeftWidth : leftPanelWidth}px` }}
+          className={cn(
+            "border-r flex flex-col shrink-0 relative",
+            !isResizingLeft && "transition-all duration-300"
+          )}
+        >
           <ScrollArea className="flex-1">
             <div className="p-4 space-y-6">
               {/* Task Details */}
@@ -480,6 +578,17 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
               </div>
             </div>
           </ScrollArea>
+          
+          {/* Resize Handle */}
+          <div
+            className={cn(
+              "absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-accent transition-colors",
+              isResizingLeft && "bg-accent"
+            )}
+            onMouseDown={handleLeftMouseDown}
+          >
+            <div className="absolute top-0 right-0 w-4 h-full -mr-1.5" />
+          </div>
         </aside>
 
         {/* Center: Editor Area */}
@@ -509,7 +618,24 @@ export function WorkspacePage({ selectedTask, onBack }: WorkspacePageProps) {
         </main>
 
         {/* Right: Chat Panel */}
-        <aside className="w-72 border-l flex flex-col shrink-0">
+        <aside
+          style={{ width: `${tempRightWidth !== null ? tempRightWidth : rightPanelWidth}px` }}
+          className={cn(
+            "border-l flex flex-col shrink-0 relative",
+            !isResizingRight && "transition-all duration-300"
+          )}
+        >
+          {/* Resize Handle */}
+          <div
+            className={cn(
+              "absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-accent transition-colors",
+              isResizingRight && "bg-accent"
+            )}
+            onMouseDown={handleRightMouseDown}
+          >
+            <div className="absolute top-0 left-0 w-4 h-full -ml-1.5" />
+          </div>
+          
           <div className="px-4 py-3 border-b shrink-0">
             <h3 className="font-semibold">{t("workspace", "aiAssistant")}</h3>
             <p className="text-xs text-muted-foreground">{t("workspace", "context")}</p>

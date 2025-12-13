@@ -459,7 +459,21 @@ interface CalendarPageProps {
 
 #### `Workspace.tsx` (Page B)
 
-任务工作台：三栏布局，已集成编辑器与资源预览。
+任务工作台：三栏布局，已集成编辑器与资源预览。**支持拖拽调整面板大小**。
+
+**可调整布局**：
+
+- **左栏（Context Panel）**：可拖拽调整宽度（150px - 400px，默认 256px）
+  - 拖拽右边缘调整宽度
+  - 宽度保存到 localStorage (`neuralvault_workspace_left_width`)
+- **中栏（Editor Area）**：自动填充剩余空间
+- **右栏（Chat Panel）**：可拖拽调整宽度（200px - 500px，默认 288px）
+  - 拖拽左边缘调整宽度
+  - 宽度保存到 localStorage (`neuralvault_workspace_right_width`)
+
+**性能优化**：拖拽时使用临时状态，禁用 CSS transitions，释放鼠标时才保存到 localStorage
+
+**内容功能**：
 
 - **左栏**：当前任务详情 + `fetchTaskResources` 拉取的关联资源列表，点击资源在中栏显示。
   - 文本资源：使用 `TiptapEditor` 进行 Markdown 编辑（实时保存状态提示）
