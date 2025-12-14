@@ -1,5 +1,5 @@
 文件结构
-backend/
+src-python/
 ├── app/
 │ ├── main.py # FastAPI 入口，生命周期管理
 │ ├── core/ # 核心配置
@@ -8,11 +8,10 @@ backend/
 │ │ └── events.py # 启动/关闭时的钩子（如开启 WAL 模式）
 │ │
 │ ├── api/ # 接口层 (Routes)
-│ │ ├── v1/
-│ │ │ ├── ingest.py # 接收 Rust 的“新文件/新任务”通知
-│ │ │ ├── chat.py # 聊天对话接口
-│ │ │ ├── agent.py # 不是对话的 AI 任务处理 (标签，任务拆解等)
-│ │ │ └── search.py # 混合检索接口
+│ │ ├── ingest.py # 接收 Rust 的“新文件/新任务”通知
+│ │ ├── chat.py # 聊天对话接口
+│ │ ├── agent.py # 不是对话的 AI 任务处理 (标签，任务拆解等)
+│ │ ├── search.py # 混合检索接口
 │ │ └── websocket.py # 负责向前端推送 AI 处理进度
 │ │
 │ ├── models/ # 数据模型 (与 database.sql 对应)
@@ -72,7 +71,7 @@ sync_status in ('pending','dirty', 'error') AND (indexed_hash IS NULL OR indexed
 通过数据库来创建队列，然后写入数据库
 
 Python 只返回“结构化建议”（子任务数组、tag 列表等）给前端；
-前端确认后，通过 Tauri 调用 Rust 的 create_task / update_task / classify_task/ create_resource / update_resource / classify_resource 命令，由 Rust 去写 SQLite；
+前端确认后，通过 Tauri 调用 Rust 的 create_task / update_task / create_resource / update_resource / link_resource 命令，由 Rust 去写 SQLite；
 
 规定：
 resources 的 sync_status/indexed_hash/processing_hash/last_indexed_at/processing_stage/last_error：只能 Python 写。
