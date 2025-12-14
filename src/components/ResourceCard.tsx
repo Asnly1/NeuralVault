@@ -58,7 +58,7 @@ export function ResourceCard({
   };
 
   return (
-    <Card className="group transition-all border-border shadow-sm hover:shadow-none hover:bg-muted/40 overflow-hidden relative">
+    <Card className="group transition-all border-border hover:bg-accent/50 overflow-hidden relative">
       <CardContent className="flex items-center gap-3 p-3">
         {/* File Icon */}
         <div className="shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">

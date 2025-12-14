@@ -53,7 +53,7 @@ export function TaskCard({ task, onClick, onDelete, onUpdate }: TaskCardProps) {
     <>
       <Card
         className={cn(
-          "cursor-pointer transition-all border-border shadow-sm hover:shadow-none hover:bg-muted/40 relative group min-h-[110px] flex flex-col",
+          "cursor-pointer transition-all border-border hover:bg-accent/50 relative group min-h-[110px] flex flex-col",
           isOverdue && "border-destructive/30 bg-destructive/5"
         )}
         onClick={onClick}

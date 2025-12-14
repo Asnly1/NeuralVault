@@ -155,12 +155,12 @@ export function Sidebar({
             className={cn(
               "w-full justify-start h-8 mb-0.5 text-sm font-normal px-2.5 transition-colors",
               currentPage === item.key
-                ? "bg-accent/80 text-accent-foreground font-medium"
-                : "text-muted-foreground hover:bg-black/5 dark:hover:bg-white/5 hover:text-foreground"
+                ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
             )}
             onClick={() => onNavigate(item.key)}
           >
-            <span className={cn("mr-2", currentPage === item.key ? "text-foreground" : "text-muted-foreground")}>
+            <span className={cn("mr-2", currentPage === item.key ? "text-sidebar-foreground" : "text-muted-foreground")}>
               {iconMap[item.key]}
             </span>
             {t("sidebar", item.key)}
