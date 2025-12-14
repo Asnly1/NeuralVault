@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
 import { TasksDialog } from "@/components/TasksDialog";
 import { markTaskAsDone, markTaskAsTodo, fetchTasksByDate } from "@/api";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface CalendarPageProps {
   tasks: Task[];
@@ -16,6 +17,7 @@ export function CalendarPage({ tasks, onRefresh }: CalendarPageProps) {
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const { t } = useLanguage();
 
   // Group tasks by due date for efficient lookup
   const tasksByDate = useMemo(() => {
@@ -197,7 +199,7 @@ export function CalendarPage({ tasks, onRefresh }: CalendarPageProps) {
                       className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 p-0.5 rounded hover:bg-accent/50 w-full transition-colors mt-0.5"
                     >
                       <MoreHorizontal className="h-3 w-3" />
-                      <span>还有 {sortedTasks.length - 2} 个任务</span>
+                      <span>{t("common", "moreTasks").replace("{count}", String(sortedTasks.length - 2))}</span>
                     </button>
                   )}
                 </div>

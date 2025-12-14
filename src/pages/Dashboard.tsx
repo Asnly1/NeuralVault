@@ -119,7 +119,7 @@ export function DashboardPage({
               onClick={() => setCompletedDialogOpen(true)}
             >
               <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
-              今日已完成
+              {t("dashboard", "completedToday")}
             </Button>
 
             {/* 创建任务按钮 */}
@@ -179,7 +179,7 @@ export function DashboardPage({
         open={completedDialogOpen}
         onOpenChange={setCompletedDialogOpen}
         onTaskUpdated={onRefresh}
-        title="今日已完成的任务"
+        title={t("dashboard", "completedTodayTasks")}
         fetchTasks={async () => {
           // 调用API获取所有任务（包括done状态）
           const allTasks = await fetchAllTasks();

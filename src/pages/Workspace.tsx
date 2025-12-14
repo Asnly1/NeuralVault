@@ -329,8 +329,8 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
       return (
         <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
           <span className="text-4xl mb-4">✎</span>
-          <p className="text-lg font-medium">文本编辑器 / PDF 阅读器</p>
-          <p className="text-sm">从左侧选择一个资源开始查看或编辑</p>
+          <p className="text-lg font-medium">{t("workspace", "editorPlaceholder")}</p>
+          <p className="text-sm">{t("workspace", "editorPlaceholderDesc")}</p>
         </div>
       );
     }
@@ -537,7 +537,7 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
         <div className="flex items-center gap-2 text-sm">
           {isResourceMode ? (
             <>
-              <span className="text-muted-foreground">资源</span>
+              <span className="text-muted-foreground">{t("workspace", "resourceBreadcrumb")}</span>
               <span className="text-muted-foreground">/</span>
               <span className="font-medium">
                 {resourceTypeIcons[propSelectedResource!.file_type]}{" "}
@@ -788,7 +788,7 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
                 </>
               )
             ) : (
-              <span className="text-sm font-medium">工作区</span>
+              <span className="text-sm font-medium">{t("workspace", "workspaceArea")}</span>
             )}
             {selectedResource && selectedResource.file_type === "text" && (
               <Button
@@ -838,7 +838,7 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
                   ◆
                 </div>
                 <div className="bg-muted rounded-lg p-3 text-sm">
-                  你好！我可以帮你分析和处理这个任务相关的内容。
+                  {t("workspace", "aiGreeting")}
                 </div>
               </div>
             </div>

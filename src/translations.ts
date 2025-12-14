@@ -46,9 +46,12 @@ export const translations = {
       resources: "资源收件箱",
       createTask: "新建任务",
       noTasks: "暂无待办任务，开始创建吧！",
+      completedToday: "今日已完成",
+      completedTodayTasks: "今日已完成的任务",
     },
     common: {
       untitled: "无标题",
+      moreTasks: "还有 {count} 个任务",
     },
     workspace: {
       title: "工作台",
@@ -73,6 +76,11 @@ export const translations = {
       selectTaskPrompt: "选择一个任务开始工作",
       selectTaskDesc: "从看板页面点击任务卡片进入工作台",
       backToDashboard: "返回看板",
+      workspaceArea: "工作区",
+      editorPlaceholder: "文本编辑器 / PDF 阅读器",
+      editorPlaceholderDesc: "从左侧选择一个资源开始查看或编辑",
+      aiGreeting: "你好！我可以帮你分析和处理这个任务相关的内容。",
+      resourceBreadcrumb: "资源",
     },
   },
   en: {
@@ -120,9 +128,12 @@ export const translations = {
       resources: "Inbox Resources",
       createTask: "Create Task",
       noTasks: "No tasks yet. Create one!",
+      completedToday: "Completed Today",
+      completedTodayTasks: "Completed Today",
     },
     common: {
       untitled: "Untitled",
+      moreTasks: "{count} more tasks",
     },
     workspace: {
       title: "Workspace",
@@ -147,6 +158,11 @@ export const translations = {
       selectTaskPrompt: "Select a task to start work",
       selectTaskDesc: "Click a task card from the dashboard page to enter the workspace",
       backToDashboard: "Back to Dashboard",
+      workspaceArea: "Workspace",
+      editorPlaceholder: "Text Editor / PDF Reader",
+      editorPlaceholderDesc: "Select a resource from the left to view or edit",
+      aiGreeting: "Hello! I can help you analyze and process content related to this task.",
+      resourceBreadcrumb: "Resource",
     },
   },
 };
