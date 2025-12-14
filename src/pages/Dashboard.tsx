@@ -23,6 +23,7 @@ interface DashboardPageProps {
   onSeed: () => Promise<void>;
   onRefresh: () => Promise<void>;
   onSelectTask: (task: Task) => void;
+  onSelectResource: (resource: Resource) => void;
   onLinkResource: (resourceId: number, taskId: number) => Promise<void>;
 }
 
@@ -34,6 +35,7 @@ export function DashboardPage({
   onCapture,
   onRefresh,
   onSelectTask,
+  onSelectResource,
   onLinkResource,
 }: DashboardPageProps) {
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
@@ -210,6 +212,7 @@ export function DashboardPage({
               key={res.resource_id}
               resource={res}
               tasks={activeTasks} // pass tasks for linking
+              onClick={onSelectResource}
               onLinkToTask={async (resourceId, taskId) => {
                 await onLinkResource(resourceId, taskId);
               }}

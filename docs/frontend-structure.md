@@ -244,13 +244,22 @@ interface TasksDialogProps {
 
 #### `ResourceCard.tsx`
 
-资源卡片组件，展示资源基本信息；当传入 `tasks` 和 `onLinkToTask` 时，会出现“关联到任务”的下拉菜单。
+资源卡片组件，展示资源基本信息；当传入 `tasks` 和 `onLinkToTask` 时，会出现"关联到任务"的下拉菜单。**支持点击卡片直接导航到Workspace**。
+
+**核心功能**：
+
+- **点击导航**：点击卡片可直接进入Workspace查看资源（需传入`onClick`回调）
+- **关联任务**：下拉菜单支持将资源关联到任务
+- **删除操作**：悬浮显示删除按钮
+- **事件隔离**：下拉菜单和删除按钮点击不会触发卡片导航
 
 ```tsx
 interface ResourceCardProps {
   resource: Resource; // 资源数据
   tasks?: Task[]; // 可关联的任务列表
   onLinkToTask?: (resourceId: number, taskId: number) => Promise<void>; // 关联回调
+  onDelete?: (resourceId: number) => Promise<void>; // 删除回调
+  onClick?: (resource: Resource) => void; // 点击卡片的导航回调
 }
 ```
 
@@ -401,6 +410,7 @@ const PDFViewer = lazy(() =>
 **3. 待分类资源**
 
 - 网格布局展示未分类资源（1-5 列自适应）
+- **点击资源卡片**：直接进入Workspace查看资源（资源模式）
 - 每个资源卡片支持下拉菜单关联到任务
 - AI 建议提示（资源数量 > 0 时显示）
 - 快捷键提示（Alt + Space 唤起 HUD）
@@ -418,9 +428,10 @@ interface DashboardPageProps {
   onSeed: () => void;
   onRefresh: () => void;
   onSelectTask: (task: Task) => void;
+  onSelectResource: (resource: Resource) => void; // 新增：资源点击导航
   onLinkResource: (resourceId: number, taskId: number) => Promise<void>;
 }
-
+```
 #### `Calendar.tsx` (Page C)
 
 日历页面：全屏月历视图，直接在日期格子中展示任务。
@@ -467,7 +478,18 @@ interface CalendarPageProps {
 
 #### `Workspace.tsx` (Page B)
 
-任务工作台：三栏布局，已集成编辑器与资源预览。**支持拖拽调整面板大小**。
+任务工作台：三栏布局，已集成编辑器与资源预览。**支持拖拽调整面板大小**。**支持双模式进入：任务模式和资源模式**。
+
+**进入模式**：
+
+- **任务模式**：从Dashboard点击任务卡片进入
+  - 左侧显示任务详情和关联资源列表
+  - 可以点击关联资源在中间编辑区查看
+  - Header面包屑显示："任务 / [任务名] / [资源名]"
+- **资源模式**：从Dashboard点击资源卡片进入
+  - 左侧显示资源详情（类型、创建时间、路径等）
+  - 中间编辑区直接显示资源内容
+  - Header面包屑显示："资源 / [资源名]"
 
 **可调整布局**：
 
@@ -483,7 +505,9 @@ interface CalendarPageProps {
 
 **内容功能**：
 
-- **左栏**：当前任务详情 + `fetchTaskResources` 拉取的关联资源列表，点击资源在中栏显示。
+- **左栏（任务模式）**：当前任务详情 + `fetchTaskResources` 拉取的关联资源列表，点击资源在中栏显示。
+- **左栏（资源模式）**：资源详情卡片，显示类型、名称、创建时间、路径等信息。
+- **中栏（编辑区）**：支持多种资源类型预览和编辑
   - 文本资源：使用 `TiptapEditor` 进行 Markdown 编辑（实时保存状态提示）
   - PDF 资源：使用 `react-pdf-highlighter-extended` 实现 PDF 阅读和高亮标注
     - PDF.js 渲染引擎
@@ -491,6 +515,7 @@ interface CalendarPageProps {
     - 区域截图高亮
     - 高亮管理（查看/删除）
     - 滚轮缩放查看
+    - 加载状态：加载动画和错误提示
     - 自动路径转换（相对路径 → 完整路径 → Tauri URL）
   - 图片资源：使用 `react-zoom-pan-pinch` 实现缩放平移预览
     - 滚轮缩放（0.1x - 10x）
@@ -501,12 +526,13 @@ interface CalendarPageProps {
     - 自动路径转换（相对路径 → 完整路径 → Tauri URL）
   - URL 资源：显示内容占位
   - 其他类型：显示文件类型提示
-- **右栏**：AI 助手占位（当前任务上下文提示，输入框支持 `@` 引用文件）。
-- 未选择任务时显示返回看板的空状态。
+- **右栏**：AI 助手占位（当前任务/资源上下文提示，输入框支持 `@` 引用文件）。
+- 既未选择任务也未选择资源时显示返回看板的空状态。
 
 ```tsx
 interface WorkspacePageProps {
   selectedTask: Task | null;
+  selectedResource: Resource | null; // 新增：支持资源模式
   onBack: () => void;
 }
 ```
@@ -525,14 +551,16 @@ interface WorkspacePageProps {
 
 主应用入口（主窗口），负责全局状态与页面切换：
 
-- 状态：`currentPage`、`tasks`、`resources`、`loading`、`error`、`selectedTask`、`seeding`。
+- 状态：`currentPage`、`tasks`、`allTasks`、`resources`、`loading`、`error`、`selectedTask`、`selectedResource`、`seeding`、`theme`、`sidebarCollapsed`、`sidebarWidth`。
 - 数据加载：`fetchDashboardData` 初始拉取 + `reloadData` 复用。
 - 交互处理：
   - `handleCapture`：文本/文件快速捕获，推断文件类型后调用 `quickCapture`。
   - `handleSeed`：生成演示数据。
-  - `handleSelectTask`/`handleBackToDashboard`：导航与选中任务。
-  - `handleLinkResource`：资源关联后刷新列表（资源从“未分类”消失）。
-- 路由：`dashboard`、`workspace`、`settings` 三个视图。
+  - `handleSelectTask`：选中任务并导航到Workspace（任务模式），同时清除资源选择。
+  - `handleSelectResource`：选中资源并导航到Workspace（资源模式），同时清除任务选择。
+  - `handleBackToDashboard`：返回Dashboard，清除任务和资源选择。
+  - `handleLinkResource`：资源关联后刷新列表（资源从"未分类"消失）。
+- 路由：`dashboard`、`workspace`、`calendar`、`settings` 四个视图。
 
 ### `main.tsx`
 
@@ -563,23 +591,28 @@ interface WorkspacePageProps {
   │                        └─ 捕获提交 -> quickCapture -> Rust (capture_resource)
   └─ default -> App.tsx
         ├─ DashboardPage (tasks/resources)
-        │    ├─ TaskCard（点击方框切换状态、悬浮显示编辑/删除按钮）
-        │    │    └─ TaskEditCard（编辑模式）
-        │    ├─ CompletedTasksDialog（查看今日已完成任务）
-        │    ├─ TaskEditCard（创建模式，点击"创建任务"按钮触发）
-        │    ├─ ResourceCard / QuickCapture（含剪贴板支持）
-        │    └─ onLinkResource -> linkResource -> Rust
-        ├─ WorkspacePage (selectedTask)
-        │    ├─ fetchTaskResources -> 获取关联资源
-        │    ├─ TiptapEditor（文本编辑，Markdown 双向绑定）
-        │    └─ AI Chat 占位（输入框 + 上下文）
-        └─ SettingsPage (API Key / 本地模型 / 快捷键 / 关于)
-              ▲
-              │ state: tasks, resources, currentPage, selectedTask, loading, error, seeding
-              │ actions: fetchDashboardData / seedDemoData / linkResource / quickCapture / readClipboard
-              │         markTaskAsDone / markTaskAsTodo / updateTask* (title/description/priority/due_date)
-              ▼
-        api/index.ts -> tauri invoke -> Rust commands.rs
+│    ├─ TaskCard（点击方框切换状态、悬浮显示编辑/删除按钮、点击卡片进入Workspace任务模式）
+│    │    └─ TaskEditCard（编辑模式）
+│    ├─ Completed TasksDialog（查看今日已完成任务）
+│    ├─ TaskEditCard（创建模式，点击\"创建任务\"按钮触发）
+│    ├─ ResourceCard（点击卡片进入Workspace资源模式）/ QuickCapture（含剪贴板支持）
+│    └─ onLinkResource -> linkResource -> Rust
+├─ WorkspacePage (selectedTask | selectedResource，双模式支持)
+│    ├─ 任务模式：fetchTaskResources -> 获取关联资源
+│    ├─ 资源模式：直接显示资源详情
+│    ├─ TiptapEditor（文本编辑，Markdown 双向绑定）
+│    └─ AI Chat 占位（输入框 + 上下文）
+├─ CalendarPage (allTasks)
+│    ├─ 月历视图，显示所有任务
+│    └─ TasksDialog（溢出任务对话框）
+└─ SettingsPage (API Key / 本地模型 / 快捷键 / 关于)
+      ▲
+      │ state: tasks, allTasks, resources, currentPage, selectedTask, selectedResource, loading, error, seeding
+      │ actions: fetchDashboardData / seedDemoData / linkResource / quickCapture / readClipboard
+      │         handleSelectTask / handleSelectResource / handleBackToDashboard
+      │         markTaskAsDone / markTaskAsTodo / updateTask* (title/description/priority/due_date)
+      ▼
+api/index.ts -> tauri invoke -> Rust commands.rs
 ```
 
 ---

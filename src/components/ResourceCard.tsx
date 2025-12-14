@@ -27,6 +27,7 @@ interface ResourceCardProps {
   tasks?: Task[];
   onLinkToTask?: (resourceId: number, taskId: number) => Promise<void>;
   onDelete?: (resourceId: number) => Promise<void>;
+  onClick?: (resource: Resource) => void;
 }
 
 const iconMap: Record<ResourceType, React.ReactNode> = {
@@ -43,6 +44,7 @@ export function ResourceCard({
   tasks = [],
   onLinkToTask,
   onDelete,
+  onClick,
 }: ResourceCardProps) {
   const [linking, setLinking] = useState(false);
 
@@ -58,7 +60,10 @@ export function ResourceCard({
   };
 
   return (
-    <Card className="group transition-all border-border hover:bg-accent/50 overflow-hidden relative">
+    <Card 
+      className={`group transition-all border-border hover:bg-accent/50 overflow-hidden relative ${onClick ? 'cursor-pointer' : ''}`}
+      onClick={() => onClick?.(resource)}
+    >
       <CardContent className="flex items-center gap-3 p-3">
         {/* File Icon */}
         <div className="shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">
@@ -88,6 +93,7 @@ export function ResourceCard({
                   size="icon"
                   className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
                   disabled={linking || tasks.length === 0}
+                  onClick={(e) => e.stopPropagation()}
                 >
                   {linking ? (
                     <span className="animate-spin text-xs">⟳</span>

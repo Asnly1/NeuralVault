@@ -42,6 +42,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
   const [seeding, setSeeding] = useState(false);
   
   // Theme state
@@ -156,11 +157,19 @@ function App() {
 
   const handleSelectTask = useCallback((task: Task) => {
     setSelectedTask(task);
+    setSelectedResource(null); // 清除资源选择
+    setCurrentPage("workspace");
+  }, []);
+
+  const handleSelectResource = useCallback((resource: Resource) => {
+    setSelectedResource(resource);
+    setSelectedTask(null); // 清除任务选择
     setCurrentPage("workspace");
   }, []);
 
   const handleBackToDashboard = useCallback(() => {
     setSelectedTask(null);
+    setSelectedResource(null);
     setCurrentPage("dashboard");
   }, []);
 
@@ -251,6 +260,7 @@ function App() {
             onSeed={handleSeed}
             onRefresh={reloadData}
             onSelectTask={handleSelectTask}
+            onSelectResource={handleSelectResource}
             onLinkResource={handleLinkResource}
           />
         )}
@@ -258,6 +268,7 @@ function App() {
         {currentPage === "workspace" && (
           <WorkspacePage
             selectedTask={selectedTask}
+            selectedResource={selectedResource}
             onBack={handleBackToDashboard}
           />
         )}
