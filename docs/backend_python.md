@@ -29,7 +29,9 @@ src-python/
 │ │ └── processors.py # 具体的消费者逻辑 (处理 Embedding、Task Routing)
 │
 ├── scripts/ # 数据库初始化脚本
-└── requirements.txt
+└── pyproject.toml
+└── .python-version
+└── uv.lock
 
 端点：
 

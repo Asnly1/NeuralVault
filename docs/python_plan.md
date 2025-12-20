@@ -1,7 +1,7 @@
 ### 第一阶段：骨架与动脉 (Infrastructure & IPC)
 **目标**：Python 进程能随 Tauri 启动/退出，数据库连接正常，基础心跳打通。
 
-1.  **环境初始化 (The "Lean" Setup)**
+1.  **环境初始化 (The "Lean" Setup)** (已完成)
     * **依赖管理**：使用 `uv` 初始化项目。
     * **核心库锁定**：安装 `fastapi`, `uvicorn`, `llamaindex`, `qdrant-client`, `sqlmodel` (ORM), `aiosqlite` (异步驱动)。
 

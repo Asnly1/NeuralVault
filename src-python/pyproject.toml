@@ -1,0 +1,26 @@
+[project]
+name = "neuralvault-python"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Asnly1", email = "asnly1013@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "aiosqlite>=0.22.0",
+    "fastapi>=0.125.0",
+    "fastembed>=0.7.4",
+    "llama-index-core>=0.14.10",
+    "pymupdf>=1.26.7",
+    "qdrant-client>=1.16.2",
+    "sqlmodel>=0.0.27",
+    "uvicorn[standard]>=0.38.0",
+]
+
+[project.scripts]
+neuralvault-python = "neuralvault_python:main"
+
+[build-system]
+requires = ["uv_build>=0.9.5,<0.10.0"]
+build-backend = "uv_build"
