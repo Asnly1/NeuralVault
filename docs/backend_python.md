@@ -73,7 +73,10 @@ sync_status in ('pending','dirty', 'error') AND (indexed_hash IS NULL OR indexed
 Python 只返回“结构化建议”（子任务数组、tag 列表等）给前端；
 前端确认后，通过 Tauri 调用 Rust 的 create_task / update_task / create_resource / update_resource / link_resource 命令，由 Rust 去写 SQLite；
 
+心跳机制：Rust 端每隔几秒向 Python 发送心跳，或者 Python 监听 stdin。一旦管道断开，Python 必须自动 sys.exit(0)。
+API 优雅退出：在 Rust 的 app_handle.exit() 钩子中，显式调用 Python 的 /shutdown 接口（如果需要保存状态），然后再杀进程。
 规定：
+
 resources 的 sync_status/indexed_hash/processing_hash/last_indexed_at/processing_stage/last_error：只能 Python 写。
 例外：Rust 初始化资源时可以写`sync_status = 'pending'`, `processing_stage = 'todo'`，其余时刻都是 Python 写
 context_chunks：只能 Python 写。
