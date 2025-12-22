@@ -73,10 +73,3 @@
     * **依赖清理**：检查 `pyproject.toml`，移除所有开发依赖。
     * **打包工具**：使用 `PyInstaller（已安装）` 将 Python 环境打包成单文件或单目录（推荐单目录，启动快）。
     * **Tauri 集成**：将打包好的二进制文件重命名放入 Tauri 的 sidecar 目录。
-
-### 核心检查清单 (Pre-flight Checklist)
-
-* [ ] **SQLite WAL 模式**：确保 Rust 初始化数据库时开启了 `PRAGMA journal_mode=WAL;`，否则 Python 一读写就会报错。
-* [ ] **Schema 一致性**：Rust 改了表结构，Python 必须同步改 Model。
-* [ ] **Qdrant 路径**：确保 Embedded Qdrant 的数据存储路径在 `$APPDATA` 下，而不是程序安装目录下（后者没有写权限）。
-* [ ] **端口管理**：Python 启动端口最好由 Rust 动态分配并通过参数传入，或者是硬编码一个极少冲突的端口（虽然 Sidecar 模式下动态分配更安全）。

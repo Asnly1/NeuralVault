@@ -87,7 +87,7 @@ async def monitor_parent_process():
                     # 1. 获取当前进程 ID
                     pid = os.getpid()
                     # 2. 发送 SIGINT 信号 (相当于 Ctrl+C)
-                    # 这会通知 Uvicorn 开始优雅关闭流程，从而触发 shutdown_handler
+                    # 这会通知 Uvicorn 立即终止程序，从而触发 shutdown_handler
                     os.kill(pid, signal.SIGINT)
                     # 退出循环，不再监控
                     break
