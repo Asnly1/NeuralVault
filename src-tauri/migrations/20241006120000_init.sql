@@ -133,13 +133,12 @@ CREATE TABLE context_chunks (
     embedding_hash TEXT,
     embedding_model TEXT,
     embedding_at DATETIME,
-    metadata JSON,
+    chunk_meta JSON,
     token_count INTEGER,
 
     FOREIGN KEY(resource_id) REFERENCES resources(resource_id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_context_chunks_qdrant ON context_chunks(qdrant_uuid);
 CREATE INDEX idx_chunks_resource_order ON context_chunks(resource_id, chunk_index);
 CREATE INDEX idx_chunks_embedding_hash ON context_chunks(embedding_hash);
 
