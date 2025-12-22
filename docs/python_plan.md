@@ -7,7 +7,7 @@
 
 2.  **数据库复刻 (Schema Mirroring)**
     * **任务**：在 Python 端 (`models/sql_models.py`) 建立与 Rust `migrations/*.sql` **严格一一对应**的 SQLModel 模型。
-    * **校验点**：编写一个简单的脚本，连接 SQLite，尝试读取 Rust 写入的 `tasks` 和 `resources` 表。如果字段类型（如 `datetime` vs `string`）不匹配，程序会立即报错，必须在这一步修好。
+    * **校验点**：编写一个简单的脚本，连接 SQLite，测试SQLModel和SQLite的模型是否一样
 
 3.  **Sidecar 生命周期管理**
     * **启动**：在 Tauri (Rust) 端配置 `tauri.conf.json` 的 sidecar 路径。

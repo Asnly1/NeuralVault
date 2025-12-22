@@ -14,6 +14,7 @@ dependencies = [
     "llama-index-core>=0.14.10",
     "openai>=2.14.0",
     "pydantic-settings>=2.12.0",
+    "pyinstaller>=6.17.0",
     "pymupdf>=1.26.7",
     "qdrant-client>=1.16.2",
     "sqlmodel>=0.0.27",
