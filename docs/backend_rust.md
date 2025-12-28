@@ -8,6 +8,7 @@ src-tauri/
 │   ├── main.rs              # 应用入口
 │   ├── lib.rs               # 库入口，Tauri 应用设置与初始化
 │   ├── app_state.rs         # 全局应用状态定义
+│   ├── sidecar.rs           # Python Sidecar 进程管理
 │   ├── db/                  # 数据库模块
 │   │   ├── mod.rs          # 模块导出
 │   │   ├── types.rs        # 数据库类型定义（枚举、结构体）
@@ -21,7 +22,8 @@ src-tauri/
 │   │   ├── tasks.rs        # 任务相关命令
 │   │   ├── resources.rs    # 资源捕获相关命令
 │   │   ├── clipboard.rs    # 剪贴板相关命令
-│   │   └── dashboard.rs    # Dashboard 相关命令
+│   │   ├── dashboard.rs    # Dashboard 相关命令
+│   │   └── python.rs       # Python Sidecar 相关命令
 │   ├── utils/               # 工具函数模块
 │   │   ├── mod.rs          # 模块导出
 │   │   ├── hash.rs         # 哈希计算工具
@@ -152,14 +154,75 @@ fn main() {
 
 ```rust
 use crate::db::DbPool;
+use crate::sidecar::PythonSidecar;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub db: DbPool,  // SQLx 数据库连接池
+    pub db: DbPool,                    // SQLx 数据库连接池
+    pub python: Arc<PythonSidecar>,    // Python Sidecar 管理器
 }
 ```
 
-通过 `State<AppState>` 在命令间共享数据库连接。
+通过 `State<AppState>` 在命令间共享数据库连接和 Python Sidecar。
+
+---
+
+#### `sidecar.rs`
+
+Python Sidecar 进程管理模块，负责启动、监控和关闭 Python 后端服务。
+
+##### 核心结构
+
+```rust
+pub struct PythonSidecar {
+    process: Arc<Mutex<Option<Child>>>,  // 子进程句柄
+    client: reqwest::Client,              // HTTP 客户端（复用连接池）
+    port: Mutex<u16>,                     // 动态分配的端口号
+}
+```
+
+##### 主要功能
+
+| 方法 | 参数 | 返回值 | 说明 |
+| --- | --- | --- | --- |
+| `new()` | - | `Self` | 创建新的 Sidecar 实例，初始化 HTTP 客户端 |
+| `find_available_port()` | - | `Result<u16, String>` | 让 OS 自动分配可用端口 |
+| `get_base_url()` | `&self` | `String` | 返回 Python 后端的基础 URL（如 `http://127.0.0.1:8123`） |
+| `get_port()` | `&self` | `u16` | 获取当前分配的端口号 |
+| `get_python_dir()` | - | `PathBuf` | 获取 Python 项目目录（开发模式：`src-python`） |
+| `start()` | `&self, app: &mut App` | `Result<(), String>` | 启动 Python 进程，传递端口和数据库路径 |
+| `is_running()` | `&self` | `bool` | 检查 Python 进程是否存活 |
+| `wait_for_health()` | `&self, max_retries: u32` | `Result<(), String>` | 等待 Python 服务健康检查通过 |
+| `check_health()` | `&self` | `Result<Value, String>` | 调用 `/health` 接口检查服务状态 |
+| `shutdown()` | `&self` | `Result<(), String>` | 优雅关闭 Python 进程 |
+| `call_shutdown_endpoint()` | `&self` | `Result<(), String>` | 调用 `/shutdown` 接口 |
+
+##### 设计要点
+
+1. **动态端口分配**：通过 `TcpListener::bind("127.0.0.1:0")` 让操作系统分配可用端口，避免端口冲突
+2. **HTTP 客户端复用**：创建单个 `reqwest::Client` 实例并复用，利用内部连接池提高性能
+3. **线程安全**：使用 `Arc<Mutex<...>>` 保护进程句柄，支持多线程访问
+4. **开发/生产模式**：开发模式使用 `uv run` 直接运行 Python，生产模式预留打包二进制支持
+5. **优雅关闭**：先调用 shutdown 接口，等待 1 秒后如仍运行则强制终止
+6. **Drop 实现**：析构时自动清理子进程，防止僵尸进程
+
+##### 启动流程
+
+```
+lib.rs setup()
+  ↓
+PythonSidecar::new() - 创建实例
+  ↓
+PythonSidecar::start() - 启动进程
+  ├─ find_available_port() - 分配端口
+  ├─ Command::new("uv").args([...]) - 构建命令
+  └─ spawn() - 派生子进程
+  ↓
+wait_for_health(20) - 等待服务就绪（最多 10 秒）
+  ↓
+app.manage(AppState { db, python }) - 注入状态
+```
 
 ---
 
@@ -223,6 +286,7 @@ pub struct AppState {
 | `update_task_title()`           | `pool, task_id, title`       | `Result<()>`                  | 更新任务标题                                       |
 | `update_task_description()`     | `pool, task_id, description` | `Result<()>`                  | 更新任务描述                                       |
 | `list_tasks_by_date()`          | `pool, date: &str`           | `Result<Vec<TaskRecord>>`     | 查询指定日期的所有任务（根据 due_date）            |
+| `list_all_tasks()`              | `pool`                       | `Result<Vec<TaskRecord>>`     | 查询所有任务（包括 todo 和 done），用于 Calendar   |
 | `insert_resource()`             | `pool, NewResource<'_>`      | `Result<i64>`                 | 插入资源并返回 `resource_id`                       |
 | `get_resource_by_id()`          | `pool, resource_id`          | `Result<ResourceRecord>`      | 根据 ID 查询资源                                   |
 | `list_unclassified_resources()` | `pool`                       | `Result<Vec<ResourceRecord>>` | 查询未分类资源                                     |
@@ -282,7 +346,8 @@ pub struct AppState {
 | `update_task_due_date_command`    | `state, task_id, due_date`    | `Result<()>`                    | 更新任务截止日期                         |
 | `update_task_title_command`       | `state, task_id, title`       | `Result<()>`                    | 更新任务标题                             |
 | `update_task_description_command` | `state, task_id, description` | `Result<()>`                    | 更新任务描述                             |
-| `get_tasks_by_date`               | `state, date`                 | `Result<Vec<TaskRecord>>`       | 获取指定日期（due_date）的所有任务  |
+| `get_tasks_by_date`               | `state, date`                 | `Result<Vec<TaskRecord>>`       | 获取指定日期（due_date）的所有任务       |
+| `get_all_tasks`                   | `state`                       | `Result<Vec<TaskRecord>>`       | 获取所有任务，用于 Calendar 视图         |
 | `get_dashboard`                   | `state`                       | `Result<DashboardData>`         | 返回活跃任务 + 未分类资源                |
 | `link_resource`                   | `state, LinkResourceRequest`  | `Result<LinkResourceResponse>`  | 关联资源到任务                           |
 | `unlink_resource`                 | `state, task_id, resource_id` | `Result<LinkResourceResponse>`  | 取消关联                                 |
@@ -291,6 +356,8 @@ pub struct AppState {
 | `hard_delete_resource_command`    | `state, resource_id`          | `Result<()>`                    | 硬删除资源（物理删除数据库记录和文件）   |
 | `update_resource_content_command` | `state, resource_id, content` | `Result<()>`                    | 更新资源内容（保存编辑器修改）           |
 | `update_resource_display_name_command` | `state, resource_id, display_name` | `Result<()>`           | 更新资源显示名称（重命名资源）           |
+| `check_python_health`             | `state`                       | `Result<serde_json::Value>`     | 检查 Python 后端健康状态                 |
+| `is_python_running`               | `state`                       | `Result<bool>`                  | 检查 Python 进程是否存活                 |
 | `seed_demo_data`                  | `state`                       | `Result<SeedResponse>`          | 生成演示数据（3 个任务 + 3 个资源）      |
 | `read_clipboard`                  | `app`                         | `Result<ReadClipboardResponse>` | 读取系统剪贴板（图片/文件/HTML/文本）    |
 | `get_assets_path`                 | `app`                         | `Result<String>`                | 获取 assets 目录的完整路径               |
@@ -315,7 +382,7 @@ pub struct AppState {
 
 **哈希计算**：使用 SHA-256 对文本/文件字节计算 hash，用于去重
 
-**异步通知 Python**：捕获成功后异步调用 `http://127.0.0.1:8000/ingest/notify`，失败不影响主流程
+**异步通知 Python**：捕获成功后通过 `PythonSidecar.get_base_url()` 获取动态端口的 URL，异步调用 `/ingest/notify`，失败不影响主流程
 
 ###### `get_tasks_by_date`
 
@@ -332,6 +399,19 @@ pub struct AppState {
 - Calendar 页面显示每天的任务
 - 查看具体日期的所有任务列表
 - Dashboard 页面显示今天已完成的任务（传入今天日期，前端过滤 done 状态）
+
+###### `get_all_tasks`
+
+获取所有任务（包括 todo 和 done 状态），主要用于 Calendar 视图展示。
+
+**查询逻辑**：
+
+- 筛选条件：`is_deleted = 0 AND due_date IS NOT NULL`
+- 排序：按 `due_date ASC, priority DESC`
+
+**使用场景**：
+
+- Calendar 页面需要一次性获取所有任务进行日期分组显示
 
 ###### `read_clipboard`
 
@@ -430,11 +510,13 @@ pub async fn update_resource_display_name(
 
 #### `utils/notification.rs`
 
-Python 后端通知。
+Python 后端通知，使用动态端口与 Python 后端通信。
 
 **函数**：
 
-- `notify_python(resource_uuid: String)`: 异步通知 Python 后端处理资源
+- `notify_python(base_url: &str, resource_uuid: String)`: 异步通知 Python 后端处理资源
+  - `base_url`: 从 `PythonSidecar.get_base_url()` 获取的动态 URL
+  - `resource_uuid`: 需要处理的资源 UUID
 
 ---
 
@@ -857,8 +939,17 @@ rm ~/Library/Application\ Support/com.hovsco.neuralvault/neuralvault.sqlite3
 
 **A**:
 
-- 检查 Python 后端是否运行在 `http://127.0.0.1:8000`
+- 检查 Python 后端是否正常运行（端口为动态分配，可通过 `check_python_health` 命令验证）
+- 查看控制台日志中的 `[Sidecar]` 前缀消息
 - 捕获失败不影响本地存储，可以稍后手动触发处理
+
+### Q6: Python Sidecar 端口冲突怎么办？
+
+**A**:
+
+- 系统自动分配可用端口，极少发生冲突
+- 如遇问题，检查是否有其他进程占用了分配的端口
+- 重启应用会重新分配端口
 
 ## 参考资料
 
