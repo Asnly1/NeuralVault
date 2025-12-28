@@ -268,7 +268,8 @@ pub async fn capture_resource(
 
     // ========== 异步通知 Python ==========
     // 不阻塞主流程
-    tauri::async_runtime::spawn(notify_python(resource_uuid.clone()));
+    let base_url = state.python.get_base_url();
+    tauri::async_runtime::spawn(notify_python(base_url.leak(), resource_uuid.clone()));
 
     Ok(CaptureResponse {
         resource_id,
