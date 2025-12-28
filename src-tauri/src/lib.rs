@@ -1,10 +1,12 @@
 mod app_state;
 mod commands;
 mod db;
+mod sidecar;
 mod utils;
 mod window;
 
 use std::fs;
+use std::sync::Arc;
 
 use tauri::Manager;
 
@@ -16,7 +18,9 @@ pub use commands::{
     mark_task_as_done_command, mark_task_as_todo_command, update_task_priority_command,
     update_task_due_date_command, update_task_title_command, update_task_description_command,
     get_tasks_by_date, get_all_tasks, update_resource_content_command, update_resource_display_name_command,
+    check_python_health, is_python_running,
 };
+pub use sidecar::PythonSidecar;
 pub use window::{hide_hud, toggle_hud};
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -46,9 +50,28 @@ pub fn run() {
             let db_path = app_dir.join("neuralvault.sqlite3");
             // 强制阻塞当前线程，直到数据库连接池初始化完成
             let pool = tauri::async_runtime::block_on(db::init_pool(&db_path))?;
-            // 初始化好的 AppState（包含数据库连接池）注入到 Tauri 的全局管理器中
-            // 以后你的 greet 或 capture_resource 命令只要在参数里写 state: State<AppState>，Tauri 就会自动把这个存好的数据库连接给你
-            app.manage(AppState { db: pool });
+            
+            // ========== Python Sidecar 初始化 ==========
+            let python_sidecar = Arc::new(PythonSidecar::new());
+            // 名称含义： Arc = Atomic Reference Counting。
+            // 内存模型： 当你用 Arc::new(data) 时，数据会被分配在堆（Heap）上。除了数据本身，堆上还会维护一个原子计数器（Atomic Counter）。
+            // 所有权机制： Rust 的核心规则是“一个值只能有一个所有者”。但在多线程场景下（比如多个 Tauri Command 都要访问同一个数据库连接池），你需要多重所有权。
+            // 每次调用 Arc::clone(&ptr)，原子计数器 +1（这是一个浅拷贝，只复制指针和增加计数，不复制底层数据，开销极小）。
+            // 每次 Arc 离开作用域被 drop，原子计数器 -1。
+            // 当计数器归零时，底层数据被物理释放。
+
+            python_sidecar.start(app)?;
+            
+            // 等待 Python 后端健康检查通过
+            println!("[Tauri] Waiting for Python backend to be ready...");
+            tauri::async_runtime::block_on(python_sidecar.wait_for_health(20))?;
+            println!("[Tauri] Python backend is ready");
+            
+            // 初始化好的 AppState（包含数据库连接池和 Python sidecar）注入到 Tauri 的全局管理器中
+            app.manage(AppState { 
+                db: pool,
+                python: python_sidecar.clone(),
+            });
 
             // ========== HUD 窗口设置 ==========
             window::setup_hud(app)?;
@@ -88,8 +111,23 @@ pub fn run() {
             get_tasks_by_date,
             get_all_tasks,
             update_resource_content_command,
-            update_resource_display_name_command
+            update_resource_display_name_command,
+            check_python_health,
+            is_python_running
         ])
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                // 当主窗口关闭时，关闭 Python sidecar
+                if let Some(state) = window.try_state::<AppState>() {
+                    let python = state.python.clone();
+                    tauri::async_runtime::spawn(async move {
+                        // Tokio 维护了一个专门用来处理笨重任务的线程池（Blocking Thread Pool）。
+                        //spawn_blocking 会把花括号里的代码扔到那个池子里去跑，让核心线程继续去接待别的请求
+                        let _ = python.shutdown().await;
+                    });
+                }
+            }
+        })
         // 启动应用
         // tauri::generate_context!()：这个宏会读取你的 tauri.conf.json 配置文件，并在编译时将其转化为代码。它告诉构建器应用的名称、版本、图标等信息。
         // 一旦调用 .run()，程序就会进入事件循环（Event Loop），直到你关闭窗口，程序才会退出。

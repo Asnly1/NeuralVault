@@ -51,7 +51,40 @@ async def health_check():
     return {"status": "healthy", "service": "neuralvault-ai"}
 
 
+@app.post("/shutdown")
+async def shutdown():
+    """优雅关闭接口，供 Rust 调用"""
+    import asyncio
+    import os
+    import signal
+    
+    asyncio.create_task(_shutdown())
+    return {"status": "shutting down"}
+
+
+async def _shutdown():
+    """延迟关闭，给响应时间返回"""
+    import asyncio
+    import os
+    import signal
+    
+    await asyncio.sleep(0.5)
+    os.kill(os.getpid(), signal.SIGTERM)
+
+
 if __name__ == "__main__":
+    import argparse
     import uvicorn
-    # TODO: 动态端口
-    uvicorn.run(app, host="127.0.0.1", port=8765)
+    
+    # 解析命令行参数
+    parser = argparse.ArgumentParser(description="NeuralVault Python Backend")
+    parser.add_argument("--port", type=int, default=8765, help="Server port")
+    parser.add_argument("--db-path", type=str, help="SQLite database path")
+    args = parser.parse_args()
+    
+    print(f"[Python] Starting server on port {args.port}", flush=True)
+    if args.db_path:
+        print(f"[Python] Database path: {args.db_path}", flush=True)
+    
+    uvicorn.run(app, host="127.0.0.1", port=args.port)
+
