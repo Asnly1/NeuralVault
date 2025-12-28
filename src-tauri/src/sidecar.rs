@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -6,19 +7,45 @@ use tauri::{App, Manager};
 const PYTHON_PORT: u16 = 8765;
 const PYTHON_BASE_URL: &str = "http://127.0.0.1:8765";
 
+/// 编译时获取项目根目录（Cargo.toml 所在目录）
+/// 在开发模式下，这会指向 src-tauri 目录
+const CARGO_MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
+
 pub struct PythonSidecar {
     process: Arc<Mutex<Option<Child>>>,
     // Child: 在操作系统层面，当你的 Rust 程序（父进程）启动 Python 脚本时，它会派生（spawn）出一个子进程。
     // Option: 因为进程可能还没启动（None），或者已经启动了（Some(Child)）。
     // Mutex: 提供了内部可变性（Interior Mutability），允许你在只拥有不可变引用 &self 的情况下，通过 lock() 拿到锁来修改内部的 Child
     // Arc: 允许这个 PythonSidecar 实例被克隆（Clone），但所有克隆体都指向内存中同一个 Mutex。这意味着无论你在哪个线程、哪个 Tauri 命令里访问 process，操作的都是同一个 Python 进程
+    
+    /// HTTP 客户端，用于与 Python 后端通信
+    /// 复用同一个 Client 可以利用连接池，提高性能
+    client: reqwest::Client,
 }
 
 impl PythonSidecar {
     pub fn new() -> Self {
         Self {
             process: Arc::new(Mutex::new(None)),
+            // 创建一个带有合理默认配置的 HTTP 客户端
+            // reqwest::Client 内部维护了连接池，应该被复用而非每次请求都创建
+            client: reqwest::Client::builder()
+                .timeout(Duration::from_secs(30))  // 全局超时
+                .pool_max_idle_per_host(5)         // 每个 host 最多保持 5 个空闲连接
+                .build()
+                .expect("Failed to create HTTP client"),
         }
+    }
+
+    /// 获取 Python 项目目录
+    /// 开发模式：返回项目根目录下的 src-python
+    fn get_python_dir() -> PathBuf {
+        // CARGO_MANIFEST_DIR 指向 src-tauri 目录
+        // 需要获取父目录（项目根目录）再拼接 src-python
+        PathBuf::from(CARGO_MANIFEST_DIR)
+            .parent()
+            .expect("Failed to get project root directory")
+            .join("src-python")
     }
 
     /// 启动 Python sidecar 进程
@@ -36,16 +63,8 @@ impl PythonSidecar {
         #[cfg(debug_assertions)]
         {
             // 开发模式：使用 uv run 直接运行 Python
-            // TODO: 配置路径而不是硬编码
-            let python_dir = app_handle
-                .path()
-                .resource_dir()
-                .map_err(|e| format!("Failed to get resource dir: {}", e))?
-                .parent()
-                .ok_or("Failed to get parent dir")?
-                .parent()
-                .ok_or("Failed to get grandparent dir")?
-                .join("src-python");
+            // 使用编译时常量获取项目路径，避免运行时路径计算的不确定性
+            let python_dir = Self::get_python_dir();
             
             println!("[Sidecar] Starting Python in development mode from {:?}", python_dir);
             
@@ -136,10 +155,9 @@ impl PythonSidecar {
     }
 
     /// 调用 Python 的健康检查接口
-    /// TODO: 重复使用client
+    /// 使用结构体中缓存的 HTTP 客户端，复用连接池
     pub async fn check_health(&self) -> Result<serde_json::Value, String> {
-        let client = reqwest::Client::new();
-        let response = client
+        let response = self.client
             .get(&format!("{}/health", PYTHON_BASE_URL))       // 1. 构造请求：GET http://127.0.0.1:8765/health
             .timeout(Duration::from_secs(2))                       // 2. 设置超时：如果 Python 2秒没理我，就不等了
             .send()                            // 3. 发送：此时请求刚发出去
@@ -194,9 +212,9 @@ impl PythonSidecar {
     }
 
     /// 调用 Python 的 shutdown 接口
+    /// 使用结构体中缓存的 HTTP 客户端
     async fn call_shutdown_endpoint(&self) -> Result<(), String> {
-        let client = reqwest::Client::new();
-        client
+        self.client
             .post(&format!("{}/shutdown", PYTHON_BASE_URL))
             .timeout(Duration::from_secs(2))
             .send()
