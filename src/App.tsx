@@ -11,7 +11,7 @@ import {
   linkResource,
   fetchAllTasks,
 } from "./api";
-import { useWebSocket } from "./hooks/useWebSocket";
+import { useIngestProgress } from "./hooks/useIngestProgress";
 import { Sidebar } from "./components";
 import { DashboardPage, WorkspacePage, CalendarPage, SettingsPage } from "./pages";
 
@@ -60,8 +60,8 @@ function App() {
     return saved ? parseInt(saved, 10) : 240;
   });
 
-  // WebSocket progress for resource processing
-  const { progressMap } = useWebSocket();
+  // Ingest progress for resource processing (via Tauri Events)
+  const { progressMap } = useIngestProgress();
 
   // Python backend status
   const [pythonError, setPythonError] = useState<string | null>(null);

@@ -295,14 +295,3 @@ export const getAssetsPath = async (): Promise<string> => {
   return await invoke("get_assets_path");
 };
 
-// ============================================
-// Python Sidecar API
-// ============================================
-
-/**
- * 获取 Python 后端动态分配的端口
- * 用于建立 WebSocket 连接
- */
-export const getPythonPort = async (): Promise<number> => {
-  return await invoke("get_python_port");
-};

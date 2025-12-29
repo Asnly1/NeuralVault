@@ -37,13 +37,13 @@ async def startup_handler():
         vector_service.initialize()
     
     # 初始化 Ingestion Queue
-    from app.workers.queue_manager import ingestion_queue
+    from app.workers.queue_manager import ingestion_queue, progress_broadcaster
     from app.workers.processors import process_ingestion_job, rebuild_pending_queue
-    from app.api.websocket import notify_progress
-    
+
     # 设置处理器和进度回调
+    # 使用 ProgressBroadcaster 替代 WebSocket，通过 HTTP StreamingResponse 推送进度
     ingestion_queue.set_processor(process_ingestion_job)
-    ingestion_queue.set_progress_callback(notify_progress)
+    ingestion_queue.set_progress_callback(progress_broadcaster.broadcast)
     
     # 启动 Worker
     await ingestion_queue.start_worker()

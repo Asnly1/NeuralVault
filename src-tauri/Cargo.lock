@@ -2462,6 +2462,7 @@ name = "neuralvault"
 version = "0.1.0"
 dependencies = [
  "clipboard-rs",
+ "futures-util",
  "reqwest",
  "serde",
  "serde_json",

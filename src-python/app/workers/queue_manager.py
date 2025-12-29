@@ -3,14 +3,100 @@
 用于管理 Ingestion 任务
 """
 import asyncio
+import json
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Callable, Awaitable
+from typing import Optional, Callable, Awaitable, AsyncGenerator
 
 from app.models.sql_models import ProcessingStage
 from app.core.logging import get_logger
 
 logger = get_logger("IngestionQueue")
+
+
+class ProgressBroadcaster:
+    """
+    全局进度广播器
+
+    使用 HTTP StreamingResponse + NDJSON
+    支持多个订阅者同时监听进度更新
+    """
+    _instance: Optional['ProgressBroadcaster'] = None
+
+    def __init__(self):
+        self._subscribers: list[asyncio.Queue] = []
+        self._lock = asyncio.Lock()
+
+    @classmethod
+    def get_instance(cls) -> 'ProgressBroadcaster':
+        """获取单例实例"""
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+
+    async def subscribe(self) -> AsyncGenerator[str, None]:
+        """
+        订阅进度更新流
+
+        返回一个异步生成器，yield NDJSON 格式的进度消息
+        """
+        queue: asyncio.Queue = asyncio.Queue()
+
+        async with self._lock:
+            self._subscribers.append(queue)
+            logger.info(f"New subscriber connected. Total: {len(self._subscribers)}")
+
+        try:
+            while True:
+                # 等待进度消息
+                progress = await queue.get()
+                # 返回 NDJSON 格式（每行一个 JSON 对象）
+                yield json.dumps(progress, ensure_ascii=False) + "\n"
+        finally:
+            async with self._lock:
+                if queue in self._subscribers:
+                    self._subscribers.remove(queue)
+                    logger.info(f"Subscriber disconnected. Total: {len(self._subscribers)}")
+
+    async def broadcast(
+        self,
+        resource_id: int,
+        stage: ProcessingStage,
+        percentage: Optional[int] = None,
+        error: Optional[str] = None
+    ):
+        """
+        广播进度消息给所有订阅者
+
+        Args:
+            resource_id: 资源 ID
+            stage: 处理阶段
+            percentage: 进度百分比 (0-100)
+            error: 错误信息（如果有）
+        """
+        message = {
+            "type": "progress",
+            "resource_id": resource_id,
+            "stage": stage.value,
+            "percentage": percentage,
+        }
+
+        if error:
+            message["error"] = error
+
+        async with self._lock:
+            subscribers = list(self._subscribers)
+
+        # 向所有订阅者发送消息
+        for queue in subscribers:
+            try:
+                await queue.put(message)
+            except Exception as e:
+                logger.error(f"Failed to send to subscriber: {e}")
+
+
+# 全局单例
+progress_broadcaster = ProgressBroadcaster.get_instance()
 
 class JobType(str, Enum):
     """任务类型"""

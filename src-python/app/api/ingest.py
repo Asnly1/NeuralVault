@@ -2,6 +2,7 @@
 接收 Rust 的"新文件/新任务"通知
 """
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,7 +12,8 @@ from app.models.sql_models import (
     IngestNotifyRequest, IngestNotifyResponse, IngestStatusResponse
 )
 from app.workers.queue_manager import (
-    ingestion_queue, IngestionJob, JobType, JobAction
+    ingestion_queue, IngestionJob, JobType, JobAction,
+    progress_broadcaster
 )
 
 router = APIRouter()
@@ -83,4 +85,34 @@ async def get_ingestion_status(
         resource_id=resource_id,
         status=processing_stage,
         error=last_error
+    )
+
+
+@router.get("/stream")
+async def stream_progress():
+    """
+    全局进度流端点
+
+    返回一个 NDJSON 流，实时推送所有资源的处理进度。
+    Rust 端会建立一个持久连接来读取这个流，并通过 Tauri Events 转发给前端。
+
+    响应格式 (每行一个 JSON 对象):
+        {"type": "progress", "resource_id": 1, "stage": "chunking", "percentage": 30}
+        {"type": "progress", "resource_id": 1, "stage": "embedding", "percentage": 80}
+        {"type": "progress", "resource_id": 1, "stage": "done", "percentage": 100}
+
+    使用方式:
+        curl -N http://localhost:PORT/ingest/stream
+    """
+    return StreamingResponse(
+        progress_broadcaster.subscribe(),
+        media_type="application/x-ndjson",
+        headers={
+            # 禁用缓存，确保实时推送
+            "Cache-Control": "no-cache",
+            # 保持连接
+            "Connection": "keep-alive",
+            # 禁用 nginx 等代理的缓冲
+            "X-Accel-Buffering": "no",
+        }
     )

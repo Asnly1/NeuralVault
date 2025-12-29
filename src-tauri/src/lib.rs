@@ -18,7 +18,7 @@ pub use commands::{
     mark_task_as_done_command, mark_task_as_todo_command, update_task_priority_command,
     update_task_due_date_command, update_task_title_command, update_task_description_command,
     get_tasks_by_date, get_all_tasks, update_resource_content_command, update_resource_display_name_command,
-    check_python_health, is_python_running, get_python_port,
+    check_python_health, is_python_running,
 };
 pub use sidecar::PythonSidecar;
 pub use window::{hide_hud, toggle_hud};
@@ -73,6 +73,7 @@ pub fn run() {
             // 在后台等待 Python 就绪（不阻塞 UI 显示）
             let python_for_health = python_sidecar.clone();
             let app_handle = app.handle().clone();
+            // move 关键字强制将该闭包（closure）内部使用到的外部变量（如 client, url, app_handle）的所有权（Ownership） 从外部环境“移动”到这个异步任务内部
             tauri::async_runtime::spawn(async move {
                 println!("[Tauri] Waiting for Python backend in background...");
                 match python_for_health.wait_for_health(20).await {
@@ -82,6 +83,11 @@ pub fn run() {
                         let _ = app_handle.emit("python-status", serde_json::json!({
                             "status": "ready"
                         }));
+
+                        // 启动全局进度流连接
+                        // 通过 HTTP StreamingResponse + NDJSON 接收 Python 的处理进度，
+                        // 并通过 Tauri Events 转发给前端
+                        python_for_health.start_progress_stream(app_handle.clone());
                     }
                     Err(e) => {
                         eprintln!("[Tauri] Python backend failed to start: {}", e);
@@ -134,8 +140,7 @@ pub fn run() {
             update_resource_content_command,
             update_resource_display_name_command,
             check_python_health,
-            is_python_running,
-            get_python_port
+            is_python_running
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {

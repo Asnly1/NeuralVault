@@ -536,8 +536,8 @@ class IngestStatusResponse(PydanticBaseModel):
     error: Optional[str] = None
 
 
-class WebSocketMessage(PydanticBaseModel):
-    """WebSocket 消息"""
+class PythonMessage(PydanticBaseModel):
+    """Python 消息"""
     resource_id: int
     event: Literal["ingest", "decompose", "tag", "report"]
     status: ProcessingStage

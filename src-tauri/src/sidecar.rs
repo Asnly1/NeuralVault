@@ -3,7 +3,8 @@ use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tauri::{App, Manager};
+use tauri::{App, AppHandle, Emitter, Manager};
+use futures_util::StreamExt;
 
 /// 编译时获取项目根目录（Cargo.toml 所在目录）
 /// 在开发模式下，这会指向 src-tauri 目录
@@ -257,7 +258,105 @@ impl PythonSidecar {
             .send()
             .await
             .map_err(|e| format!("Shutdown request failed: {}", e))?;
-        
+
+        Ok(())
+    }
+
+    /// 启动全局进度流连接
+    ///
+    /// 建立到 Python `/ingest/stream` 端点的 HTTP 长连接，
+    /// 读取 NDJSON 格式的进度消息，并通过 Tauri Events 转发给前端。
+    ///
+    /// 该方法会在后台持续运行，连接断开后自动重连。
+    pub fn start_progress_stream(&self, app_handle: AppHandle) {
+        let url = format!("{}/ingest/stream", self.get_base_url());
+        let client = self.client.clone();
+
+        println!("[Sidecar] Starting progress stream to {}", url);
+
+        tauri::async_runtime::spawn(async move {
+            loop {
+                match Self::connect_and_read_stream(&client, &url, &app_handle).await {
+                    Ok(_) => {
+                        println!("[Sidecar] Progress stream ended normally");
+                    }
+                    Err(e) => {
+                        eprintln!("[Sidecar] Progress stream error: {}", e);
+                    }
+                }
+
+                // 连接断开后等待重连
+                println!("[Sidecar] Reconnecting progress stream in 2 seconds...");
+                tokio::time::sleep(Duration::from_secs(2)).await;
+            }
+        });
+    }
+
+    /// 建立连接并读取 NDJSON 流
+    async fn connect_and_read_stream(
+        client: &reqwest::Client,
+        url: &str,
+        app_handle: &AppHandle,
+    ) -> Result<(), String> {
+        let response = client
+            .get(url)
+            .send()
+            .await
+            .map_err(|e| format!("Failed to connect to progress stream: {}", e))?;
+
+        if !response.status().is_success() {
+            return Err(format!(
+                "Progress stream returned error status: {}",
+                response.status()
+            ));
+        }
+
+        println!("[Sidecar] Progress stream connected");
+
+        let mut stream = response.bytes_stream();
+        // 使用 Vec<u8> 而不是 String，防止字节截断
+        let mut buffer: Vec<u8> = Vec::new();
+
+        while let Some(chunk_result) = stream.next().await {
+            match chunk_result {
+                Ok(bytes) => {
+                    // 将新收到的原始字节追加到 buffer 尾部
+                    buffer.extend_from_slice(&bytes);
+
+                    // 按行解析 NDJSON
+                    // 在字节流中查找换行符 (0xA 是 '\n' 的 ASCII 码)
+                    while let Some(pos) = buffer.iter().position(|&b| b == b'\n') {
+                        // 提取完整的一行（不包含换行符）
+                        let line_bytes = &buffer[..pos];
+                        let line = String::from_utf8_lossy(line_bytes).to_string();
+
+                        // 使用 drain 移除已处理的字节（包含换行符）
+                        buffer.drain(..pos + 1);
+
+                        // 跳过空行
+                        if line.trim().is_empty() {
+                            continue;
+                        }
+
+                        // 解析 JSON 并发送 Tauri Event
+                        match serde_json::from_str::<serde_json::Value>(&line) {
+                            Ok(progress) => {
+                                if let Err(e) = app_handle.emit("ingest-progress", &progress) {
+                                    eprintln!("[Sidecar] Failed to emit progress event: {}", e);
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("[Sidecar] Failed to parse progress JSON: {} - line: {}", e, line);
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    return Err(format!("Stream read error: {}", e));
+                }
+            }
+        }
+
         Ok(())
     }
 }

@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core import events
-from app.api import ingest, chat, agent, search, websocket
+from app.api import ingest, chat, agent, search
 
 
 @asynccontextmanager
@@ -42,7 +42,6 @@ app.include_router(ingest.router, prefix="/ingest", tags=["ingest"])
 app.include_router(chat.router, prefix="/chat", tags=["chat"])
 app.include_router(agent.router, prefix="/agent", tags=["agent"])
 app.include_router(search.router, prefix="/search", tags=["search"])
-app.include_router(websocket.router, prefix="/ws", tags=["websocket"])
 
 
 @app.get("/health")
@@ -108,10 +107,10 @@ if __name__ == "__main__":
     
     # IMPORTANT: 必须使用单进程模式 (workers=1)
     # 原因：
-    # 1. WebSocket ConnectionManager 使用内存状态管理连接
+    # 1. ProgressBroadcaster 使用内存状态管理 HTTP 流订阅者
     # 2. IngestionQueue 使用 asyncio.Queue 内存队列
     # 3. VectorService 单例持有 Embedding 模型
-    # 多进程会导致状态不共享，WebSocket 广播和任务队列无法正常工作
+    # 多进程会导致状态不共享，进度推送和任务队列无法正常工作
     uvicorn.run(
         app, 
         host="127.0.0.1", 
