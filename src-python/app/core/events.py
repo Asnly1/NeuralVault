@@ -27,6 +27,27 @@ async def startup_handler():
             await conn.execute("PRAGMA synchronous=NORMAL")
             print("[NeuralVault Python Backend] SQLite WAL mode enabled", flush=True)
     
+    # 初始化 VectorService（预加载 Embedding 模型）
+    if settings.qdrant_path:
+        from app.services.vector_service import vector_service
+        vector_service.initialize()
+    
+    # 初始化 Ingestion Queue
+    from app.workers.queue_manager import ingestion_queue
+    from app.workers.processors import process_ingestion_job, rebuild_pending_queue
+    from app.api.websocket import notify_progress
+    
+    # 设置处理器和进度回调
+    ingestion_queue.set_processor(process_ingestion_job)
+    ingestion_queue.set_progress_callback(notify_progress)
+    
+    # 启动 Worker
+    await ingestion_queue.start_worker()
+    
+    # 重建待处理队列
+    if db_manager.engine:
+        await rebuild_pending_queue()
+    
     # 启动心跳监控（监听 stdin）
     global _heartbeat_task
     _heartbeat_task = asyncio.create_task(monitor_parent_process())
@@ -46,6 +67,10 @@ async def shutdown_handler():
             await _heartbeat_task
         except asyncio.CancelledError:
             pass
+    
+    # 停止 Ingestion Worker
+    from app.workers.queue_manager import ingestion_queue
+    await ingestion_queue.stop_worker()
     
     # 关闭数据库连接
     db_manager = await DatabaseManager.get_instance()

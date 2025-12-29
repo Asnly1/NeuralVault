@@ -63,19 +63,32 @@ class DatabaseManager:
         
         # 初始化 Qdrant (embedded mode)
         if settings.qdrant_path:
+            from app.core.config import DENSE_MODEL_DIMENSIONS
+            from qdrant_client.models import SparseVectorParams
+            
             self.qdrant_client = QdrantClient(path=settings.qdrant_path)
             
-            # 创建 collection（如果不存在）
+            # 获取 Dense 向量维度
+            dense_size = DENSE_MODEL_DIMENSIONS.get(
+                settings.dense_embedding_model, 512
+            )
+            
+            # 创建 collection（如果不存在）- 使用 Named Vectors 支持混合检索
             try:
                 self.qdrant_client.get_collection(settings.qdrant_collection_name)
             except Exception:
                 # 向量数据库客户端
                 self.qdrant_client.create_collection(
                     collection_name=settings.qdrant_collection_name,
-                    vectors_config=VectorParams(
-                        size=settings.vector_size,
-                        distance=Distance.COSINE
-                    )
+                    vectors_config={
+                        "dense": VectorParams(
+                            size=dense_size,
+                            distance=Distance.COSINE
+                        )
+                    },
+                    sparse_vectors_config={
+                        "sparse": SparseVectorParams()
+                    }
                 )
     
     async def get_session(self) -> AsyncGenerator[AsyncSession, None]:

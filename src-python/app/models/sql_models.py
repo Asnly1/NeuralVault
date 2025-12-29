@@ -19,7 +19,7 @@ def generate_uuid() -> str:
     import uuid
     return str(uuid.uuid4())
 from enum import Enum
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from pydantic import BaseModel as PydanticBaseModel
 from sqlmodel import SQLModel, Field
 from sqlalchemy import Column, JSON, Index, text
@@ -510,3 +510,64 @@ class ChatMessage(SQLModel, table=True):
             ref_chunk_id=self.ref_chunk_id,
             created_at=self.created_at,
         )
+
+# ============================================================
+# API DTO (请求/响应)
+# ============================================================
+
+class IngestNotifyRequest(PydanticBaseModel):
+    """Ingest 通知请求"""
+    source_type: Literal["resource", "task"]
+    id: int
+    action: Literal["created", "updated", "deleted"]
+
+
+class IngestNotifyResponse(PydanticBaseModel):
+    """Ingest 通知响应"""
+    status: Literal["accepted", "rejected"]
+    message: Optional[str] = None
+
+
+class IngestStatusResponse(PydanticBaseModel):
+    """Ingest 状态响应"""
+    resource_id: int
+    status: ProcessingStage
+    error: Optional[str] = None
+
+
+class WebSocketMessage(PydanticBaseModel):
+    """WebSocket 消息"""
+    resource_id: int
+    event: Literal["ingest", "decompose", "tag", "report"]
+    status: ProcessingStage
+    percentage: Optional[int] = None
+    error: Optional[str] = None
+
+
+class SearchFilters(PydanticBaseModel):
+    """搜索过滤条件"""
+    task_id: Optional[int] = None
+    file_type: Optional[str] = None
+
+
+class HybridSearchRequest(PydanticBaseModel):
+    """混合检索请求"""
+    query: str
+    top_k: int = 20
+    filters: Optional[SearchFilters] = None
+
+
+class SearchResult(PydanticBaseModel):
+    """搜索结果"""
+    chunk_id: int
+    resource_id: int
+    text: str
+    score: float
+    page_number: Optional[int] = None
+
+
+class HybridSearchResponse(PydanticBaseModel):
+    """混合检索响应"""
+    results: List[SearchResult]
+    total: int
+

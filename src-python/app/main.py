@@ -86,5 +86,16 @@ if __name__ == "__main__":
     if args.db_path:
         print(f"[Python] Database path: {args.db_path}", flush=True)
     
-    uvicorn.run(app, host="127.0.0.1", port=args.port)
-
+    # IMPORTANT: 必须使用单进程模式 (workers=1)
+    # 原因：
+    # 1. WebSocket ConnectionManager 使用内存状态管理连接
+    # 2. IngestionQueue 使用 asyncio.Queue 内存队列
+    # 3. VectorService 单例持有 Embedding 模型
+    # 多进程会导致状态不共享，WebSocket 广播和任务队列无法正常工作
+    uvicorn.run(
+        app, 
+        host="127.0.0.1", 
+        port=args.port,
+        workers=1,  # 强制单进程
+        log_level="info"
+    )
