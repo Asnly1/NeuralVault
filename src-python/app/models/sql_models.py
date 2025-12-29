@@ -29,54 +29,55 @@ from sqlalchemy import Column, JSON, Index, text
 # 枚举类型 (Enums)
 # ============================================================
 
+# 注意: 枚举名称必须与数据库存储值一致，SQLAlchemy 用 .name 匹配
 class TaskStatus(str, Enum):
-    TODO = "todo"
-    DONE = "done"
+    todo = "todo"
+    done = "done"
 
 class TaskPriority(str, Enum):
-    HIGH = "High"
-    MEDIUM = "Medium"
-    LOW = "Low"
+    high = "high"
+    medium = "medium"
+    low = "low"
 
 class FileType(str, Enum):
-    TEXT = "text"
-    IMAGE = "image"
-    PDF = "pdf"
-    URL = "url"
-    EPUB = "epub"
-    OTHER = "other"
+    text = "text"
+    image = "image"
+    pdf = "pdf"
+    url = "url"
+    epub = "epub"
+    other = "other"
 
 class SyncStatus(str, Enum):
-    PENDING = "pending"
-    SYNCED = "synced"
-    DIRTY = "dirty"
-    ERROR = "error"
+    pending = "pending"
+    synced = "synced"
+    dirty = "dirty"
+    error = "error"
 
 class ProcessingStage(str, Enum):
-    TODO = "todo"
-    CHUNKING = "chunking"
-    EMBEDDING = "embedding"
-    DONE = "done"
+    todo = "todo"
+    chunking = "chunking"
+    embedding = "embedding"
+    done = "done"
 
 class ClassificationStatus(str, Enum):
-    UNCLASSIFIED = "unclassified"
-    SUGGESTED = "suggested"
-    LINKED = "linked"
-    IGNORED = "ignored"
+    unclassified = "unclassified"
+    suggested = "suggested"
+    linked = "linked"
+    ignored = "ignored"
 
 class VisibilityScope(str, Enum):
-    THIS = "this"
-    SUBTREE = "subtree"
-    GLOBAL = "global"
+    this = "this"
+    subtree = "subtree"
+    global_ = "global"  # global 是 Python 保留字，用 global_
 
 class SessionType(str, Enum):
-    GLOBAL = "global"
-    TASK = "task"
+    global_ = "global"  # global 是 Python 保留字
+    task = "task"
 
 class MessageRole(str, Enum):
-    USER = "user"
-    ASSISTANT = "assistant"
-    SYSTEM = "system"
+    user = "user"
+    assistant = "assistant"
+    system = "system"
 
 # ============================================================
 # 用户 (User)
@@ -111,9 +112,9 @@ class TaskBase(PydanticBaseModel):
     suggested_subtasks: Optional[List[Dict[str, Any]]] = None
     
     # 任务状态管理
-    status: TaskStatus = TaskStatus.TODO
+    status: TaskStatus = TaskStatus.todo
     done_date: Optional[datetime] = None
-    priority: TaskPriority = TaskPriority.MEDIUM
+    priority: TaskPriority = TaskPriority.medium
     due_date: Optional[datetime] = None
 
 
@@ -154,9 +155,9 @@ class Task(SQLModel, table=True):
     suggested_subtasks: Optional[List[Dict[str, Any]]] = Field(default=None, sa_column=Column(JSON))
     
     # 任务状态管理
-    status: TaskStatus = Field(default=TaskStatus.TODO, index=True)
+    status: TaskStatus = Field(default=TaskStatus.todo, index=True)
     done_date: Optional[datetime] = None
-    priority: TaskPriority = Field(default=TaskPriority.MEDIUM)
+    priority: TaskPriority = Field(default=TaskPriority.medium)
     due_date: Optional[datetime] = Field(default=None, index=True)
     
     # 时间戳 (数据库专属)
@@ -202,7 +203,7 @@ class ResourceBase(PydanticBaseModel):
     
     # 核心身份标识
     file_hash: Optional[str] = None
-    file_type: FileType = FileType.OTHER
+    file_type: FileType = FileType.other
     content: Optional[str] = None
     
     # 物理存储
@@ -226,9 +227,9 @@ class ResourceRead(ResourceBase):
     file_hash: str
     
     # 向量化状态
-    sync_status: SyncStatus = SyncStatus.PENDING
-    processing_stage: ProcessingStage = ProcessingStage.TODO
-    classification_status: ClassificationStatus = ClassificationStatus.UNCLASSIFIED
+    sync_status: SyncStatus = SyncStatus.pending
+    processing_stage: ProcessingStage = ProcessingStage.todo
+    classification_status: ClassificationStatus = ClassificationStatus.unclassified
     
     created_at: datetime
 
@@ -242,7 +243,7 @@ class Resource(SQLModel, table=True):
     
     # 核心身份标识
     file_hash: str
-    file_type: FileType = Field(default=FileType.OTHER)
+    file_type: FileType = Field(default=FileType.other)
     content: Optional[str] = None
     
     # 物理存储
@@ -251,17 +252,17 @@ class Resource(SQLModel, table=True):
     file_size_bytes: Optional[int] = None
     
     # 向量化状态 (Python 专属写入)
-    sync_status: SyncStatus = Field(default=SyncStatus.PENDING, index=True)
+    sync_status: SyncStatus = Field(default=SyncStatus.pending, index=True)
     indexed_hash: Optional[str] = None
     processing_hash: Optional[str] = None
     last_indexed_at: Optional[datetime] = None
     last_error: Optional[str] = None
     
     # 资源处理状态
-    processing_stage: ProcessingStage = Field(default=ProcessingStage.TODO)
+    processing_stage: ProcessingStage = Field(default=ProcessingStage.todo)
     
     # 分类状态
-    classification_status: ClassificationStatus = Field(default=ClassificationStatus.UNCLASSIFIED)
+    classification_status: ClassificationStatus = Field(default=ClassificationStatus.unclassified)
     
     # 时间戳 (数据库专属)
     created_at: datetime = Field(default_factory=utc_now)
@@ -301,7 +302,7 @@ class TaskResourceLinkBase(PydanticBaseModel):
     """任务-资源关联基础 DTO"""
     task_id: int
     resource_id: int
-    visibility_scope: VisibilityScope = VisibilityScope.SUBTREE
+    visibility_scope: VisibilityScope = VisibilityScope.subtree
     local_alias: Optional[str] = None
 
 class TaskResourceLinkCreate(TaskResourceLinkBase):
@@ -319,7 +320,7 @@ class TaskResourceLink(SQLModel, table=True):
     task_id: int = Field(primary_key=True, foreign_key="tasks.task_id")
     resource_id: int = Field(primary_key=True, foreign_key="resources.resource_id")
     
-    visibility_scope: VisibilityScope = Field(default=VisibilityScope.SUBTREE)
+    visibility_scope: VisibilityScope = Field(default=VisibilityScope.subtree)
     local_alias: Optional[str] = None
     
     created_at: datetime = Field(default_factory=utc_now)
@@ -407,7 +408,7 @@ class ContextChunk(SQLModel, table=True):
 
 class ChatSessionBase(PydanticBaseModel):
     """聊天会话基础 DTO"""
-    session_type: SessionType = SessionType.TASK
+    session_type: SessionType = SessionType.task
     task_id: Optional[int] = None
     title: Optional[str] = None
     summary: Optional[str] = None
@@ -432,7 +433,7 @@ class ChatSession(SQLModel, table=True):
     __tablename__ = "chat_sessions"
     
     session_id: Optional[int] = Field(default=None, primary_key=True)
-    session_type: SessionType = Field(default=SessionType.TASK)
+    session_type: SessionType = Field(default=SessionType.task)
     task_id: Optional[int] = Field(default=None, foreign_key="tasks.task_id")
     
     title: Optional[str] = None

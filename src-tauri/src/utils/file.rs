@@ -14,6 +14,7 @@ pub fn parse_file_type(raw: Option<&str>) -> ResourceFileType {
     // 最终返回 Option<String>
     match raw.map(|s| s.to_lowercase()) {
         // Some(t) 是一个"模式"：它的意思是，"如果这个盒子不为空（是 Some），那么把盒子里的东西取出来，并且临时命名为 t"
+        Some(t) if t == "text" => ResourceFileType::Text,
         Some(t) if t == "image" => ResourceFileType::Image,
         Some(t) if t == "pdf" => ResourceFileType::Pdf,
         Some(t) if t == "url" => ResourceFileType::Url,

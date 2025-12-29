@@ -31,7 +31,7 @@ CREATE TABLE tasks (
     -- 任务状态管理
     status TEXT DEFAULT 'todo' CHECK (status IN ('todo','done')),
     done_date DATETIME,
-    priority TEXT DEFAULT 'Medium' CHECK (priority IN ('High','Medium','Low')),
+    priority TEXT DEFAULT 'medium' CHECK (priority IN ('high','medium','low')),
     due_date DATETIME,
 
     -- 时间戳

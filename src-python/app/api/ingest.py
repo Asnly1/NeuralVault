@@ -73,7 +73,7 @@ async def get_ingestion_status(
     if not row:
         return IngestStatusResponse(
             resource_id=resource_id,
-            status=ProcessingStage.TODO,
+            status=ProcessingStage.todo,
             error="Resource not found"
         )
     

@@ -25,7 +25,7 @@ pub enum TaskStatus {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Type, Serialize, Deserialize)]
-#[sqlx(rename_all = "PascalCase")]
+#[sqlx(rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
 pub enum TaskPriority {
     High,

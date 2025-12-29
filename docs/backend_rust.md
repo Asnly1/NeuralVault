@@ -249,13 +249,13 @@ app.manage(AppState { db, python }) - 注入状态
 
 | 枚举类型                       | 可选值                                | 说明             |
 | ------------------------------ | ------------------------------------- | ---------------- |
-| `TaskStatus`                   | todo/done                             | 任务状态         |
+| `TaskStatus`                   | Todo/Done                             | 任务状态         |
 | `TaskPriority`                 | High/Medium/Low                       | 任务优先级       |
-| `ResourceSyncStatus`           | pending/synced/dirty/error            | 资源同步状态     |
-| `ResourceProcessingStage`      | todo/chunking/embedding/done          | 资源处理阶段     |
-| `ResourceFileType`             | text/image/pdf/url/epub/other         | 资源文件类型     |
-| `ResourceClassificationStatus` | unclassified/suggested/linked/ignored | 资源分类状态     |
-| `VisibilityScope`              | this/subtree/global                   | 资源关联可见范围 |
+| `ResourceSyncStatus`           | Pending/Synced/Dirty/Error            | 资源同步状态     |
+| `ResourceProcessingStage`      | Todo/Chunking/Embedding/Done          | 资源处理阶段     |
+| `ResourceFileType`             | Text/Image/Pdf/Url/Epub/Other         | 资源文件类型     |
+| `ResourceClassificationStatus` | Unclassified/Suggested/Linked/Ignored | 资源分类状态     |
+| `VisibilityScope`              | This/Subtree/Global                   | 资源关联可见范围 |
 
 **数据结构**
 

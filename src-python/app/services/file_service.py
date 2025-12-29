@@ -30,17 +30,17 @@ class FileService:
             raise FileNotFoundError(f"File not found: {file_path}")
         
         match file_type:
-            case FileType.PDF:
+            case FileType.pdf:
                 return await self._parse_pdf(path)
-            case FileType.TEXT:
+            case FileType.text:
                 return await self._parse_text(path)
-            case FileType.EPUB:
+            case FileType.epub:
                 # TODO: 未来扩展
                 raise NotImplementedError("EPUB parsing not yet implemented")
-            case FileType.IMAGE:
+            case FileType.image:
                 # TODO: OCR 支持
                 raise NotImplementedError("Image OCR not yet implemented")
-            case FileType.URL:
+            case FileType.url:
                 # URL 内容应该已经在 content 字段中
                 raise ValueError("URL content should be in resource.content field")
             case _:
