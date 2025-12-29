@@ -7,6 +7,9 @@ from typing import Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.models.sql_models import WebSocketMessage, ProcessingStage
+from app.core.logging import get_logger
+
+logger = get_logger("WebSocket")
 
 router = APIRouter()
 
@@ -31,7 +34,7 @@ class ConnectionManager:
         await websocket.accept()
         async with self._lock:
             self._active_connections.append(websocket)
-        print(f"[WebSocket] Client connected. Total: {len(self._active_connections)}", flush=True)
+        logger.info(f"Client connected. Total: {len(self._active_connections)}")
     
     async def disconnect(self, websocket: WebSocket, close_code: int = 1000):
         """断开连接"""
@@ -43,14 +46,14 @@ class ConnectionManager:
                 except Exception:
                     # 忽略已经关闭的连接报错
                     pass
-        print(f"[WebSocket] Client disconnected. Total: {len(self._active_connections)}", flush=True)
+        logger.info(f"Client disconnected. Total: {len(self._active_connections)}")
     
     async def _send_safe(self, websocket: WebSocket, message: str):
         """单独处理每个连接的发送异常，互不影响"""
         try:
             await websocket.send_text(message)
         except Exception as e:
-            print(f"[WebSocket] Failed to send message: {e}", flush=True)
+            logger.warning(f"Failed to send message: {e}")
             await self.disconnect(websocket, close_code=1011)
 
     async def broadcast(self, message: WebSocketMessage):
@@ -108,7 +111,7 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         await connection_manager.disconnect(websocket)
     except Exception as e:
-        print(f"[WebSocket] Error: {e}", flush=True)
+        logger.error(f"Error: {e}")
         await connection_manager.disconnect(websocket, close_code=1011)
 
 # 进度回调函数，供 Worker 调用

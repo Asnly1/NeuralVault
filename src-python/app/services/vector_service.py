@@ -14,6 +14,9 @@ from qdrant_client.models import PointStruct, SparseVector
 
 from app.core.config import settings, DENSE_MODEL_DIMENSIONS
 from app.core.db import get_qdrant
+from app.core.logging import get_logger
+
+logger = get_logger("VectorService")
 
 
 @dataclass
@@ -48,12 +51,12 @@ class VectorService:
         if self._initialized:
             return
         
-        print(f"[VectorService] Loading Dense model: {settings.dense_embedding_model}", flush=True)
+        logger.info(f"Loading Dense model: {settings.dense_embedding_model}")
         self._dense_model = TextEmbedding(
             model_name=settings.dense_embedding_model
         )
         
-        print(f"[VectorService] Loading Sparse model: {settings.sparse_embedding_model}", flush=True)
+        logger.info(f"Loading Sparse model: {settings.sparse_embedding_model}")
         self._sparse_model = SparseTextEmbedding(
             model_name=settings.sparse_embedding_model
         )
@@ -64,7 +67,7 @@ class VectorService:
         )
         
         self._initialized = True
-        print("[VectorService] Models loaded successfully", flush=True)
+        logger.info("Models loaded successfully")
     
     def chunk_text(self, text: str) -> list[TextChunk]:
         """

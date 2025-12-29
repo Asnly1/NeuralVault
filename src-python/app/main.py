@@ -76,15 +76,21 @@ if __name__ == "__main__":
     import argparse
     import uvicorn
     
+    from app.core.logging import setup_logging, get_logger
+    
+    # 配置日志
+    setup_logging()
+    logger = get_logger("Python")
+    
     # 解析命令行参数
     parser = argparse.ArgumentParser(description="NeuralVault Python Backend")
     parser.add_argument("--port", type=int, default=8765, help="Server port")
     parser.add_argument("--db-path", type=str, help="SQLite database path")
     args = parser.parse_args()
     
-    print(f"[Python] Starting server on port {args.port}", flush=True)
+    logger.info(f"Starting server on port {args.port}")
     if args.db_path:
-        print(f"[Python] Database path: {args.db_path}", flush=True)
+        logger.info(f"Database path: {args.db_path}")
     
     # IMPORTANT: 必须使用单进程模式 (workers=1)
     # 原因：

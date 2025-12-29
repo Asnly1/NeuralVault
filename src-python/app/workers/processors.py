@@ -14,6 +14,7 @@ from typing import Optional
 from sqlalchemy import select, delete
 
 from app.core.db import DatabaseManager
+from app.core.logging import get_logger
 from app.models.sql_models import (
     Resource, ContextChunk, SyncStatus, ProcessingStage
 )
@@ -22,6 +23,8 @@ from app.services.vector_service import vector_service
 from app.workers.queue_manager import (
     IngestionJob, JobType, JobAction, ProgressCallback
 )
+
+logger = get_logger("Processor")
 
 
 async def process_ingestion_job(
@@ -66,7 +69,7 @@ async def _process_resource_ingestion(
             resource = result.scalar_one_or_none()
             
             if not resource:
-                print(f"[Processor] Resource not found: {resource_id}", flush=True)
+                logger.warning(f"Resource not found: {resource_id}")
                 return
             
             # 更新状态为 chunking
@@ -89,20 +92,20 @@ async def _process_resource_ingestion(
                         resource.file_type
                     )
                 except NotImplementedError as e:
-                    print(f"[Processor] Unsupported file type: {e}", flush=True)
+                    logger.warning(f"Unsupported file type: {e}")
                     resource.sync_status = SyncStatus.ERROR
                     resource.last_error = str(e)
                     await session.commit()
                     return
                 except FileNotFoundError as e:
-                    print(f"[Processor] File not found: {e}", flush=True)
+                    logger.warning(f"File not found: {e}")
                     resource.sync_status = SyncStatus.ERROR
                     resource.last_error = str(e)
                     await session.commit()
                     return
             
             if not text_content or not text_content.strip():
-                print(f"[Processor] No content to process for resource: {resource_id}", flush=True)
+                logger.info(f"No content to process for resource: {resource_id}")
                 resource.sync_status = SyncStatus.SYNCED
                 resource.processing_stage = ProcessingStage.DONE
                 resource.indexed_hash = resource.file_hash
@@ -117,7 +120,7 @@ async def _process_resource_ingestion(
             chunks = vector_service.chunk_text(text_content)
             
             if not chunks:
-                print(f"[Processor] No chunks generated for resource: {resource_id}", flush=True)
+                logger.info(f"No chunks generated for resource: {resource_id}")
                 resource.sync_status = SyncStatus.SYNCED
                 resource.processing_stage = ProcessingStage.DONE
                 resource.indexed_hash = resource.file_hash
@@ -179,7 +182,7 @@ async def _process_resource_ingestion(
             await session.commit()
             await progress_callback(resource_id, ProcessingStage.DONE, 100)
             
-            print(f"[Processor] Resource {resource_id} ingestion completed: {len(chunks)} chunks", flush=True)
+            logger.info(f"Resource {resource_id} ingestion completed: {len(chunks)} chunks")
             
         except Exception as e:
             await session.rollback()
@@ -206,7 +209,7 @@ async def _process_resource_deletion(resource_id: int):
     qdrant_client = db_manager.get_qdrant()
     
     await vector_service.delete_by_resource(resource_id, qdrant_client)
-    print(f"[Processor] Resource {resource_id} vectors deleted from Qdrant", flush=True)
+    logger.info(f"Resource {resource_id} vectors deleted from Qdrant")
 
 
 async def rebuild_pending_queue():
@@ -244,4 +247,4 @@ async def rebuild_pending_queue():
             await ingestion_queue.enqueue(job)
         
         if pending_resources:
-            print(f"[Processor] Rebuilt queue with {len(pending_resources)} pending resources", flush=True)
+            logger.info(f"Rebuilt queue with {len(pending_resources)} pending resources")

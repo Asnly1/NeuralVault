@@ -8,6 +8,9 @@ from enum import Enum
 from typing import Optional, Callable, Awaitable
 
 from app.models.sql_models import ProcessingStage
+from app.core.logging import get_logger
+
+logger = get_logger("IngestionQueue")
 
 class JobType(str, Enum):
     """任务类型"""
@@ -70,7 +73,7 @@ class IngestionQueue:
     async def enqueue(self, job: IngestionJob):
         """将任务加入队列"""
         await self._queue.put(job)
-        print(f"[IngestionQueue] Job enqueued: {job.job_type.value} - {job.source_id}", flush=True)
+        logger.info(f"Job enqueued: {job.job_type.value} - {job.source_id}")
     
     async def start_worker(self):
         """启动 Worker"""
@@ -79,7 +82,7 @@ class IngestionQueue:
         
         self._running = True
         self._worker_task = asyncio.create_task(self._worker_loop())
-        print("[IngestionQueue] Worker started", flush=True)
+        logger.info("Worker started")
     
     async def stop_worker(self):
         """停止 Worker"""
@@ -98,7 +101,7 @@ class IngestionQueue:
                 except asyncio.CancelledError:
                     pass
         
-        print("[IngestionQueue] Worker stopped", flush=True)
+        logger.info("Worker stopped")
     
     async def _worker_loop(self):
         """Worker 主循环"""
@@ -117,16 +120,16 @@ class IngestionQueue:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                print(f"[IngestionQueue] Worker error: {e}", flush=True)
+                logger.error(f"Worker error: {e}")
     
     async def _process_job(self, job: IngestionJob):
         """处理单个任务"""
         if not self._processor:
-            print("[IngestionQueue] No processor set, skipping job", flush=True)
+            logger.warning("No processor set, skipping job")
             return
         
         try:
-            print(f"[IngestionQueue] Processing job: {job.job_type.value} - {job.source_id}", flush=True)
+            logger.info(f"Processing job: {job.job_type.value} - {job.source_id}")
             
             # 创建进度回调包装器
             async def progress_wrapper(
@@ -140,18 +143,18 @@ class IngestionQueue:
             # 调用处理器
             await self._processor(job, progress_wrapper)
             
-            print(f"[IngestionQueue] Job completed: {job.job_type.value} - {job.source_id}", flush=True)
+            logger.info(f"Job completed: {job.job_type.value} - {job.source_id}")
             
         except Exception as e:
-            print(f"[IngestionQueue] Job failed: {job.job_type.value} - {job.source_id}: {e}", flush=True)
+            logger.error(f"Job failed: {job.job_type.value} - {job.source_id}: {e}")
             
             # 重试逻辑
             if job.retry_count < job.max_retries:
                 job.retry_count += 1
-                print(f"[IngestionQueue] Retrying job ({job.retry_count}/{job.max_retries})", flush=True)
+                logger.info(f"Retrying job ({job.retry_count}/{job.max_retries})")
                 await self._queue.put(job)
             else:
-                print(f"[IngestionQueue] Job failed after {job.max_retries} retries", flush=True)
+                logger.error(f"Job failed after {job.max_retries} retries")
 
 # 全局单例
 ingestion_queue = IngestionQueue.get_instance()

@@ -9,13 +9,16 @@ from typing import Optional
 
 from app.core.db import DatabaseManager
 from app.core.config import settings
+from app.core.logging import get_logger
+
+logger = get_logger("NeuralVault")
 
 # 心跳监控任务
 _heartbeat_task: Optional[asyncio.Task] = None
 
 async def startup_handler():
     """应用启动时的初始化"""
-    print("[NeuralVault Python Backend] Starting up...", flush=True)
+    logger.info("Starting up...")
     
     # 初始化数据库
     db_manager = await DatabaseManager.get_instance()
@@ -25,7 +28,7 @@ async def startup_handler():
         async with db_manager.engine.begin() as conn:
             await conn.execute("PRAGMA journal_mode=WAL")
             await conn.execute("PRAGMA synchronous=NORMAL")
-            print("[NeuralVault Python Backend] SQLite WAL mode enabled", flush=True)
+            logger.info("SQLite WAL mode enabled")
     
     # 初始化 VectorService（预加载 Embedding 模型）
     if settings.qdrant_path:
@@ -52,12 +55,12 @@ async def startup_handler():
     global _heartbeat_task
     _heartbeat_task = asyncio.create_task(monitor_parent_process())
     
-    print("[NeuralVault Python Backend] Startup complete", flush=True)
+    logger.info("Startup complete")
 
 
 async def shutdown_handler():
     """应用关闭时的清理"""
-    print("[NeuralVault Python Backend] Shutting down...", flush=True)
+    logger.info("Shutting down...")
     
     # 停止心跳监控
     global _heartbeat_task
@@ -76,7 +79,7 @@ async def shutdown_handler():
     db_manager = await DatabaseManager.get_instance()
     await db_manager.close()
     
-    print("[NeuralVault Python Backend] Shutdown complete", flush=True)
+    logger.info("Shutdown complete")
 
 
 async def monitor_parent_process():
@@ -84,7 +87,7 @@ async def monitor_parent_process():
     监控父进程（Tauri）是否存活
     通过监听 stdin，如果 stdin 关闭（父进程退出），则自动退出
     """
-    print("[NeuralVault Python Backend] Heartbeat monitor started", flush=True)
+    logger.info("Heartbeat monitor started")
     
     try:
         loop = asyncio.get_event_loop() #获取当前运行的事件循环实例
@@ -107,7 +110,7 @@ async def monitor_parent_process():
                 
                 if not line:
                     # stdin 已关闭，父进程已退出
-                    print("[NeuralVault Python Backend] Parent process exited, shutting down...", flush=True)
+                    logger.warning("Parent process exited, shutting down...")
 
                     # 1. 获取当前进程 ID
                     pid = os.getpid()
@@ -122,5 +125,5 @@ async def monitor_parent_process():
                 continue
                 
     except Exception as e:
-        print(f"[NeuralVault Python Backend] Heartbeat monitor error: {e}", flush=True)
+        logger.error(f"Heartbeat monitor error: {e}")
         sys.exit(1)
