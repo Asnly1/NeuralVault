@@ -79,18 +79,22 @@ async def _process_resource_ingestion(
             await progress_callback(resource_id, ProcessingStage.chunking, 10)
             
             # 2. Parse: 获取文本内容
-            text_content: Optional[str] = None
+            # 合并 content（用户输入的文本）和 file_path（文件解析的文本）
+            text_parts: list[str] = []
             
+            # 2a. 如果有用户输入的文本内容，添加到列表
             if resource.content:
-                # 如果已有 content（如文本资源），直接使用
-                text_content = resource.content
-            elif resource.file_path:
-                # 否则解析文件
+                text_parts.append(resource.content)
+            
+            # 2b. 如果有文件，解析并添加到列表
+            if resource.file_path:
                 try:
-                    text_content = await file_service.parse_file(
+                    file_text = await file_service.parse_file(
                         resource.file_path, 
                         resource.file_type
                     )
+                    if file_text and file_text.strip():
+                        text_parts.append(file_text)
                 except NotImplementedError as e:
                     logger.warning(f"Unsupported file type: {e}")
                     resource.sync_status = SyncStatus.error
@@ -103,6 +107,9 @@ async def _process_resource_ingestion(
                     resource.last_error = str(e)
                     await session.commit()
                     return
+            
+            # 合并所有文本部分
+            text_content: Optional[str] = "\n\n".join(text_parts) if text_parts else None
             
             if not text_content or not text_content.strip():
                 logger.info(f"No content to process for resource: {resource_id}")
