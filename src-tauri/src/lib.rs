@@ -8,7 +8,7 @@ mod window;
 use std::fs;
 use std::sync::Arc;
 
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 pub use app_state::AppState;
 pub use commands::{
@@ -60,17 +60,38 @@ pub fn run() {
             // 每次 Arc 离开作用域被 drop，原子计数器 -1。
             // 当计数器归零时，底层数据被物理释放。
 
+            // 启动 Python 进程（非阻塞）
             python_sidecar.start(app)?;
             
-            // 等待 Python 后端健康检查通过
-            println!("[Tauri] Waiting for Python backend to be ready...");
-            tauri::async_runtime::block_on(python_sidecar.wait_for_health(20))?;
-            println!("[Tauri] Python backend is ready");
-            
             // 初始化好的 AppState（包含数据库连接池和 Python sidecar）注入到 Tauri 的全局管理器中
+            // 注意：此时不等待 Python 健康检查，让 UI 先显示
             app.manage(AppState { 
                 db: pool,
                 python: python_sidecar.clone(),
+            });
+            
+            // 在后台等待 Python 就绪（不阻塞 UI 显示）
+            let python_for_health = python_sidecar.clone();
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                println!("[Tauri] Waiting for Python backend in background...");
+                match python_for_health.wait_for_health(20).await {
+                    Ok(_) => {
+                        println!("[Tauri] Python backend is ready");
+                        // 通知前端 Python 已就绪
+                        let _ = app_handle.emit("python-status", serde_json::json!({
+                            "status": "ready"
+                        }));
+                    }
+                    Err(e) => {
+                        eprintln!("[Tauri] Python backend failed to start: {}", e);
+                        // 通知前端 Python 启动失败
+                        let _ = app_handle.emit("python-status", serde_json::json!({
+                            "status": "error",
+                            "message": e.to_string()
+                        }));
+                    }
+                }
             });
 
             // ========== HUD 窗口设置 ==========

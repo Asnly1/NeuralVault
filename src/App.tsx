@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { z } from "zod";
+import { listen } from "@tauri-apps/api/event";
 import "./App.css";
 
 import { Task, Resource, PageType } from "./types";
@@ -61,6 +62,24 @@ function App() {
 
   // WebSocket progress for resource processing
   const { progressMap } = useWebSocket();
+
+  // Python backend status
+  const [pythonError, setPythonError] = useState<string | null>(null);
+
+  // Listen for Python backend status events
+  useEffect(() => {
+    const unlisten = listen<{ status: string; message?: string }>("python-status", (event) => {
+      if (event.payload.status === "error") {
+        setPythonError(event.payload.message || "Python 后端启动失败");
+      } else if (event.payload.status === "ready") {
+        setPythonError(null);
+      }
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
 
   // Apply theme class to document
   useEffect(() => {
@@ -253,7 +272,19 @@ function App() {
         onWidthChange={handleSidebarWidthChange}
       />
 
-      <main className="flex-1 min-w-0 overflow-hidden">
+      <main className="flex-1 min-w-0 overflow-hidden flex flex-col">
+        {/* Python 后端错误提示 */}
+        {pythonError && (
+          <div className="bg-red-500/90 text-white px-4 py-2 flex items-center justify-between text-sm">
+            <span>⚠️ AI 功能暂不可用: {pythonError}</span>
+            <button 
+              onClick={() => setPythonError(null)}
+              className="ml-4 hover:bg-red-600/50 px-2 py-1 rounded"
+            >
+              ✕
+            </button>
+          </div>
+        )}
         {currentPage === "dashboard" && (
           <DashboardPage
             tasks={tasks}
