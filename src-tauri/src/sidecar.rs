@@ -4,6 +4,10 @@ use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{App, AppHandle, Emitter, Manager};
+
+// Unix 进程组支持
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
 use futures_util::StreamExt;
 
 /// 编译时获取项目根目录（Cargo.toml 所在目录）
@@ -104,8 +108,8 @@ impl PythonSidecar {
             println!("[Sidecar] Starting Python in development mode from {:?}", python_dir);
             println!("[Sidecar] Using dynamically allocated port: {}", port);
             
-            let child = Command::new("uv")
-                .args(&[
+            let mut cmd = Command::new("uv");
+            cmd.args(&[
                     "run",
                     "python",
                     "-m",
@@ -118,11 +122,18 @@ impl PythonSidecar {
                 .current_dir(python_dir)
                 .stdin(Stdio::piped()) // 把 Python 的输入管子接到了这个 Child 结构体里
                 .stdout(Stdio::inherit())
-                .stderr(Stdio::inherit())
-                .spawn()
+                .stderr(Stdio::inherit());
+            
+            // Unix: 创建新的进程组，这样可以一次性杀掉整个进程树
+            // process_group(0) 让子进程成为新进程组的 leader
+            // 只有在目标平台是 Unix 系列（Linux / macOS / BSD 等）时，这段代码才会被编译
+            #[cfg(unix)]
+            cmd.process_group(0);
+            
+            let child = cmd.spawn()
                 .map_err(|e| format!("Failed to spawn Python process: {}", e))?;
             
-            println!("[Sidecar] Python process spawned with PID: {:?}", child.id());
+            println!("[Sidecar] Python process spawned with PID: {:?} (as process group leader)", child.id());
             
             *self.process.lock().unwrap() = Some(child);
         }
@@ -229,8 +240,24 @@ impl PythonSidecar {
                 if child.try_wait().unwrap_or(None).is_none() {
                     // unwarp_or: 如果是 Ok，就拿出里面的东西；如果是 Err，就给我个默认值 None
                     // None的情况： 进程还活着 / 检查出错
-                    println!("[Sidecar] Force killing Python process");
-                    let _ = child.kill();
+                    println!("[Sidecar] Force killing Python process group");
+                    
+                    // Unix: 杀掉整个进程组（使用负的 PID）
+                    #[cfg(unix)]
+                    {
+                        let pid = child.id();
+                        // kill(-pid, SIGTERM) 会杀掉整个进程组
+                        // 这确保 uv 和其子进程 python 都会被终止
+                        unsafe {
+                            libc::kill(-(pid as i32), libc::SIGTERM);
+                        }
+                    }
+                    
+                    // 非 Unix 或作为备选方案
+                    #[cfg(not(unix))]
+                    {
+                        let _ = child.kill();
+                    }
 
                     // 把"收尸"工作扔到后台线程去做，不要卡住当前的 async 任务
                     tokio::task::spawn_blocking(move || {
@@ -364,10 +391,24 @@ impl PythonSidecar {
 impl Drop for PythonSidecar {
     //析构函数, 当 PythonSidecar 实例被销毁时调用
     fn drop(&mut self) {
-        println!("[Sidecar] Dropping PythonSidecar, killing process if still running");
+        println!("[Sidecar] Dropping PythonSidecar, killing process group if still running");
         if let Ok(mut process) = self.process.lock() {
             if let Some(mut child) = process.take() {
-                let _ = child.kill();
+                // Unix: 杀掉整个进程组
+                #[cfg(unix)]
+                {
+                    let pid = child.id();
+                    unsafe {
+                        libc::kill(-(pid as i32), libc::SIGTERM);
+                    }
+                }
+                
+                // 非 Unix: 使用标准 kill
+                #[cfg(not(unix))]
+                {
+                    let _ = child.kill();
+                }
+                
                 let _ = child.wait(); // 阻塞当前线程，直到子进程彻底从操作系统中消失
                 // 仅仅 kill 是不够的。在 Linux/Unix 系统中，子进程死后会变成僵尸进程 (Zombie Process)，保留在进程表中，等待父进程来"收尸"（读取它的退出码）。
                 // wait() 就是这个"收尸"的操作。如果不做这一步，你的 Python 进程虽然不跑了，但在任务管理器里可能还会看到一个 <defunct> 的条目占用着 PID
