@@ -15,8 +15,7 @@ src-python/
 │ │ └── websocket.py # 负责向前端推送 AI 处理进度
 │ │
 │ ├── models/ # 数据模型 (与 database.sql 对应)
-│ │ ├── sql_models.py # SQLModel
-│ │ └── dto.py # 前后端交互的数据传输对象
+│ │ └── sql_models.py # SQLModel
 │ │
 │ ├── services/ # 业务逻辑层 (核心大脑)
 │ │ ├── file_service.py # 文件解析 (PDF/Image/Epub) -> Text
