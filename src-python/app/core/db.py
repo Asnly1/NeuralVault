@@ -38,8 +38,17 @@ class DatabaseManager:
         """初始化数据库连接"""
         # 初始化 SQLite
         if settings.database_url:
-            # 确保使用 aiosqlite
-            db_url = settings.database_url.replace("sqlite://", "sqlite+aiosqlite://")
+            db_path = settings.database_url
+            
+            # 处理 URL 格式：如果是原始文件路径，转换为 SQLAlchemy URL
+            if db_path.startswith("sqlite"):
+                # 已经是 URL 格式，确保使用 aiosqlite
+                db_url = db_path.replace("sqlite://", "sqlite+aiosqlite://")
+            else:
+                # 原始文件路径，转换为 URL 格式
+                # SQLAlchemy 需要 sqlite+aiosqlite:///path/to/db (注意三个斜杠)
+                db_url = f"sqlite+aiosqlite:///{db_path}"
+            
             # 应用程序与数据库之间的底层物理连接管理器
             # 它负责建立和维护到底层数据库文件的连接
             # 它将 Python 的指令翻译成数据库能听懂的 SQL 语言

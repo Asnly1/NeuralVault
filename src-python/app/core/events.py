@@ -25,9 +25,10 @@ async def startup_handler():
     
     # 开启 WAL 模式
     if db_manager.engine:
+        from sqlalchemy import text
         async with db_manager.engine.begin() as conn:
-            await conn.execute("PRAGMA journal_mode=WAL")
-            await conn.execute("PRAGMA synchronous=NORMAL")
+            await conn.execute(text("PRAGMA journal_mode=WAL"))
+            await conn.execute(text("PRAGMA synchronous=NORMAL"))
             logger.info("SQLite WAL mode enabled")
     
     # 初始化 VectorService（预加载 Embedding 模型）

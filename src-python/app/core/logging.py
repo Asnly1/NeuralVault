@@ -19,7 +19,7 @@ def setup_logging(level: int = logging.INFO) -> None:
         # asctime: 根据 datefmt 指定的格式输出时间
         # name: logger 的名称
         # message: 日志消息
-        fmt="%(asctime)s [%(name)s] %(message)s"
+        fmt="%(asctime)s [%(name)s] %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S"
     )
     
