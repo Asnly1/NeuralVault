@@ -18,7 +18,7 @@ pub use commands::{
     mark_task_as_done_command, mark_task_as_todo_command, update_task_priority_command,
     update_task_due_date_command, update_task_title_command, update_task_description_command,
     get_tasks_by_date, get_all_tasks, update_resource_content_command, update_resource_display_name_command,
-    check_python_health, is_python_running,
+    check_python_health, is_python_running, get_python_port,
 };
 pub use sidecar::PythonSidecar;
 pub use window::{hide_hud, toggle_hud};
@@ -113,7 +113,8 @@ pub fn run() {
             update_resource_content_command,
             update_resource_display_name_command,
             check_python_health,
-            is_python_running
+            is_python_running,
+            get_python_port
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {

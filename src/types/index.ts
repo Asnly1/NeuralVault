@@ -204,3 +204,24 @@ export type ClipboardContent =
 export interface ReadClipboardResponse {
   content: ClipboardContent;
 }
+
+// ============================================
+// WebSocket Progress Types (对应 Python: WebSocketMessage)
+// ============================================
+
+/**
+ * 资源处理阶段
+ */
+export const processingStageValues = ["todo", "chunking", "embedding", "done"] as const;
+export type ProcessingStage = (typeof processingStageValues)[number];
+
+/**
+ * WebSocket 进度消息 (对应 Python: WebSocketMessage)
+ */
+export interface WebSocketProgress {
+  resource_id: number;
+  event: "ingest" | "decompose" | "tag" | "report";
+  status: ProcessingStage;
+  percentage?: number;
+  error?: string;
+}

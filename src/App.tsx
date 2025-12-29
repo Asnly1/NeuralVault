@@ -10,6 +10,7 @@ import {
   linkResource,
   fetchAllTasks,
 } from "./api";
+import { useWebSocket } from "./hooks/useWebSocket";
 import { Sidebar } from "./components";
 import { DashboardPage, WorkspacePage, CalendarPage, SettingsPage } from "./pages";
 
@@ -57,6 +58,9 @@ function App() {
     const saved = localStorage.getItem("neuralvault_sidebar_width");
     return saved ? parseInt(saved, 10) : 240;
   });
+
+  // WebSocket progress for resource processing
+  const { progressMap } = useWebSocket();
 
   // Apply theme class to document
   useEffect(() => {
@@ -262,6 +266,7 @@ function App() {
             onSelectTask={handleSelectTask}
             onSelectResource={handleSelectResource}
             onLinkResource={handleLinkResource}
+            progressMap={progressMap}
           />
         )}
 

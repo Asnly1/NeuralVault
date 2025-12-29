@@ -18,9 +18,10 @@ import {
   Paperclip,
   CheckCircle2,
   Circle,
-  Trash2
+  Trash2,
+  Loader2
 } from "lucide-react";
-import { Resource, Task, ResourceType } from "../types";
+import { Resource, Task, ResourceType, WebSocketProgress, ProcessingStage } from "../types";
 
 interface ResourceCardProps {
   resource: Resource;
@@ -28,6 +29,7 @@ interface ResourceCardProps {
   onLinkToTask?: (resourceId: number, taskId: number) => Promise<void>;
   onDelete?: (resourceId: number) => Promise<void>;
   onClick?: (resource: Resource) => void;
+  progress?: WebSocketProgress;
 }
 
 const iconMap: Record<ResourceType, React.ReactNode> = {
@@ -39,12 +41,21 @@ const iconMap: Record<ResourceType, React.ReactNode> = {
   other: <Paperclip className="h-4 w-4 text-gray-500" />,
 };
 
+// Processing stage display config
+const stageConfig: Record<ProcessingStage, { label: string; color: string }> = {
+  todo: { label: "待处理", color: "text-muted-foreground" },
+  chunking: { label: "分块中", color: "text-blue-500" },
+  embedding: { label: "向量化", color: "text-purple-500" },
+  done: { label: "已完成", color: "text-green-500" },
+};
+
 export function ResourceCard({
   resource,
   tasks = [],
   onLinkToTask,
   onDelete,
   onClick,
+  progress,
 }: ResourceCardProps) {
   const [linking, setLinking] = useState(false);
 
@@ -58,6 +69,10 @@ export function ResourceCard({
       }
     }
   };
+
+  // Check if currently processing (not todo and not done)
+  const isProcessing = progress && (progress.status === "chunking" || progress.status === "embedding");
+  const stageInfo = progress ? stageConfig[progress.status] : null;
 
   return (
     <Card 
@@ -75,11 +90,25 @@ export function ResourceCard({
           <h4 className="text-sm font-medium truncate text-foreground/90 group-hover:text-foreground transition-colors">
             {resource.display_name || "Untitled"}
           </h4>
-          {resource.created_at && (
-            <span className="text-[10px] text-muted-foreground/60 group-hover:text-muted-foreground/80 transition-colors">
-              {resource.created_at.toLocaleDateString("zh-CN")}
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {resource.created_at && (
+              <span className="text-[10px] text-muted-foreground/60 group-hover:text-muted-foreground/80 transition-colors">
+                {resource.created_at.toLocaleDateString("zh-CN")}
+              </span>
+            )}
+            {/* Progress indicator */}
+            {stageInfo && progress?.status !== "done" && (
+              <span className={`flex items-center gap-1 text-[10px] ${stageInfo.color}`}>
+                {isProcessing && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
+                {stageInfo.label}
+                {progress?.percentage !== undefined && progress.percentage > 0 && (
+                  <span className="text-[9px] opacity-75">
+                    {progress.percentage}%
+                  </span>
+                )}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Actions Group */}
@@ -140,3 +169,4 @@ export function ResourceCard({
     </Card>
   );
 }
+

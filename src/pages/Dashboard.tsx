@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 
 import { Sparkles, CheckCircle2, LayoutGrid, Plus } from "lucide-react";
 
-import { Task, Resource } from "../types";
+import { Task, Resource, WebSocketProgress } from "../types";
 import { TaskCard } from "../components/TaskCard";
 import { ResourceCard } from "../components/ResourceCard";
 import { QuickCapture } from "../components/QuickCapture";
@@ -25,6 +25,7 @@ interface DashboardPageProps {
   onSelectTask: (task: Task) => void;
   onSelectResource: (resource: Resource) => void;
   onLinkResource: (resourceId: number, taskId: number) => Promise<void>;
+  progressMap?: Map<number, WebSocketProgress>;
 }
 
 export function DashboardPage({
@@ -37,6 +38,7 @@ export function DashboardPage({
   onSelectTask,
   onSelectResource,
   onLinkResource,
+  progressMap,
 }: DashboardPageProps) {
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const [completedDialogOpen, setCompletedDialogOpen] = useState(false);
@@ -213,6 +215,7 @@ export function DashboardPage({
               resource={res}
               tasks={activeTasks} // pass tasks for linking
               onClick={onSelectResource}
+              progress={progressMap?.get(res.resource_id)}
               onLinkToTask={async (resourceId, taskId) => {
                 await onLinkResource(resourceId, taskId);
               }}
