@@ -26,7 +26,7 @@
 
 2.  **轻量级 Embedding 方案**
     * **关键动作**：安装 `fastembed` (基于 ONNX Runtime)。 （已完成）
-    * **集成**：不使用 PyTorch。配置 LlamaIndex 使用 `FastEmbedEmbedding`。使用 BAAI/bge-m3（TODO）
+    * **集成**：不使用 PyTorch。配置 LlamaIndex 使用 `FastEmbedEmbedding`。Dense模型让用户选择使用 BAAI/bge-small-zh-v1.5(Vector Size: 512) 或 BAAI/bge-large-en-v1.5(Vector Size: 1024)。Sparse模型使用Qdrant/bm42-all-minilm-l6-v2-attentions 
 
 3.  **实现 `/ingest/notify` (异步处理)**
     * **接收**：FastAPI 接收 Rust 发来的 `resource_id`。
