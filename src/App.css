@@ -239,6 +239,64 @@ body,
 
 .PdfHighlighter {
   @apply relative h-full overflow-auto;
+  background-color: hsl(var(--background)) !important;
+}
+
+/* PDF 滚动条透明样式 - 使用 !important 覆盖库的默认样式 */
+.pdf-viewer-wrapper ::-webkit-scrollbar,
+.pdf-viewer-wrapper *::-webkit-scrollbar,
+.PdfHighlighter::-webkit-scrollbar,
+.PdfHighlighter *::-webkit-scrollbar {
+  width: 8px !important;
+  height: 6px !important;
+  background: transparent !important;
+}
+
+.pdf-viewer-wrapper ::-webkit-scrollbar-track,
+.pdf-viewer-wrapper *::-webkit-scrollbar-track,
+.PdfHighlighter::-webkit-scrollbar-track,
+.PdfHighlighter *::-webkit-scrollbar-track {
+  background: transparent !important;
+  border-radius: 0 !important;
+}
+
+.pdf-viewer-wrapper ::-webkit-scrollbar-track-piece,
+.pdf-viewer-wrapper *::-webkit-scrollbar-track-piece,
+.PdfHighlighter::-webkit-scrollbar-track-piece,
+.PdfHighlighter *::-webkit-scrollbar-track-piece {
+  background: transparent !important;
+}
+
+.pdf-viewer-wrapper ::-webkit-scrollbar-thumb,
+.pdf-viewer-wrapper *::-webkit-scrollbar-thumb,
+.PdfHighlighter::-webkit-scrollbar-thumb,
+.PdfHighlighter *::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.4) !important;
+  border-radius: 3px !important;
+  border: none !important;
+}
+
+.pdf-viewer-wrapper ::-webkit-scrollbar-thumb:hover,
+.pdf-viewer-wrapper *::-webkit-scrollbar-thumb:hover,
+.PdfHighlighter::-webkit-scrollbar-thumb:hover,
+.PdfHighlighter *::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.6) !important;
+}
+
+.pdf-viewer-wrapper ::-webkit-scrollbar-corner,
+.pdf-viewer-wrapper *::-webkit-scrollbar-corner,
+.PdfHighlighter::-webkit-scrollbar-corner,
+.PdfHighlighter *::-webkit-scrollbar-corner {
+  background: transparent !important;
+}
+
+/* Firefox 滚动条样式 */
+.pdf-viewer-wrapper,
+.pdf-viewer-wrapper *,
+.PdfHighlighter,
+.PdfHighlighter * {
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(128, 128, 128, 0.3) transparent !important;
 }
 
 .PdfHighlighter__page-container {

@@ -589,21 +589,24 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
         <aside
           style={{ width: `${tempLeftWidth !== null ? tempLeftWidth : leftPanelWidth}px` }}
           className={cn(
-            "border-r flex flex-col shrink-0 relative",
+            "border-r flex flex-col shrink-0 relative overflow-hidden",
             !isResizingLeft && "transition-all duration-300"
           )}
         >
           <ScrollArea className="flex-1">
-            <div className="p-4 space-y-6">
+            <div 
+              className="p-4 space-y-6"
+              style={{ maxWidth: `${tempLeftWidth !== null ? tempLeftWidth : leftPanelWidth}px`, boxSizing: 'border-box' }}
+            >
               {isResourceMode ? (
                 /* 资源模式：显示资源详情 */
                 <div>
                   <h3 className="text-sm font-semibold mb-3">资源详情</h3>
                   <Card>
                     <CardContent className="p-3 space-y-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-2xl">{resourceTypeIcons[propSelectedResource!.file_type]}</span>
-                        <h4 className="font-medium">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-2xl shrink-0">{resourceTypeIcons[propSelectedResource!.file_type]}</span>
+                        <h4 className="font-medium truncate">
                           {propSelectedResource!.display_name || "未命名资源"}
                         </h4>
                       </div>
@@ -622,7 +625,7 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
                         </p>
                       )}
                       {propSelectedResource!.file_path && (
-                        <p className="text-xs text-muted-foreground truncate" title={propSelectedResource!.file_path}>
+                        <p className="text-xs text-muted-foreground break-all" title={propSelectedResource!.file_path}>
                           路径: {propSelectedResource!.file_path}
                         </p>
                       )}
@@ -803,8 +806,12 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
               </Button>
             )}
           </div>
-          {/* Editor Content */}
-          <div className="flex-1 p-4 overflow-auto">{renderEditorArea()}</div>
+          {/* Editor Content - PDF/Image 不需要 padding */}
+          <div className={cn(
+            "flex-1 overflow-auto",
+            // 仅对 text 和其他类型添加 padding，PDF 和 image 全屏显示
+            selectedResource?.file_type !== "pdf" && selectedResource?.file_type !== "image" && "p-4"
+          )}>{renderEditorArea()}</div>
         </main>
 
         {/* Right: Chat Panel */}

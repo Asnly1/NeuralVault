@@ -192,27 +192,20 @@ export function PDFViewer({ url, displayName }: PDFViewerProps) {
         )}
       </PdfLoader>
 
-      {/* 顶部工具栏 */}
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex gap-2 bg-background/95 backdrop-blur-sm border rounded-lg p-2 shadow-lg">
-        <div className="flex items-center gap-2 px-2">
-          <span className="text-sm font-medium">
-            {displayName || "PDF 文档"}
-          </span>
-          {highlights.length > 0 && (
+      {/* 顶部工具栏 - 仅在有高亮时显示 */}
+      {highlights.length > 0 && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex gap-2 bg-background/95 backdrop-blur-sm border rounded-lg p-2 shadow-lg">
+          <div className="flex items-center gap-2 px-2">
             <Badge variant="secondary" className="text-xs">
               {highlights.length} 个高亮
             </Badge>
-          )}
+          </div>
+          <div className="h-6 w-px bg-border" />
+          <Button size="sm" variant="ghost" onClick={() => setHighlights([])}>
+            清除高亮
+          </Button>
         </div>
-        {highlights.length > 0 && (
-          <>
-            <div className="h-6 w-px bg-border" />
-            <Button size="sm" variant="ghost" onClick={() => setHighlights([])}>
-              清除高亮
-            </Button>
-          </>
-        )}
-      </div>
+      )}
 
       {/* 底部提示 */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 bg-background/80 backdrop-blur-sm border rounded-lg px-3 py-1.5 text-xs text-muted-foreground">
