@@ -512,11 +512,30 @@ pub async fn update_resource_display_name(
 
 Python 后端通知，使用动态端口与 Python 后端通信。
 
+**枚举类型**：
+
+| 枚举类型 | 可选值 | 说明 |
+| --- | --- | --- |
+| `NotifySource` | Resource/Task | 通知的来源类型 |
+| `NotifyAction` | Created/Updated/Deleted | 通知的动作类型 |
+
 **函数**：
 
-- `notify_python(base_url: &str, resource_uuid: String)`: 异步通知 Python 后端处理资源
+- `notify_python(base_url: &str, source: NotifySource, id: i64, action: NotifyAction)`: 异步通知 Python 后端处理资源或任务
   - `base_url`: 从 `PythonSidecar.get_base_url()` 获取的动态 URL
-  - `resource_uuid`: 需要处理的资源 UUID
+  - `source`: 通知类型（Resource 或 Task）
+  - `id`: 资源或任务的 ID
+  - `action`: 动作类型（Created, Updated, Deleted）
+
+**请求格式**（匹配 Python 的 `IngestNotifyRequest`）：
+
+```json
+{
+  "source_type": "resource",
+  "id": 123,
+  "action": "created"
+}
+```
 
 ---
 
