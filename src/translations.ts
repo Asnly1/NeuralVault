@@ -81,6 +81,9 @@ export const translations = {
       editorPlaceholderDesc: "从左侧选择一个资源开始查看或编辑",
       aiGreeting: "你好！我可以帮你分析和处理这个任务相关的内容。",
       resourceBreadcrumb: "资源",
+      editText: "编辑文本",
+      viewFile: "查看文件",
+      attachedText: "附带文本",
     },
   },
   en: {
@@ -163,6 +166,9 @@ export const translations = {
       editorPlaceholderDesc: "Select a resource from the left to view or edit",
       aiGreeting: "Hello! I can help you analyze and process content related to this task.",
       resourceBreadcrumb: "Resource",
+      editText: "Edit Text",
+      viewFile: "View File",
+      attachedText: "Attached Text",
     },
   },
 };

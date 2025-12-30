@@ -50,6 +50,7 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedDisplayName, setEditedDisplayName] = useState("");
+  const [viewMode, setViewMode] = useState<'file' | 'text'>('file');
 
   // Panel resize state
   const [leftPanelWidth, setLeftPanelWidth] = useState(() => {
@@ -69,6 +70,16 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
 
   // 检测模式：资源模式（直接从资源进入）或任务模式（从任务进入）
   const isResourceMode = !selectedTask && propSelectedResource;
+
+  // 当前实际显示的资源（资源模式用 propSelectedResource，任务模式用 selectedResource）
+  const currentResource = isResourceMode ? propSelectedResource : selectedResource;
+
+  // 判断是否同时有文本和文件
+  const hasTextAndFile = !!(
+    currentResource?.content?.trim() &&
+    currentResource?.file_path &&
+    currentResource?.file_type !== 'text'
+  );
 
   // Load assets path on mount
   useEffect(() => {
@@ -129,26 +140,33 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
     };
   }, [selectedTask, isResourceMode]);
 
-  // Load resource content to editor
+  // 统一加载资源内容到编辑器
   useEffect(() => {
-    if (selectedResource) {
-      if (selectedResource.file_type === "text") {
-        setEditorContent(selectedResource.content || "");
-        setIsModified(false);
-      } else {
-        setEditorContent("");
-        setIsModified(false);
-      }
-      // 初始化编辑的显示名称
-      setEditedDisplayName(selectedResource.display_name || "");
+    // 确定当前要加载的资源（资源模式用 propSelectedResource，任务模式用 selectedResource）
+    const resourceToLoad = isResourceMode ? propSelectedResource : selectedResource;
+
+    if (resourceToLoad) {
+      // 加载资源内容
+      setEditorContent(resourceToLoad.content || "");
+      setIsModified(false);
+      setEditedDisplayName(resourceToLoad.display_name || "");
       setIsEditingName(false);
+
+      // 设置视图模式：纯文本资源强制 text 模式，其他默认 file 模式
+      if (resourceToLoad.file_type === "text") {
+        setViewMode('text');
+      } else {
+        setViewMode('file');
+      }
     } else {
+      // 清空状态
       setEditorContent("");
       setIsModified(false);
       setEditedDisplayName("");
       setIsEditingName(false);
+      setViewMode('file');
     }
-  }, [selectedResource]);
+  }, [isResourceMode, propSelectedResource, selectedResource]);
 
   const handleResourceClick = useCallback((resource: Resource) => {
     setSelectedResource(resource);
@@ -163,12 +181,14 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
 
   // 保存资源内容和显示名称
   const handleSave = useCallback(async () => {
-    if (!selectedResource || isSaving) return;
-    
+    // 使用 currentResource 统一处理资源模式和任务模式
+    const resourceToSave = isResourceMode ? propSelectedResource : selectedResource;
+    if (!resourceToSave || isSaving) return;
+
     // 检查是否有任何修改
     const hasContentChange = isModified;
-    const hasNameChange = editedDisplayName !== (selectedResource.display_name || "");
-    
+    const hasNameChange = editedDisplayName !== (resourceToSave.display_name || "");
+
     if (!hasContentChange && !hasNameChange) return;
 
     setIsSaving(true);
@@ -178,19 +198,19 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
     try {
       // 分别调用两个独立的 API 函数
       if (hasContentChange) {
-        await updateResourceContent(selectedResource.resource_id, editorContent);
+        await updateResourceContent(resourceToSave.resource_id, editorContent);
       }
       if (hasNameChange) {
-        await updateResourceDisplayName(selectedResource.resource_id, editedDisplayName);
+        await updateResourceDisplayName(resourceToSave.resource_id, editedDisplayName);
       }
-      
+
       setIsModified(false);
       setIsEditingName(false);
       setSaveSuccess(true);
 
       // 更新本地资源对象的 display_name
       if (hasNameChange) {
-        selectedResource.display_name = editedDisplayName;
+        resourceToSave.display_name = editedDisplayName;
       }
 
       // 3秒后清除保存成功提示
@@ -203,7 +223,7 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
     } finally {
       setIsSaving(false);
     }
-  }, [selectedResource, isModified, isSaving, editorContent, editedDisplayName]);
+  }, [isResourceMode, propSelectedResource, selectedResource, isModified, isSaving, editorContent, editedDisplayName]);
 
   // 处理删除资源（取消关联）
   const handleDeleteResource = useCallback(
@@ -325,7 +345,10 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
 
 
   const renderEditorArea = () => {
-    if (!selectedResource) {
+    // 使用 currentResource 统一处理资源模式和任务模式
+    const resource = currentResource;
+
+    if (!resource) {
       return (
         <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
           <span className="text-4xl mb-4">✎</span>
@@ -335,7 +358,8 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
       );
     }
 
-    if (selectedResource.file_type === "text") {
+    // 新增：如果是"编辑文本"模式且有内容，显示 TiptapEditor（用于非 text 类型资源的文本编辑）
+    if (viewMode === 'text' && resource.file_type !== 'text' && resource.content) {
       return (
         <TiptapEditor
           content={editorContent}
@@ -346,9 +370,20 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
       );
     }
 
-    if (selectedResource.file_type === "pdf") {
+    if (resource.file_type === "text") {
+      return (
+        <TiptapEditor
+          content={editorContent}
+          onChange={handleEditorChange}
+          editable={true}
+          placeholder="开始输入内容..."
+        />
+      );
+    }
+
+    if (resource.file_type === "pdf") {
       // 获取 PDF 路径并转换为 Tauri 可访问的 URL
-      const pdfPath = selectedResource.file_path;
+      const pdfPath = resource.file_path;
       if (!pdfPath || !assetsPath) {
         return (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
@@ -381,15 +416,15 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
         >
           <PDFViewer
             url={pdfUrl}
-            displayName={selectedResource.display_name || "PDF 文档"}
+            displayName={resource.display_name || "PDF 文档"}
           />
         </Suspense>
       );
     }
 
-    if (selectedResource.file_type === "image") {
+    if (resource.file_type === "image") {
       // 获取图片路径并转换为 Tauri 可访问的 URL
-      const imagePath = selectedResource.file_path;
+      const imagePath = resource.file_path;
       if (!imagePath || !assetsPath) {
         return (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
@@ -467,7 +502,7 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
                 >
                   <img
                     src={imageUrl}
-                    alt={selectedResource.display_name || "图片预览"}
+                    alt={resource.display_name || "图片预览"}
                     className="max-w-full max-h-full object-contain"
                     style={{ userSelect: "none" }}
                     onError={(e) => {
@@ -490,12 +525,12 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
       );
     }
 
-    if (selectedResource.file_type === "url") {
+    if (resource.file_type === "url") {
       return (
         <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
           <span className="text-4xl mb-4">🔗</span>
           <p className="text-lg font-medium">链接资源</p>
-          <p className="text-sm">{selectedResource.content || "无内容"}</p>
+          <p className="text-sm">{resource.content || "无内容"}</p>
         </div>
       );
     }
@@ -504,8 +539,8 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
         <span className="text-4xl mb-4">📎</span>
         <p className="text-lg font-medium">
-          {resourceTypeIcons[selectedResource.file_type]}{" "}
-          {selectedResource.display_name}
+          {resourceTypeIcons[resource.file_type]}{" "}
+          {resource.display_name}
         </p>
         <p className="text-sm">此类型文件暂不支持预览</p>
       </div>
@@ -631,6 +666,20 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
                       )}
                     </CardContent>
                   </Card>
+
+                  {/* 查看文件模式下显示附带文本（使用 editorContent 显示编辑后的内容） */}
+                  {viewMode === 'file' && editorContent?.trim() && (
+                    <div className="mt-4">
+                      <h3 className="text-sm font-semibold mb-3">{t("workspace", "attachedText")}</h3>
+                      <Card>
+                        <CardContent className="p-3 max-h-48 overflow-y-auto">
+                          <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words">
+                            {editorContent}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
                 </div>
               ) : (
                 /* 任务模式：显示任务详情+关联资源 */
@@ -730,6 +779,20 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
                       <p className="text-sm text-muted-foreground">暂无关联资源</p>
                     )}
                   </div>
+
+                  {/* 任务模式：查看文件模式下显示附带文本（显示 editorContent 以反映用户编辑） */}
+                  {viewMode === 'file' && editorContent?.trim() && (
+                    <div>
+                      <h3 className="text-sm font-semibold mb-3">{t("workspace", "attachedText")}</h3>
+                      <Card>
+                        <CardContent className="p-3 max-h-48 overflow-y-auto">
+                          <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words">
+                            {editorContent}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -751,19 +814,19 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
         <main className="flex-1 flex flex-col min-w-0">
           {/* Editor Toolbar */}
           <div className="flex items-center gap-2 px-4 py-2 border-b shrink-0">
-            {selectedResource ? (
+            {currentResource ? (
               isEditingName ? (
                 // 编辑模式：显示输入框
                 <>
                   <span className="text-sm">
-                    {resourceTypeIcons[selectedResource.file_type]}
+                    {resourceTypeIcons[currentResource.file_type]}
                   </span>
                   <Input
                     value={editedDisplayName}
                     onChange={(e) => setEditedDisplayName(e.target.value)}
                     onBlur={() => {
                       // 失焦时如果有修改则保存
-                      if (editedDisplayName !== (selectedResource.display_name || "")) {
+                      if (editedDisplayName !== (currentResource.display_name || "")) {
                         handleSave();
                       } else {
                         setIsEditingName(false);
@@ -773,7 +836,7 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
                       if (e.key === "Enter") {
                         e.currentTarget.blur(); // 触发保存
                       } else if (e.key === "Escape") {
-                        setEditedDisplayName(selectedResource.display_name || "");
+                        setEditedDisplayName(currentResource.display_name || "");
                         setIsEditingName(false);
                       }
                     }}
@@ -785,20 +848,41 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
                 // 查看模式：显示名称，点击编辑
                 <>
                   <span className="text-sm font-medium cursor-pointer hover:text-primary" onClick={() => setIsEditingName(true)} title="点击编辑名称">
-                    {resourceTypeIcons[selectedResource.file_type]}{" "}
-                    {selectedResource.display_name || "未命名"}
+                    {resourceTypeIcons[currentResource.file_type]}{" "}
+                    {currentResource.display_name || "未命名"}
                   </span>
+                  {/* 文本/文件切换按钮 */}
+                  {hasTextAndFile && (
+                    <div className="flex gap-1 ml-2 bg-muted rounded-md p-0.5">
+                      <Button
+                        variant={viewMode === 'text' ? 'secondary' : 'ghost'}
+                        size="sm"
+                        className="h-6 px-2 text-xs"
+                        onClick={() => setViewMode('text')}
+                      >
+                        {t("workspace", "editText")}
+                      </Button>
+                      <Button
+                        variant={viewMode === 'file' ? 'secondary' : 'ghost'}
+                        size="sm"
+                        className="h-6 px-2 text-xs"
+                        onClick={() => setViewMode('file')}
+                      >
+                        {t("workspace", "viewFile")}
+                      </Button>
+                    </div>
+                  )}
                 </>
               )
             ) : (
               <span className="text-sm font-medium">{t("workspace", "workspaceArea")}</span>
             )}
-            {selectedResource && selectedResource.file_type === "text" && (
+            {currentResource && (currentResource.file_type === "text" || viewMode === 'text') && (
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 ml-auto"
-                disabled={(!isModified && editedDisplayName === (selectedResource.display_name || "")) || isSaving}
+                disabled={(!isModified && editedDisplayName === (currentResource.display_name || "")) || isSaving}
                 onClick={handleSave}
                 title={isSaving ? "保存中..." : "保存 (Ctrl+S)"}
               >
@@ -806,11 +890,11 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
               </Button>
             )}
           </div>
-          {/* Editor Content - PDF/Image 不需要 padding */}
+          {/* Editor Content - PDF/Image 查看模式不需要 padding */}
           <div className={cn(
             "flex-1 overflow-auto",
-            // 仅对 text 和其他类型添加 padding，PDF 和 image 全屏显示
-            selectedResource?.file_type !== "pdf" && selectedResource?.file_type !== "image" && "p-4"
+            // 仅对 text 模式和其他类型添加 padding，PDF 和 image 查看模式全屏显示
+            (viewMode === 'text' || (currentResource?.file_type !== "pdf" && currentResource?.file_type !== "image")) && "p-4"
           )}>{renderEditorArea()}</div>
         </main>
 

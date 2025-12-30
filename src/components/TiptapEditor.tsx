@@ -19,7 +19,8 @@ export function TiptapEditor({
   placeholder = "开始输入...",
 }: TiptapEditorProps) {
   // 用于跟踪上一次的内容，避免无限循环
-  const lastContentRef = useRef<string>(content);
+  // 初始化为 null，确保首次渲染时会设置内容
+  const lastContentRef = useRef<string | null>(null);
 
   const editor = useEditor({
     extensions: [
