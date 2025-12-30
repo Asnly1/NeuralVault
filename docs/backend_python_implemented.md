@@ -4,7 +4,7 @@
 
 > **必须使用单进程模式 (workers=1)**
 > 
-> WebSocket、IngestionQueue、VectorService 均使用内存状态，多进程会导致状态不共享。
+> IngestionQueue、VectorService 均使用内存状态，多进程会导致状态不共享。
 
 ---
 
@@ -21,8 +21,7 @@ src-python/
 │   │   └── logging.py       # 日志配置
 │   │
 │   ├── api/
-│   │   ├── ingest.py        # /ingest 端点
-│   │   └── websocket.py     # /ws 端点
+│   │   └── ingest.py        # /ingest 端点
 │   │
 │   ├── models/
 │   │   └── sql_models.py    # SQLModel + API DTO
@@ -46,12 +45,7 @@ src-python/
 |------|------|------|
 | POST | `/ingest/notify` | Rust 通知数据变更，立即返回，后台处理 |
 | GET | `/ingest/status/{resource_id}` | 查询处理状态 |
-
-### /ws
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| WebSocket | `/ws/notifications` | 进度推送 |
+| GET | `/ingest/stream` | 向 Rust 推送进度 |
 
 ### 其他
 
@@ -69,7 +63,7 @@ src-python/
                                     ↓
                     Fetch → Parse → Chunk → Embed → Upsert
                                     ↓
-                            WebSocket 推送进度
+                            向 Rust 推送进度
 ```
 
 ---
