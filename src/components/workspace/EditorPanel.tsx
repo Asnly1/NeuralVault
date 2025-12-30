@@ -1,0 +1,332 @@
+import { lazy, Suspense } from "react";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
+import { Resource, resourceTypeIcons } from "@/types";
+import { TiptapEditor } from "@/components";
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { useLanguage } from "@/contexts/LanguageContext";
+
+// 懒加载 PDF 组件
+const PDFViewer = lazy(() =>
+  import("../PDFViewer").then((module) => ({
+    default: module.PDFViewer,
+  }))
+);
+
+interface EditorPanelProps {
+  currentResource: Resource | null;
+  editorContent: string;
+  viewMode: 'file' | 'text';
+  isEditingName: boolean;
+  editedDisplayName: string;
+  isModified: boolean;
+  isSaving: boolean;
+  assetsPath: string;
+  onEditorChange: (content: string) => void;
+  onSave: () => void;
+  onViewModeChange: (mode: 'file' | 'text') => void;
+  onEditingNameChange: (editing: boolean) => void;
+  onDisplayNameChange: (name: string) => void;
+}
+
+export function EditorPanel({
+  currentResource,
+  editorContent,
+  viewMode,
+  isEditingName,
+  editedDisplayName,
+  isModified,
+  isSaving,
+  assetsPath,
+  onEditorChange,
+  onSave,
+  onViewModeChange,
+  onEditingNameChange,
+  onDisplayNameChange,
+}: EditorPanelProps) {
+  // 判断是否是文件类型资源（可以切换查看模式）
+  const isFileResource = currentResource && currentResource.file_type !== 'text' && currentResource.file_path;
+  const { t } = useLanguage();
+
+  const renderEditorArea = () => {
+    if (!currentResource) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+          <span className="text-4xl mb-4">✎</span>
+          <p className="text-lg font-medium">{t("workspace", "editorPlaceholder")}</p>
+          <p className="text-sm">{t("workspace", "editorPlaceholderDesc")}</p>
+        </div>
+      );
+    }
+
+    // 如果是"编辑文本"模式，显示 TiptapEditor（用于非 text 类型资源的文本编辑，即使内容为空也可以添加）
+    if (viewMode === 'text' && currentResource.file_type !== 'text') {
+      return (
+        <TiptapEditor
+          content={editorContent}
+          onChange={onEditorChange}
+          editable={true}
+          placeholder="添加笔记或备注..."
+        />
+      );
+    }
+
+    if (currentResource.file_type === "text") {
+      return (
+        <TiptapEditor
+          content={editorContent}
+          onChange={onEditorChange}
+          editable={true}
+          placeholder="开始输入内容..."
+        />
+      );
+    }
+
+    if (currentResource.file_type === "pdf") {
+      const pdfPath = currentResource.file_path;
+      if (!pdfPath || !assetsPath) {
+        return (
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+            <span className="text-4xl mb-4">⚠️</span>
+            <p className="text-lg font-medium">
+              {!pdfPath ? "PDF 路径缺失" : "正在加载..."}
+            </p>
+          </div>
+        );
+      }
+
+      const fileName = pdfPath.replace("assets/", "");
+      const fullPath = `${assetsPath}/${fileName}`;
+      const pdfUrl = convertFileSrc(fullPath);
+
+      return (
+        <Suspense
+          fallback={
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+              <div className="animate-spin text-4xl mb-4">⟳</div>
+              <p className="text-lg font-medium">正在加载 PDF 阅读器...</p>
+            </div>
+          }
+        >
+          <PDFViewer
+            url={pdfUrl}
+            displayName={currentResource.display_name || "PDF 文档"}
+          />
+        </Suspense>
+      );
+    }
+
+    if (currentResource.file_type === "image") {
+      const imagePath = currentResource.file_path;
+      if (!imagePath || !assetsPath) {
+        return (
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+            <span className="text-4xl mb-4">⚠️</span>
+            <p className="text-lg font-medium">
+              {!imagePath ? "图片路径缺失" : "正在加载..."}
+            </p>
+          </div>
+        );
+      }
+
+      const fileName = imagePath.replace("assets/", "");
+      const fullPath = `${assetsPath}/${fileName}`;
+      const imageUrl = convertFileSrc(fullPath);
+
+      return (
+        <div className="relative w-full h-full bg-black/5">
+          <TransformWrapper
+            initialScale={1}
+            minScale={0.1}
+            maxScale={10}
+            centerOnInit={true}
+            wheel={{ step: 0.1 }}
+            doubleClick={{ mode: "reset" }}
+          >
+            {({ zoomIn, zoomOut, resetTransform, centerView }) => (
+              <>
+                {/* 控制按钮工具栏 */}
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex gap-2 bg-background/95 backdrop-blur-sm border rounded-lg p-2 shadow-lg">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => zoomIn()}
+                    title="放大 (滚轮向上)"
+                  >
+                    🔍+
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => zoomOut()}
+                    title="缩小 (滚轮向下)"
+                  >
+                    🔍−
+                  </Button>
+                  <Separator orientation="vertical" className="h-8" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => resetTransform()}
+                    title="重置 (双击图片)"
+                  >
+                    ⟲ 重置
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => centerView()}
+                    title="居中"
+                  >
+                    ⊕ 居中
+                  </Button>
+                </div>
+
+                {/* 图片容器 */}
+                <TransformComponent
+                  wrapperClass="!w-full !h-full"
+                  contentClass="!w-full !h-full flex items-center justify-center"
+                >
+                  <img
+                    src={imageUrl}
+                    alt={currentResource.display_name || "图片预览"}
+                    className="max-w-full max-h-full object-contain"
+                    style={{ userSelect: "none" }}
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.onerror = null;
+                      target.style.display = "none";
+                      console.error("图片加载失败:", imagePath);
+                    }}
+                  />
+                </TransformComponent>
+
+                {/* 使用提示 */}
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 bg-background/80 backdrop-blur-sm border rounded-lg px-3 py-1.5 text-xs text-muted-foreground">
+                  滚轮缩放 · 拖拽平移 · 双击重置
+                </div>
+              </>
+            )}
+          </TransformWrapper>
+        </div>
+      );
+    }
+
+    if (currentResource.file_type === "url") {
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+          <span className="text-4xl mb-4">🔗</span>
+          <p className="text-lg font-medium">链接资源</p>
+          <p className="text-sm">{currentResource.content || "无内容"}</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+        <span className="text-4xl mb-4">📎</span>
+        <p className="text-lg font-medium">
+          {resourceTypeIcons[currentResource.file_type]}{" "}
+          {currentResource.display_name}
+        </p>
+        <p className="text-sm">此类型文件暂不支持预览</p>
+      </div>
+    );
+  };
+
+  return (
+    <main className="flex-1 flex flex-col min-w-0">
+      {/* Editor Toolbar */}
+      <div className="flex items-center gap-2 px-4 py-2 border-b shrink-0">
+        {currentResource ? (
+          isEditingName ? (
+            // 编辑模式：显示输入框
+            <>
+              <span className="text-sm">
+                {resourceTypeIcons[currentResource.file_type]}
+              </span>
+              <Input
+                value={editedDisplayName}
+                onChange={(e) => onDisplayNameChange(e.target.value)}
+                onBlur={() => {
+                  if (editedDisplayName !== (currentResource.display_name || "")) {
+                    onSave();
+                  } else {
+                    onEditingNameChange(false);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.currentTarget.blur();
+                  } else if (e.key === "Escape") {
+                    onDisplayNameChange(currentResource.display_name || "");
+                    onEditingNameChange(false);
+                  }
+                }}
+                className="h-7 text-sm flex-1"
+                autoFocus
+              />
+            </>
+          ) : (
+            // 查看模式：显示名称，点击编辑
+            <>
+              <span
+                className="text-sm font-medium cursor-pointer hover:text-primary"
+                onClick={() => onEditingNameChange(true)}
+                title="点击编辑名称"
+              >
+                {resourceTypeIcons[currentResource.file_type]}{" "}
+                {currentResource.display_name || "未命名"}
+              </span>
+              {/* 文本/文件切换按钮 - 对所有文件类型资源都显示 */}
+              {isFileResource && (
+                <div className="flex gap-1 ml-2 bg-muted rounded-md p-0.5">
+                  <Button
+                    variant={viewMode === 'text' ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className="h-6 px-2 text-xs"
+                    onClick={() => onViewModeChange('text')}
+                  >
+                    {t("workspace", "editText")}
+                  </Button>
+                  <Button
+                    variant={viewMode === 'file' ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className="h-6 px-2 text-xs"
+                    onClick={() => onViewModeChange('file')}
+                  >
+                    {t("workspace", "viewFile")}
+                  </Button>
+                </div>
+              )}
+            </>
+          )
+        ) : (
+          <span className="text-sm font-medium">{t("workspace", "workspaceArea")}</span>
+        )}
+        {currentResource && (currentResource.file_type === "text" || viewMode === 'text') && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 ml-auto"
+            disabled={(!isModified && editedDisplayName === (currentResource.display_name || "")) || isSaving}
+            onClick={onSave}
+            title={isSaving ? "保存中..." : "保存 (Ctrl+S)"}
+          >
+            {isSaving ? "⏳" : "💾"}
+          </Button>
+        )}
+      </div>
+      {/* Editor Content */}
+      <div className={cn(
+        "flex-1 overflow-auto",
+        (viewMode === 'text' || (currentResource?.file_type !== "pdf" && currentResource?.file_type !== "image")) && "p-4"
+      )}>
+        {renderEditorArea()}
+      </div>
+    </main>
+  );
+}

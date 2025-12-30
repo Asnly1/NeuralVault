@@ -1,25 +1,11 @@
-import { useState, useEffect, useCallback, lazy, Suspense } from "react";
-import { cn } from "@/lib/utils";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Task, Resource, priorityConfig, resourceTypeIcons } from "../types";
-import { Trash2 } from "lucide-react";
+import { Task, Resource, resourceTypeIcons } from "../types";
 import { fetchTaskResources, getAssetsPath, unlinkResource, updateResourceContent, updateResourceDisplayName } from "../api";
-import { TiptapEditor } from "../components";
-import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { useLanguage } from "@/contexts/LanguageContext";
-
-// 懒加载 PDF 组件，避免启动时加载
-const PDFViewer = lazy(() =>
-  import("../components/PDFViewer").then((module) => ({
-    default: module.PDFViewer,
-  }))
-);
+import { ContextPanel, EditorPanel, ChatPanel } from "../components/workspace";
 
 interface WorkspacePageProps {
   selectedTask: Task | null;
@@ -36,15 +22,11 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
   const [chatInput, setChatInput] = useState("");
   const [linkedResources, setLinkedResources] = useState<Resource[]>([]);
   const [loadingResources, setLoadingResources] = useState(false);
-  const [selectedResource, setSelectedResource] = useState<Resource | null>(
-    null
-  );
+  const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
   const [editorContent, setEditorContent] = useState("");
   const [isModified, setIsModified] = useState(false);
   const [assetsPath, setAssetsPath] = useState<string>("");
-  const [hoveredResourceId, setHoveredResourceId] = useState<number | null>(
-    null
-  );
+  const [hoveredResourceId, setHoveredResourceId] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -71,15 +53,9 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
   // 检测模式：资源模式（直接从资源进入）或任务模式（从任务进入）
   const isResourceMode = !selectedTask && propSelectedResource;
 
-  // 当前实际显示的资源（资源模式用 propSelectedResource，任务模式用 selectedResource）
+  // 当前实际显示的资源
   const currentResource = isResourceMode ? propSelectedResource : selectedResource;
 
-  // 判断是否同时有文本和文件
-  const hasTextAndFile = !!(
-    currentResource?.content?.trim() &&
-    currentResource?.file_path &&
-    currentResource?.file_type !== 'text'
-  );
 
   // Load assets path on mount
   useEffect(() => {
@@ -90,7 +66,7 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
   useEffect(() => {
     if (isResourceMode && propSelectedResource) {
       setSelectedResource(propSelectedResource);
-      setLinkedResources([]); // 资源模式不显示关联资源列表
+      setLinkedResources([]);
     }
   }, [isResourceMode, propSelectedResource]);
 
@@ -114,9 +90,7 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
           setLinkedResources(data.resources);
           if (
             selectedResource &&
-            !data.resources.find(
-              (r) => r.resource_id === selectedResource.resource_id
-            )
+            !data.resources.find((r) => r.resource_id === selectedResource.resource_id)
           ) {
             setSelectedResource(null);
           }
@@ -142,24 +116,20 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
 
   // 统一加载资源内容到编辑器
   useEffect(() => {
-    // 确定当前要加载的资源（资源模式用 propSelectedResource，任务模式用 selectedResource）
     const resourceToLoad = isResourceMode ? propSelectedResource : selectedResource;
 
     if (resourceToLoad) {
-      // 加载资源内容
       setEditorContent(resourceToLoad.content || "");
       setIsModified(false);
       setEditedDisplayName(resourceToLoad.display_name || "");
       setIsEditingName(false);
 
-      // 设置视图模式：纯文本资源强制 text 模式，其他默认 file 模式
       if (resourceToLoad.file_type === "text") {
         setViewMode('text');
       } else {
         setViewMode('file');
       }
     } else {
-      // 清空状态
       setEditorContent("");
       setIsModified(false);
       setEditedDisplayName("");
@@ -175,17 +145,15 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
   const handleEditorChange = useCallback((content: string) => {
     setEditorContent(content);
     setIsModified(true);
-    setSaveSuccess(false); // 清除保存成功提示
-    setSaveError(null); // 清除错误提示
+    setSaveSuccess(false);
+    setSaveError(null);
   }, []);
 
   // 保存资源内容和显示名称
   const handleSave = useCallback(async () => {
-    // 使用 currentResource 统一处理资源模式和任务模式
     const resourceToSave = isResourceMode ? propSelectedResource : selectedResource;
     if (!resourceToSave || isSaving) return;
 
-    // 检查是否有任何修改
     const hasContentChange = isModified;
     const hasNameChange = editedDisplayName !== (resourceToSave.display_name || "");
 
@@ -196,7 +164,6 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
     setSaveSuccess(false);
 
     try {
-      // 分别调用两个独立的 API 函数
       if (hasContentChange) {
         await updateResourceContent(resourceToSave.resource_id, editorContent);
       }
@@ -208,12 +175,10 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
       setIsEditingName(false);
       setSaveSuccess(true);
 
-      // 更新本地资源对象的 display_name
       if (hasNameChange) {
         resourceToSave.display_name = editedDisplayName;
       }
 
-      // 3秒后清除保存成功提示
       setTimeout(() => {
         setSaveSuccess(false);
       }, 3000);
@@ -228,7 +193,7 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
   // 处理删除资源（取消关联）
   const handleDeleteResource = useCallback(
     async (resourceId: number, e: React.MouseEvent) => {
-      e.stopPropagation(); // 阻止触发 resource 点击事件
+      e.stopPropagation();
 
       if (!selectedTask) return;
       if (!confirm("确定要从此任务中移除该资源吗？")) {
@@ -238,12 +203,10 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
       try {
         await unlinkResource(selectedTask.task_id, resourceId);
 
-        // 如果删除的是当前选中的资源，清空选中状态
         if (selectedResource?.resource_id === resourceId) {
           setSelectedResource(null);
         }
 
-        // 重新加载资源列表
         const data = await fetchTaskResources(selectedTask.task_id);
         setLinkedResources(data.resources);
       } catch (err) {
@@ -271,8 +234,6 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (isResizingLeft) {
-        // Get the left edge of the main content area (after sidebar)
-        // We need to find the workspace container's left position
         const workspaceContainer = document.querySelector('main.flex-1');
         if (workspaceContainer) {
           const containerRect = workspaceContainer.getBoundingClientRect();
@@ -293,17 +254,11 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
     const handleMouseUp = () => {
       if (tempLeftWidth !== null) {
         setLeftPanelWidth(tempLeftWidth);
-        localStorage.setItem(
-          "neuralvault_workspace_left_width",
-          tempLeftWidth.toString()
-        );
+        localStorage.setItem("neuralvault_workspace_left_width", tempLeftWidth.toString());
       }
       if (tempRightWidth !== null) {
         setRightPanelWidth(tempRightWidth);
-        localStorage.setItem(
-          "neuralvault_workspace_right_width",
-          tempRightWidth.toString()
-        );
+        localStorage.setItem("neuralvault_workspace_right_width", tempRightWidth.toString());
       }
       setIsResizingLeft(false);
       setIsResizingRight(false);
@@ -329,9 +284,8 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
   // 监听 Ctrl+S / Command+S 快捷键
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // 检测 Ctrl+S (Windows/Linux) 或 Command+S (macOS)
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
-        e.preventDefault(); // 阻止浏览器默认保存行为
+        e.preventDefault();
         handleSave();
       }
     };
@@ -341,211 +295,6 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [handleSave]);
-
-
-
-  const renderEditorArea = () => {
-    // 使用 currentResource 统一处理资源模式和任务模式
-    const resource = currentResource;
-
-    if (!resource) {
-      return (
-        <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-          <span className="text-4xl mb-4">✎</span>
-          <p className="text-lg font-medium">{t("workspace", "editorPlaceholder")}</p>
-          <p className="text-sm">{t("workspace", "editorPlaceholderDesc")}</p>
-        </div>
-      );
-    }
-
-    // 新增：如果是"编辑文本"模式且有内容，显示 TiptapEditor（用于非 text 类型资源的文本编辑）
-    if (viewMode === 'text' && resource.file_type !== 'text' && resource.content) {
-      return (
-        <TiptapEditor
-          content={editorContent}
-          onChange={handleEditorChange}
-          editable={true}
-          placeholder="开始输入内容..."
-        />
-      );
-    }
-
-    if (resource.file_type === "text") {
-      return (
-        <TiptapEditor
-          content={editorContent}
-          onChange={handleEditorChange}
-          editable={true}
-          placeholder="开始输入内容..."
-        />
-      );
-    }
-
-    if (resource.file_type === "pdf") {
-      // 获取 PDF 路径并转换为 Tauri 可访问的 URL
-      const pdfPath = resource.file_path;
-      if (!pdfPath || !assetsPath) {
-        return (
-          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-            <span className="text-4xl mb-4">⚠️</span>
-            <p className="text-lg font-medium">
-              {!pdfPath ? "PDF 路径缺失" : "正在加载..."}
-            </p>
-          </div>
-        );
-      }
-
-      // 将相对路径转换为完整路径
-      // pdfPath 格式: "assets/xxx.pdf"
-      // assetsPath 格式: "/Users/.../assets"
-      // 需要提取文件名并拼接完整路径
-      const fileName = pdfPath.replace("assets/", "");
-      const fullPath = `${assetsPath}/${fileName}`;
-
-      // convertFileSrc 将本地文件路径转换为 Tauri asset 协议 URL
-      const pdfUrl = convertFileSrc(fullPath);
-
-      return (
-        <Suspense
-          fallback={
-            <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-              <div className="animate-spin text-4xl mb-4">⟳</div>
-              <p className="text-lg font-medium">正在加载 PDF 阅读器...</p>
-            </div>
-          }
-        >
-          <PDFViewer
-            url={pdfUrl}
-            displayName={resource.display_name || "PDF 文档"}
-          />
-        </Suspense>
-      );
-    }
-
-    if (resource.file_type === "image") {
-      // 获取图片路径并转换为 Tauri 可访问的 URL
-      const imagePath = resource.file_path;
-      if (!imagePath || !assetsPath) {
-        return (
-          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-            <span className="text-4xl mb-4">⚠️</span>
-            <p className="text-lg font-medium">
-              {!imagePath ? "图片路径缺失" : "正在加载..."}
-            </p>
-          </div>
-        );
-      }
-
-      // 将相对路径转换为完整路径
-      // imagePath 格式: "assets/xxx.png"
-      // assetsPath 格式: "/Users/.../assets"
-      // 需要提取文件名并拼接完整路径
-      const fileName = imagePath.replace("assets/", "");
-      const fullPath = `${assetsPath}/${fileName}`;
-
-      // convertFileSrc 将本地文件路径转换为 Tauri asset 协议 URL
-      const imageUrl = convertFileSrc(fullPath);
-
-      return (
-        <div className="relative w-full h-full bg-black/5">
-          <TransformWrapper
-            initialScale={1}
-            minScale={0.1}
-            maxScale={10}
-            centerOnInit={true}
-            wheel={{ step: 0.1 }}
-            doubleClick={{ mode: "reset" }}
-          >
-            {({ zoomIn, zoomOut, resetTransform, centerView }) => (
-              <>
-                {/* 控制按钮工具栏 */}
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex gap-2 bg-background/95 backdrop-blur-sm border rounded-lg p-2 shadow-lg">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => zoomIn()}
-                    title="放大 (滚轮向上)"
-                  >
-                    🔍+
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => zoomOut()}
-                    title="缩小 (滚轮向下)"
-                  >
-                    🔍−
-                  </Button>
-                  <Separator orientation="vertical" className="h-8" />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => resetTransform()}
-                    title="重置 (双击图片)"
-                  >
-                    ⟲ 重置
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => centerView()}
-                    title="居中"
-                  >
-                    ⊕ 居中
-                  </Button>
-                </div>
-
-                {/* 图片容器 */}
-                <TransformComponent
-                  wrapperClass="!w-full !h-full"
-                  contentClass="!w-full !h-full flex items-center justify-center"
-                >
-                  <img
-                    src={imageUrl}
-                    alt={resource.display_name || "图片预览"}
-                    className="max-w-full max-h-full object-contain"
-                    style={{ userSelect: "none" }}
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.onerror = null;
-                      target.style.display = "none";
-                      console.error("图片加载失败:", imagePath);
-                    }}
-                  />
-                </TransformComponent>
-
-                {/* 使用提示 */}
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 bg-background/80 backdrop-blur-sm border rounded-lg px-3 py-1.5 text-xs text-muted-foreground">
-                  滚轮缩放 · 拖拽平移 · 双击重置
-                </div>
-              </>
-            )}
-          </TransformWrapper>
-        </div>
-      );
-    }
-
-    if (resource.file_type === "url") {
-      return (
-        <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-          <span className="text-4xl mb-4">🔗</span>
-          <p className="text-lg font-medium">链接资源</p>
-          <p className="text-sm">{resource.content || "无内容"}</p>
-        </div>
-      );
-    }
-
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-        <span className="text-4xl mb-4">📎</span>
-        <p className="text-lg font-medium">
-          {resourceTypeIcons[resource.file_type]}{" "}
-          {resource.display_name}
-        </p>
-        <p className="text-sm">此类型文件暂不支持预览</p>
-      </div>
-    );
-  };
 
   // Empty state: 既没有任务也没有资源
   if (!selectedTask && !propSelectedResource) {
@@ -621,334 +370,51 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
       {/* Three-column Layout */}
       <div className="flex flex-1 min-h-0">
         {/* Left: Context Panel */}
-        <aside
-          style={{ width: `${tempLeftWidth !== null ? tempLeftWidth : leftPanelWidth}px` }}
-          className={cn(
-            "border-r flex flex-col shrink-0 relative overflow-hidden",
-            !isResizingLeft && "transition-all duration-300"
-          )}
-        >
-          <ScrollArea className="flex-1">
-            <div 
-              className="p-4 space-y-6"
-              style={{ maxWidth: `${tempLeftWidth !== null ? tempLeftWidth : leftPanelWidth}px`, boxSizing: 'border-box' }}
-            >
-              {isResourceMode ? (
-                /* 资源模式：显示资源详情 */
-                <div>
-                  <h3 className="text-sm font-semibold mb-3">资源详情</h3>
-                  <Card>
-                    <CardContent className="p-3 space-y-3">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-2xl shrink-0">{resourceTypeIcons[propSelectedResource!.file_type]}</span>
-                        <h4 className="font-medium truncate">
-                          {propSelectedResource!.display_name || "未命名资源"}
-                        </h4>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Badge variant="outline">{propSelectedResource!.file_type}</Badge>
-                        {propSelectedResource!.classification_status && (
-                          <Badge variant="secondary">
-                            {propSelectedResource!.classification_status}
-                          </Badge>
-                        )}
-                      </div>
-                      {propSelectedResource!.created_at && (
-                        <p className="text-xs text-muted-foreground">
-                          创建时间:{" "}
-                          {propSelectedResource!.created_at.toLocaleDateString("zh-CN")}
-                        </p>
-                      )}
-                      {propSelectedResource!.file_path && (
-                        <p className="text-xs text-muted-foreground break-all" title={propSelectedResource!.file_path}>
-                          路径: {propSelectedResource!.file_path}
-                        </p>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  {/* 查看文件模式下显示附带文本（使用 editorContent 显示编辑后的内容） */}
-                  {viewMode === 'file' && editorContent?.trim() && (
-                    <div className="mt-4">
-                      <h3 className="text-sm font-semibold mb-3">{t("workspace", "attachedText")}</h3>
-                      <Card>
-                        <CardContent className="p-3 max-h-48 overflow-y-auto">
-                          <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words">
-                            {editorContent}
-                          </p>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                /* 任务模式：显示任务详情+关联资源 */
-                <>
-                  {/* Task Details */}
-                  <div>
-                    <h3 className="text-sm font-semibold mb-3">{t("workspace", "taskDetails")}</h3>
-                    <Card>
-                      <CardContent className="p-3 space-y-3">
-                        <h4 className="font-medium">
-                          {selectedTask!.title || "未命名任务"}
-                        </h4>
-                        {selectedTask!.description && (
-                          <p className="text-sm text-muted-foreground">
-                            {selectedTask!.description}
-                          </p>
-                        )}
-                        <div className="flex flex-wrap gap-2">
-                          <Badge variant="outline">{selectedTask!.status}</Badge>
-                          <Badge
-                            style={{
-                              backgroundColor: `${
-                                priorityConfig[selectedTask!.priority].color
-                              }20`,
-                              color: priorityConfig[selectedTask!.priority].color,
-                            }}
-                          >
-                            {priorityConfig[selectedTask!.priority].label}
-                          </Badge>
-                        </div>
-                        {selectedTask!.due_date && (
-                          <p className="text-xs text-muted-foreground">
-                            截止:{" "}
-                            {selectedTask!.due_date.toLocaleDateString("zh-CN")}
-                          </p>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  {/* Linked Resources */}
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-semibold">{t("workspace", "linkedResources")}</h3>
-                      {linkedResources.length > 0 && (
-                        <Badge variant="secondary" className="text-xs">
-                          {linkedResources.length}
-                        </Badge>
-                      )}
-                    </div>
-                    {loadingResources ? (
-                      <p className="text-sm text-muted-foreground">Loading...</p>
-                    ) : linkedResources.length > 0 ? (
-                      <div className="space-y-1">
-                        {linkedResources.map((resource) => (
-                          <div
-                            key={resource.resource_id}
-                            className="relative group"
-                            onMouseEnter={() =>
-                              setHoveredResourceId(resource.resource_id)
-                            }
-                            onMouseLeave={() => setHoveredResourceId(null)}
-                          >
-                            <button
-                              className={cn(
-                                "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left text-sm transition-colors",
-                                selectedResource?.resource_id ===
-                                  resource.resource_id
-                                  ? "bg-secondary"
-                                  : "hover:bg-muted"
-                              )}
-                              onClick={() => handleResourceClick(resource)}
-                            >
-                              <span>{resourceTypeIcons[resource.file_type]}</span>
-                              <span className="truncate flex-1">
-                                {resource.display_name || "未命名文件"}
-                              </span>
-                            </button>
-                            {/* 删除按钮 */}
-                            {hoveredResourceId === resource.resource_id && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="absolute top-0.5 right-0.5 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10 hover:text-destructive z-10"
-                                onClick={(e) =>
-                                  handleDeleteResource(resource.resource_id, e)
-                                }
-                                title="从任务中移除"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">暂无关联资源</p>
-                    )}
-                  </div>
-
-                  {/* 任务模式：查看文件模式下显示附带文本（显示 editorContent 以反映用户编辑） */}
-                  {viewMode === 'file' && editorContent?.trim() && (
-                    <div>
-                      <h3 className="text-sm font-semibold mb-3">{t("workspace", "attachedText")}</h3>
-                      <Card>
-                        <CardContent className="p-3 max-h-48 overflow-y-auto">
-                          <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words">
-                            {editorContent}
-                          </p>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </ScrollArea>
-          
-          {/* Resize Handle */}
-          <div
-            className={cn(
-              "absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-accent transition-colors",
-              isResizingLeft && "bg-accent"
-            )}
-            onMouseDown={handleLeftMouseDown}
-          >
-            <div className="absolute top-0 right-0 w-4 h-full -mr-1.5" />
-          </div>
-        </aside>
+        <ContextPanel
+          isResourceMode={!!isResourceMode}
+          selectedTask={selectedTask}
+          propSelectedResource={propSelectedResource}
+          selectedResource={selectedResource}
+          linkedResources={linkedResources}
+          loadingResources={loadingResources}
+          hoveredResourceId={hoveredResourceId}
+          setHoveredResourceId={setHoveredResourceId}
+          editorContent={editorContent}
+          viewMode={viewMode}
+          width={leftPanelWidth}
+          tempWidth={tempLeftWidth}
+          isResizing={isResizingLeft}
+          onMouseDown={handleLeftMouseDown}
+          onResourceClick={handleResourceClick}
+          onDeleteResource={handleDeleteResource}
+        />
 
         {/* Center: Editor Area */}
-        <main className="flex-1 flex flex-col min-w-0">
-          {/* Editor Toolbar */}
-          <div className="flex items-center gap-2 px-4 py-2 border-b shrink-0">
-            {currentResource ? (
-              isEditingName ? (
-                // 编辑模式：显示输入框
-                <>
-                  <span className="text-sm">
-                    {resourceTypeIcons[currentResource.file_type]}
-                  </span>
-                  <Input
-                    value={editedDisplayName}
-                    onChange={(e) => setEditedDisplayName(e.target.value)}
-                    onBlur={() => {
-                      // 失焦时如果有修改则保存
-                      if (editedDisplayName !== (currentResource.display_name || "")) {
-                        handleSave();
-                      } else {
-                        setIsEditingName(false);
-                      }
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.currentTarget.blur(); // 触发保存
-                      } else if (e.key === "Escape") {
-                        setEditedDisplayName(currentResource.display_name || "");
-                        setIsEditingName(false);
-                      }
-                    }}
-                    className="h-7 text-sm flex-1"
-                    autoFocus
-                  />
-                </>
-              ) : (
-                // 查看模式：显示名称，点击编辑
-                <>
-                  <span className="text-sm font-medium cursor-pointer hover:text-primary" onClick={() => setIsEditingName(true)} title="点击编辑名称">
-                    {resourceTypeIcons[currentResource.file_type]}{" "}
-                    {currentResource.display_name || "未命名"}
-                  </span>
-                  {/* 文本/文件切换按钮 */}
-                  {hasTextAndFile && (
-                    <div className="flex gap-1 ml-2 bg-muted rounded-md p-0.5">
-                      <Button
-                        variant={viewMode === 'text' ? 'secondary' : 'ghost'}
-                        size="sm"
-                        className="h-6 px-2 text-xs"
-                        onClick={() => setViewMode('text')}
-                      >
-                        {t("workspace", "editText")}
-                      </Button>
-                      <Button
-                        variant={viewMode === 'file' ? 'secondary' : 'ghost'}
-                        size="sm"
-                        className="h-6 px-2 text-xs"
-                        onClick={() => setViewMode('file')}
-                      >
-                        {t("workspace", "viewFile")}
-                      </Button>
-                    </div>
-                  )}
-                </>
-              )
-            ) : (
-              <span className="text-sm font-medium">{t("workspace", "workspaceArea")}</span>
-            )}
-            {currentResource && (currentResource.file_type === "text" || viewMode === 'text') && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 ml-auto"
-                disabled={(!isModified && editedDisplayName === (currentResource.display_name || "")) || isSaving}
-                onClick={handleSave}
-                title={isSaving ? "保存中..." : "保存 (Ctrl+S)"}
-              >
-                {isSaving ? "⏳" : "💾"}
-              </Button>
-            )}
-          </div>
-          {/* Editor Content - PDF/Image 查看模式不需要 padding */}
-          <div className={cn(
-            "flex-1 overflow-auto",
-            // 仅对 text 模式和其他类型添加 padding，PDF 和 image 查看模式全屏显示
-            (viewMode === 'text' || (currentResource?.file_type !== "pdf" && currentResource?.file_type !== "image")) && "p-4"
-          )}>{renderEditorArea()}</div>
-        </main>
+        <EditorPanel
+          currentResource={currentResource}
+          editorContent={editorContent}
+          viewMode={viewMode}
+          isEditingName={isEditingName}
+          editedDisplayName={editedDisplayName}
+          isModified={isModified}
+          isSaving={isSaving}
+          assetsPath={assetsPath}
+          onEditorChange={handleEditorChange}
+          onSave={handleSave}
+          onViewModeChange={setViewMode}
+          onEditingNameChange={setIsEditingName}
+          onDisplayNameChange={setEditedDisplayName}
+        />
 
         {/* Right: Chat Panel */}
-        <aside
-          style={{ width: `${tempRightWidth !== null ? tempRightWidth : rightPanelWidth}px` }}
-          className={cn(
-            "border-l flex flex-col shrink-0 relative",
-            !isResizingRight && "transition-all duration-300"
-          )}
-        >
-          {/* Resize Handle */}
-          <div
-            className={cn(
-              "absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-accent transition-colors",
-              isResizingRight && "bg-accent"
-            )}
-            onMouseDown={handleRightMouseDown}
-          >
-            <div className="absolute top-0 left-0 w-4 h-full -ml-1.5" />
-          </div>
-          
-          <div className="px-4 py-3 border-b shrink-0">
-            <h3 className="font-semibold">{t("workspace", "aiAssistant")}</h3>
-            <p className="text-xs text-muted-foreground">{t("workspace", "context")}</p>
-          </div>
-
-          <ScrollArea className="flex-1">
-            <div className="p-4">
-              <div className="flex gap-3">
-                <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground shrink-0">
-                  ◆
-                </div>
-                <div className="bg-muted rounded-lg p-3 text-sm">
-                  {t("workspace", "aiGreeting")}
-                </div>
-              </div>
-            </div>
-          </ScrollArea>
-
-          <div className="p-4 border-t shrink-0">
-            <div className="flex gap-2">
-              <Input
-                placeholder={t("workspace", "inputPlaceholder")}
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                className="flex-1"
-              />
-              <Button size="icon" disabled={!chatInput.trim()}>
-                ↑
-              </Button>
-            </div>
-          </div>
-        </aside>
+        <ChatPanel
+          chatInput={chatInput}
+          onChatInputChange={setChatInput}
+          width={rightPanelWidth}
+          tempWidth={tempRightWidth}
+          isResizing={isResizingRight}
+          onMouseDown={handleRightMouseDown}
+        />
       </div>
     </div>
   );

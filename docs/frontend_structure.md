@@ -9,6 +9,7 @@ src/
 ├── assets/               # 静态资源（图标/占位符）
 ├── components/
 │   ├── index.ts
+│   ├── PDFViewer.tsx     # PDF 阅读器（懒加载）
 │   ├── QuickCapture.tsx  # 捕获组件，支持 HUD/卡片、多文件、剪贴板粘贴
 │   ├── ResourceCard.tsx  # 资源卡片 + 任务关联下拉
 │   ├── Sidebar.tsx       # 侧边栏导航
@@ -16,6 +17,11 @@ src/
 │   ├── TaskEditCard.tsx  # 任务编辑组件（支持创建/编辑双模式、Notion 风格日期选择器）
 │   ├── TasksDialog.tsx   # 通用任务对话框（可显示指定日期的任务或已完成任务）
 │   ├── TiptapEditor.tsx  # Markdown 富文本编辑器（基于 Tiptap）
+│   ├── workspace/        # Workspace 页面子组件
+│   │   ├── index.ts          # 导出
+│   │   ├── ContextPanel.tsx  # 左侧面板（资源/任务详情）
+│   │   ├── EditorPanel.tsx   # 中间编辑区
+│   │   └── ChatPanel.tsx     # 右侧聊天面板
 │   └── ui/               # shadcn/ui 通用组件库
 │       ├── avatar.tsx
 │       ├── badge.tsx
@@ -480,6 +486,14 @@ interface CalendarPageProps {
 
 任务工作台：三栏布局，已集成编辑器与资源预览。**支持拖拽调整面板大小**。**支持双模式进入：任务模式和资源模式**。
 
+**组件结构**：
+
+主组件 `Workspace.tsx` 重构为使用三个独立的子组件（位于 `components/workspace/`）：
+
+- `ContextPanel.tsx` - 左侧面板，显示资源/任务详情
+- `EditorPanel.tsx` - 中间编辑区，支持多种资源类型预览
+- `ChatPanel.tsx` - 右侧 AI 聊天面板（目前为占位）
+
 **进入模式**：
 
 - **任务模式**：从Dashboard点击任务卡片进入
@@ -493,47 +507,95 @@ interface CalendarPageProps {
 
 **可调整布局**：
 
-- **左栏（Context Panel）**：可拖拽调整宽度（150px - 400px，默认 256px）
-  - 拖拽右边缘调整宽度
-  - 宽度保存到 localStorage (`neuralvault_workspace_left_width`)
-- **中栏（Editor Area）**：自动填充剩余空间
-- **右栏（Chat Panel）**：可拖拽调整宽度（200px - 500px，默认 288px）
-  - 拖拽左边缘调整宽度
-  - 宽度保存到 localStorage (`neuralvault_workspace_right_width`)
-
-**性能优化**：拖拽时使用临时状态，禁用 CSS transitions，释放鼠标时才保存到 localStorage
+- **左栏（ContextPanel）**：可拖拽调整宽度（150px - 400px，默认 256px）
+- **中栏（EditorPanel）**：自动填充剩余空间
+- **右栏（ChatPanel）**：可拖拽调整宽度（200px - 500px，默认 288px）
+- 宽度保存到 localStorage
 
 **内容功能**：
 
-- **左栏（任务模式）**：当前任务详情 + `fetchTaskResources` 拉取的关联资源列表，点击资源在中栏显示。
-- **左栏（资源模式）**：资源详情卡片，显示类型、名称、创建时间、路径等信息。
-- **中栏（编辑区）**：支持多种资源类型预览和编辑
-  - 文本资源：使用 `TiptapEditor` 进行 Markdown 编辑（实时保存状态提示）
-  - PDF 资源：使用 `react-pdf-highlighter-extended` 实现 PDF 阅读和高亮标注
-    - PDF.js 渲染引擎
-    - 选中文本添加高亮
-    - 区域截图高亮
-    - 高亮管理（查看/删除）
-    - 滚轮缩放查看
-    - 加载状态：加载动画和错误提示
-    - 自动路径转换（相对路径 → 完整路径 → Tauri URL）
-  - 图片资源：使用 `react-zoom-pan-pinch` 实现缩放平移预览
-    - 滚轮缩放（0.1x - 10x）
-    - 鼠标拖拽平移
-    - 双击重置视图
-    - 工具栏控制（放大/缩小/重置/居中）
-    - 优雅的半透明控制栏 + 操作提示
-    - 自动路径转换（相对路径 → 完整路径 → Tauri URL）
-  - URL 资源：显示内容占位
-  - 其他类型：显示文件类型提示
-- **右栏**：AI 助手占位（当前任务/资源上下文提示，输入框支持 `@` 引用文件）。
-- 既未选择任务也未选择资源时显示返回看板的空状态。
+- **左栏**：任务/资源详情 + 关联资源列表 + 附带文本显示
+- **中栏**：支持多种资源类型预览和编辑
+  - **文本资源**：使用 `TiptapEditor` 进行 Markdown 编辑
+  - **文件资源（PDF/图片等）**：显示"编辑文本/查看文件"切换按钮
+    - 查看文件：显示 PDF/图片预览
+    - 编辑文本：显示 TiptapEditor 供用户添加笔记（即使原本没有文本内容）
+  - PDF 使用 `react-pdf-highlighter-extended`，图片使用 `react-zoom-pan-pinch`
+  - 支持 Ctrl+S/Command+S 快捷键保存
+- **右栏**：AI 助手占位
 
 ```tsx
 interface WorkspacePageProps {
   selectedTask: Task | null;
-  selectedResource: Resource | null; // 新增：支持资源模式
+  selectedResource: Resource | null;
   onBack: () => void;
+}
+```
+
+##### `workspace/ContextPanel.tsx`
+
+左侧面板组件，负责资源/任务详情显示。
+
+```tsx
+interface ContextPanelProps {
+  isResourceMode: boolean;
+  selectedTask: Task | null;
+  propSelectedResource: Resource | null;
+  selectedResource: Resource | null;
+  linkedResources: Resource[];
+  loadingResources: boolean;
+  hoveredResourceId: number | null;
+  setHoveredResourceId: (id: number | null) => void;
+  editorContent: string;
+  viewMode: 'file' | 'text';
+  width: number;
+  tempWidth: number | null;
+  isResizing: boolean;
+  onMouseDown: (e: React.MouseEvent) => void;
+  onResourceClick: (resource: Resource) => void;
+  onDeleteResource: (resourceId: number, e: React.MouseEvent) => void;
+}
+```
+
+##### `workspace/EditorPanel.tsx`
+
+中间编辑区组件，负责资源内容编辑和预览。
+
+```tsx
+interface EditorPanelProps {
+  currentResource: Resource | null;
+  editorContent: string;
+  viewMode: 'file' | 'text';
+  isEditingName: boolean;
+  editedDisplayName: string;
+  isModified: boolean;
+  isSaving: boolean;
+  assetsPath: string;
+  onEditorChange: (content: string) => void;
+  onSave: () => void;
+  onViewModeChange: (mode: 'file' | 'text') => void;
+  onEditingNameChange: (editing: boolean) => void;
+  onDisplayNameChange: (name: string) => void;
+}
+```
+
+**特性**：
+- 对于文件类型资源，始终显示"编辑文本/查看文件"切换按钮
+- 即使资源原本没有文本内容，也可以切换到"编辑文本"模式添加笔记
+- 懒加载 PDFViewer 组件
+
+##### `workspace/ChatPanel.tsx`
+
+右侧聊天面板组件，AI 助手占位。
+
+```tsx
+interface ChatPanelProps {
+  chatInput: string;
+  onChatInputChange: (value: string) => void;
+  width: number;
+  tempWidth: number | null;
+  isResizing: boolean;
+  onMouseDown: (e: React.MouseEvent) => void;
 }
 ```
 
