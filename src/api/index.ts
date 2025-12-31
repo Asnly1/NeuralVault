@@ -295,3 +295,58 @@ export const getAssetsPath = async (): Promise<string> => {
   return await invoke("get_assets_path");
 };
 
+// ============================================
+// AI Configuration API
+// ============================================
+
+import type {
+  AIConfigStatus,
+  SetApiKeyRequest,
+  SetDefaultModelRequest,
+  SendChatRequest,
+  ChatResponse,
+} from "../types";
+
+/**
+ * 获取 AI 配置状态（不返回明文 key）
+ */
+export const getAIConfigStatus = async (): Promise<AIConfigStatus> => {
+  return await invoke("get_ai_config_status");
+};
+
+/**
+ * 保存 API Key
+ * @param request - 保存请求参数
+ */
+export const saveApiKey = async (request: SetApiKeyRequest): Promise<void> => {
+  return await invoke("save_api_key", { request });
+};
+
+/**
+ * 删除 API Key
+ * @param provider - Provider 名称
+ */
+export const removeApiKey = async (provider: string): Promise<void> => {
+  return await invoke("remove_api_key", { provider });
+};
+
+/**
+ * 设置默认模型
+ * @param request - 设置请求参数
+ */
+export const setDefaultModel = async (
+  request: SetDefaultModelRequest
+): Promise<void> => {
+  return await invoke("set_default_model", { request });
+};
+
+/**
+ * 发送聊天消息
+ * @param request - 聊天请求参数
+ */
+export const sendChatMessage = async (
+  request: SendChatRequest
+): Promise<ChatResponse> => {
+  return await invoke("send_chat_message", { request });
+};
+

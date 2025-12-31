@@ -36,6 +36,10 @@ export const translations = {
       about: "关于",
       versionMVP: "MVP 版本",
       aboutDesc: "NeuralVault 是一个基于 AI 的第二大脑应用，旨在帮助您更好地管理知识和任务。",
+      configured: "已配置",
+      notConfigured: "未配置",
+      configure: "配置",
+      update: "更新",
     },
     dashboard: {
       greeting: "下午好",
@@ -48,10 +52,6 @@ export const translations = {
       noTasks: "暂无待办任务，开始创建吧！",
       completedToday: "今日已完成",
       completedTodayTasks: "今日已完成的任务",
-    },
-    common: {
-      untitled: "无标题",
-      moreTasks: "还有 {count} 个任务",
     },
     workspace: {
       title: "工作台",
@@ -84,6 +84,17 @@ export const translations = {
       editText: "编辑文本",
       viewFile: "查看文件",
       attachedText: "附带文本",
+      selectModel: "选择模型",
+      noModelsConfigured: "未配置模型",
+      thinking: "思考中...",
+      configureApiFirst: "请先在设置中配置 API Key 以使用 AI 功能。",
+      goToSettings: "前往设置",
+      selectModelFirst: "请先选择一个模型",
+    },
+    common: {
+      untitled: "无标题",
+      moreTasks: "还有 {count} 个任务",
+      loading: "加载中",
     },
   },
   en: {
@@ -134,10 +145,6 @@ export const translations = {
       completedToday: "Completed Today",
       completedTodayTasks: "Completed Today",
     },
-    common: {
-      untitled: "Untitled",
-      moreTasks: "{count} more tasks",
-    },
     workspace: {
       title: "Workspace",
       description: "Manage your tasks and knowledge base",
@@ -169,6 +176,17 @@ export const translations = {
       editText: "Edit Text",
       viewFile: "View File",
       attachedText: "Attached Text",
+      selectModel: "Select Model",
+      noModelsConfigured: "No models configured",
+      thinking: "Thinking...",
+      configureApiFirst: "Please configure an API Key in settings to use AI features.",
+      goToSettings: "Go to Settings",
+      selectModelFirst: "Please select a model first",
+    },
+    common: {
+      untitled: "Untitled",
+      moreTasks: "{count} more tasks",
+      loading: "Loading",
     },
   },
 };

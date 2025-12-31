@@ -225,3 +225,179 @@ export interface PythonProgress {
   percentage?: number;
   error?: string;
 }
+
+// ============================================
+// AI Provider Types
+// ============================================
+
+export const aiProviderValues = [
+  "openai",
+  "anthropic",
+  "gemini",
+  "grok",
+  "deepseek",
+  "qwen",
+] as const;
+
+export type AIProvider = (typeof aiProviderValues)[number];
+
+export interface ModelInfo {
+  id: string;
+  name: string;
+}
+
+export interface ProviderInfo {
+  name: string;
+  icon: string;
+  defaultBaseUrl: string | null;
+  models: ModelInfo[];
+}
+
+export const AI_PROVIDER_INFO: Record<AIProvider, ProviderInfo> = {
+  openai: {
+    name: "ChatGPT",
+    icon: "O",
+    defaultBaseUrl: "https://api.openai.com/v1",
+    models: [
+      { id: "gpt-4o", name: "GPT-4o" },
+      { id: "gpt-4o-mini", name: "GPT-4o Mini" },
+      { id: "gpt-4-turbo", name: "GPT-4 Turbo" },
+      { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo" },
+    ],
+  },
+  anthropic: {
+    name: "Claude",
+    icon: "A",
+    defaultBaseUrl: null,
+    models: [
+      { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4" },
+      { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet" },
+      { id: "claude-3-opus-20240229", name: "Claude 3 Opus" },
+      { id: "claude-3-haiku-20240307", name: "Claude 3 Haiku" },
+    ],
+  },
+  gemini: {
+    name: "Gemini",
+    icon: "G",
+    defaultBaseUrl: null,
+    models: [
+      { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash" },
+      { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro" },
+      { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash" },
+    ],
+  },
+  grok: {
+    name: "Grok",
+    icon: "X",
+    defaultBaseUrl: "https://api.x.ai/v1",
+    models: [{ id: "grok-beta", name: "Grok Beta" }],
+  },
+  deepseek: {
+    name: "Deepseek",
+    icon: "D",
+    defaultBaseUrl: "https://api.deepseek.com/v1",
+    models: [
+      { id: "deepseek-chat", name: "Deepseek Chat" },
+      { id: "deepseek-reasoner", name: "Deepseek Reasoner" },
+    ],
+  },
+  qwen: {
+    name: "Qwen",
+    icon: "Q",
+    defaultBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    models: [
+      { id: "qwen-turbo", name: "Qwen Turbo" },
+      { id: "qwen-plus", name: "Qwen Plus" },
+      { id: "qwen-max", name: "Qwen Max" },
+    ],
+  },
+};
+
+// ============================================
+// AI Configuration Types (对应 Rust: ai_config.rs)
+// ============================================
+
+/**
+ * Provider 状态信息（不包含明文 key）
+ */
+export interface AIProviderStatus {
+  has_key: boolean;
+  enabled: boolean;
+  base_url: string | null;
+}
+
+/**
+ * AI 配置状态响应
+ */
+export interface AIConfigStatus {
+  providers: Record<string, AIProviderStatus>;
+  default_provider: string | null;
+  default_model: string | null;
+}
+
+/**
+ * 保存 API Key 请求
+ */
+export interface SetApiKeyRequest {
+  provider: string;
+  api_key: string;
+  base_url?: string;
+}
+
+/**
+ * 设置默认模型请求
+ */
+export interface SetDefaultModelRequest {
+  provider: string;
+  model: string;
+}
+
+/**
+ * 聊天消息
+ */
+export interface ChatMessagePayload {
+  role: "user" | "assistant" | "system";
+  content: string;
+}
+
+/**
+ * 发送聊天请求
+ */
+export interface SendChatRequest {
+  provider: string;
+  model: string;
+  messages: ChatMessagePayload[];
+  context_resource_ids?: number[];
+}
+
+/**
+ * 聊天响应
+ */
+export interface ChatResponse {
+  content: string;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+  };
+}
+
+/**
+ * 模型选项（用于 UI 显示）
+ */
+export interface ModelOption {
+  provider: AIProvider;
+  model_id: string;
+  display_name: string;
+}
+
+/**
+ * 聊天消息（带时间戳，用于 UI 显示）
+ */
+export interface ChatMessage {
+  role: "user" | "assistant" | "system";
+  content: string;
+  timestamp: Date;
+}

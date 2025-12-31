@@ -1,6 +1,7 @@
 mod app_state;
 mod commands;
 mod db;
+mod services;
 mod sidecar;
 mod utils;
 mod window;
@@ -9,6 +10,7 @@ use std::fs;
 use std::sync::Arc;
 
 use tauri::{Emitter, Manager};
+use tokio::sync::Mutex;
 
 pub use app_state::AppState;
 pub use commands::{
@@ -19,6 +21,8 @@ pub use commands::{
     update_task_due_date_command, update_task_title_command, update_task_description_command,
     get_tasks_by_date, get_all_tasks, update_resource_content_command, update_resource_display_name_command,
     check_python_health, is_python_running,
+    // AI 配置命令
+    get_ai_config_status, save_api_key, remove_api_key, set_default_model, send_chat_message,
 };
 pub use sidecar::PythonSidecar;
 pub use window::{hide_hud, toggle_hud};
@@ -51,6 +55,10 @@ pub fn run() {
             // 强制阻塞当前线程，直到数据库连接池初始化完成
             let pool = tauri::async_runtime::block_on(db::init_pool(&db_path))?;
             
+            // ========== AI 配置服务初始化 ==========
+            let ai_config_service = services::AIConfigService::new(&app_dir)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+
             // ========== Python Sidecar 初始化 ==========
             let python_sidecar = Arc::new(PythonSidecar::new());
             // 名称含义： Arc = Atomic Reference Counting。
@@ -63,11 +71,12 @@ pub fn run() {
             // 启动 Python 进程（非阻塞）
             python_sidecar.start(app)?;
             
-            // 初始化好的 AppState（包含数据库连接池和 Python sidecar）注入到 Tauri 的全局管理器中
+            // 初始化好的 AppState（包含数据库连接池、Python sidecar 和 AI 配置服务）注入到 Tauri 的全局管理器中
             // 注意：此时不等待 Python 健康检查，让 UI 先显示
-            app.manage(AppState { 
+            app.manage(AppState {
                 db: pool,
                 python: python_sidecar.clone(),
+                ai_config: Arc::new(Mutex::new(ai_config_service)),
             });
             
             // 在后台等待 Python 就绪（不阻塞 UI 显示）
@@ -140,7 +149,12 @@ pub fn run() {
             update_resource_content_command,
             update_resource_display_name_command,
             check_python_health,
-            is_python_running
+            is_python_running,
+            get_ai_config_status,
+            save_api_key,
+            remove_api_key,
+            set_default_model,
+            send_chat_message
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {

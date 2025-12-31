@@ -19,11 +19,14 @@ function Root() {
 }
 
 import { LanguageProvider } from "./contexts/LanguageContext";
+import { AIContextProvider } from "./contexts/AIContext";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <LanguageProvider>
-      <Root />
+      <AIContextProvider>
+        <Root />
+      </AIContextProvider>
     </LanguageProvider>
   </React.StrictMode>
 );

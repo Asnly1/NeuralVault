@@ -112,3 +112,12 @@ pub enum ClipboardContent {
 pub struct ReadClipboardResponse {
     pub content: ClipboardContent,
 }
+
+// ========== AI 配置 ==========
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum MessageRole {
+    User,
+    Assistant,
+    System,
+}

@@ -306,6 +306,7 @@ function App() {
             selectedTask={selectedTask}
             selectedResource={selectedResource}
             onBack={handleBackToDashboard}
+            onNavigateToSettings={() => setCurrentPage("settings")}
           />
         )}
 

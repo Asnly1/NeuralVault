@@ -121,7 +121,7 @@ const SelectionTip = ({ onConfirm }: { onConfirm: () => void }) => {
   );
 };
 
-export function PDFViewer({ url, displayName }: PDFViewerProps) {
+export function PDFViewer({ url, displayName: _displayName }: PDFViewerProps) {
   const [highlights, setHighlights] = useState<Array<Highlight>>([]);
   const [workerReady, setWorkerReady] = useState(false);
   const highlighterUtilsRef = useRef<PdfHighlighterUtils | undefined>(

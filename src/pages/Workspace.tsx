@@ -11,6 +11,7 @@ interface WorkspacePageProps {
   selectedTask: Task | null;
   selectedResource: Resource | null;
   onBack: () => void;
+  onNavigateToSettings?: () => void;
 }
 
 const LEFT_MIN = 150;
@@ -18,8 +19,7 @@ const LEFT_MAX = 400;
 const RIGHT_MIN = 200;
 const RIGHT_MAX = 500;
 
-export function WorkspacePage({ selectedTask, selectedResource: propSelectedResource, onBack }: WorkspacePageProps) {
-  const [chatInput, setChatInput] = useState("");
+export function WorkspacePage({ selectedTask, selectedResource: propSelectedResource, onBack, onNavigateToSettings }: WorkspacePageProps) {
   const [linkedResources, setLinkedResources] = useState<Resource[]>([]);
   const [loadingResources, setLoadingResources] = useState(false);
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
@@ -408,12 +408,11 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
 
         {/* Right: Chat Panel */}
         <ChatPanel
-          chatInput={chatInput}
-          onChatInputChange={setChatInput}
           width={rightPanelWidth}
           tempWidth={tempRightWidth}
           isResizing={isResizingRight}
           onMouseDown={handleRightMouseDown}
+          onNavigateToSettings={onNavigateToSettings}
         />
       </div>
     </div>

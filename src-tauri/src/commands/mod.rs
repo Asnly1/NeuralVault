@@ -1,3 +1,4 @@
+mod ai_config;
 mod clipboard;
 mod dashboard;
 mod python;
@@ -5,6 +6,7 @@ mod resources;
 mod tasks;
 mod types;
 
+pub use ai_config::*;
 pub use clipboard::*;
 pub use dashboard::*;
 pub use python::*;

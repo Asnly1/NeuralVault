@@ -23,7 +23,7 @@ pub struct PythonSidecar {
     
     /// HTTP 客户端，用于与 Python 后端通信
     /// 复用同一个 Client 可以利用连接池，提高性能
-    client: reqwest::Client,
+    pub client: reqwest::Client,
     
     /// 动态分配的端口号
     /// 使用 Mutex 包装，因为端口在 start() 时才确定
