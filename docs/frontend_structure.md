@@ -417,6 +417,8 @@ AI 配置和聊天状态管理 Context，负责与 Rust 后端通信管理 API K
 | `sendMessage()` | `content` | `Promise<void>` | 发送聊天消息 |
 | `clearMessages()` | - | `void` | 清空聊天记录 |
 
+**备注**：当前前端通过 Tauri `send_chat_message` 获取完整回复（非流式）。Python 后端已支持 SSE 流式接口（`/chat/completions` + `stream=true`），前端接入可作为后续优化。
+
 **使用示例**：
 
 ```tsx

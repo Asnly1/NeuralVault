@@ -453,7 +453,7 @@ app.manage(AppState { db, python }) - 注入状态
 
 1. 从加密配置获取 API Key
 2. 构建请求发送给 Python `/chat/completions` 端点
-3. Python 根据 provider 类型调用对应的 SDK（OpenAI/Anthropic/Gemini）
+3. Python 根据 provider 类型调用对应的 SDK（OpenAI Responses / OpenAI Chat / Anthropic / Gemini）
 4. 返回 AI 响应内容
 
 **请求格式**（发送给 Python）：
@@ -467,9 +467,12 @@ app.manage(AppState { db, python }) - 注入状态
   "messages": [
     {"role": "user", "content": "Hello"}
   ],
-  "context_resource_ids": [1, 2]
+  "context_resource_ids": [1, 2],
+  "stream": false
 }
 ```
+
+> `stream=true` 时 Python 返回 `text/event-stream`（SSE）增量内容；当前 `send_chat_message` 仍使用非流式 JSON。
 
 **支持的 Provider**：
 
@@ -481,6 +484,11 @@ app.manage(AppState { db, python }) - 注入状态
 | grok | OpenAI 兼容 | grok-beta |
 | deepseek | OpenAI 兼容 | deepseek-chat |
 | qwen | OpenAI 兼容 | qwen-plus |
+
+**适配细节**：
+- OpenAI 使用 Responses API，system 消息合并为 `instructions`。
+- OpenAI 兼容 Provider 仍走 Chat Completions。
+- Gemini 将 system 消息映射为 `system_instruction`，assistant 角色映射为 `model`。
 
 ###### `get_assets_path`
 

@@ -47,6 +47,12 @@ src-python/
 | GET | `/ingest/status/{resource_id}` | 查询处理状态 |
 | GET | `/ingest/stream` | 向 Rust 推送进度 |
 
+### /chat
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/chat/completions` | 调用 LLM 生成回复（支持 SSE 流式） |
+
 ### 其他
 
 | 方法 | 路径 | 说明 |
@@ -64,6 +70,61 @@ src-python/
                     Fetch → Parse → Chunk → Embed → Upsert
                                     ↓
                             向 Rust 推送进度
+```
+
+---
+
+## Chat 接口
+
+### 请求格式
+
+```json
+{
+  "provider": "openai",
+  "model": "gpt-4o",
+  "api_key": "sk-xxx",
+  "base_url": "https://api.openai.com/v1",
+  "messages": [
+    {"role": "system", "content": "You are a helpful assistant."},
+    {"role": "user", "content": "Hello"}
+  ],
+  "context_resource_ids": [1, 2],
+  "stream": false
+}
+```
+
+### 关键行为
+
+- **OpenAI**: 使用 Responses API；system 消息合并为 `instructions`。
+- **OpenAI 兼容**（Deepseek/Qwen/Grok）: 继续走 Chat Completions。
+- **Gemini**: system 消息映射为 `system_instruction`，assistant 角色映射为 `model`。
+- **Anthropic**: system 单独传入 `system` 字段。
+
+### 非流式响应
+
+```json
+{
+  "content": "AI 回复内容",
+  "usage": {
+    "input_tokens": 10,
+    "output_tokens": 20
+  }
+}
+```
+
+### 流式响应 (SSE)
+
+当 `stream=true` 时返回 `text/event-stream`，事件格式如下：
+
+```json
+{"type":"delta","content":"片段内容"}
+{"type":"done","content":"完整内容"}
+```
+
+如发生错误：
+
+```json
+{"type":"error","message":"错误信息"}
 ```
 
 ---
