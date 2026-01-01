@@ -22,9 +22,7 @@ import {
   Palette,
   Globe,
   Key,
-  Monitor,
   Keyboard,
-  Info,
   Eye,
   EyeOff,
   Trash2,
@@ -105,9 +103,11 @@ function APIKeyCard({
   return (
     <div className="flex items-center justify-between p-4 border rounded-lg">
       <div className="flex items-center gap-3">
-        <span className="text-xl font-bold w-8 h-8 flex items-center justify-center bg-muted rounded">
-          {providerInfo.icon}
-        </span>
+        <img
+          src={`/src/assets/${providerInfo.icon}`}
+          alt={providerInfo.name}
+          className="w-8 h-8"
+        />
         <div>
           <p className="font-medium">{providerInfo.name}</p>
           {hasKey && enabled ? (
@@ -310,7 +310,7 @@ export function SettingsPage({ theme, onThemeChange }: SettingsPageProps) {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Monitor className="h-5 w-5" />
+              <img src="/src/assets/ollama.svg" alt="Ollama" className="h-5 w-5" />
               {t("settings", "localModel")}
             </CardTitle>
             <CardDescription>{t("settings", "localDesc")}</CardDescription>
@@ -361,23 +361,6 @@ export function SettingsPage({ theme, onThemeChange }: SettingsPageProps) {
                 {shortcut}
               </Badge>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* About */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Info className="h-5 w-5" />
-              {t("settings", "about")}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <p className="text-lg font-semibold">NeuralVault</p>
-            <Badge variant="outline">{t("settings", "versionMVP")}</Badge>
-            <p className="text-sm text-muted-foreground pt-2">
-              {t("settings", "aboutDesc")}
-            </p>
           </CardContent>
         </Card>
       </div>

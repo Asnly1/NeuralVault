@@ -256,7 +256,7 @@ export interface ProviderInfo {
 export const AI_PROVIDER_INFO: Record<AIProvider, ProviderInfo> = {
   openai: {
     name: "ChatGPT",
-    icon: "O",
+    icon: "openai.svg",
     defaultBaseUrl: "https://api.openai.com/v1",
     models: [
       { id: "gpt-4o", name: "GPT-4o" },
@@ -267,7 +267,7 @@ export const AI_PROVIDER_INFO: Record<AIProvider, ProviderInfo> = {
   },
   anthropic: {
     name: "Claude",
-    icon: "A",
+    icon: "claude-color.svg",
     defaultBaseUrl: null,
     models: [
       { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4" },
@@ -278,7 +278,7 @@ export const AI_PROVIDER_INFO: Record<AIProvider, ProviderInfo> = {
   },
   gemini: {
     name: "Gemini",
-    icon: "G",
+    icon: "gemini-color.svg",
     defaultBaseUrl: null,
     models: [
       { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash" },
@@ -288,13 +288,13 @@ export const AI_PROVIDER_INFO: Record<AIProvider, ProviderInfo> = {
   },
   grok: {
     name: "Grok",
-    icon: "X",
+    icon: "grok.svg",
     defaultBaseUrl: "https://api.x.ai/v1",
     models: [{ id: "grok-beta", name: "Grok Beta" }],
   },
   deepseek: {
     name: "Deepseek",
-    icon: "D",
+    icon: "deepseek-color.svg",
     defaultBaseUrl: "https://api.deepseek.com/v1",
     models: [
       { id: "deepseek-chat", name: "Deepseek Chat" },
@@ -303,7 +303,7 @@ export const AI_PROVIDER_INFO: Record<AIProvider, ProviderInfo> = {
   },
   qwen: {
     name: "Qwen",
-    icon: "Q",
+    icon: "qwen-color.svg",
     defaultBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     models: [
       { id: "qwen-turbo", name: "Qwen Turbo" },
