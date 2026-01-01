@@ -23,9 +23,14 @@ src-tauri/
 │   │   ├── resources.rs    # 资源捕获相关命令
 │   │   ├── clipboard.rs    # 剪贴板相关命令
 │   │   ├── dashboard.rs    # Dashboard 相关命令
-│   │   └── python.rs       # Python Sidecar 相关命令
+│   │   ├── python.rs       # Python Sidecar 相关命令
+│   │   └── ai_config.rs    # AI 配置相关命令（API Key 管理、聊天）
+│   ├── services/            # 服务层模块
+│   │   ├── mod.rs          # 模块导出
+│   │   └── ai_config.rs    # AI 配置服务（加密存储 API Key）
 │   ├── utils/               # 工具函数模块
 │   │   ├── mod.rs          # 模块导出
+│   │   ├── crypto.rs       # AES-256-GCM 加密模块
 │   │   ├── hash.rs         # 哈希计算工具
 │   │   ├── file.rs         # 文件操作工具
 │   │   └── notification.rs # Python 后端通知
@@ -69,6 +74,9 @@ src-tauri/
 | `sha2`                         | 0.10  | SHA-256 哈希（资源去重）                |
 | `reqwest`                      | 0.12  | HTTP 客户端（通知 Python 后端）         |
 | `clipboard-rs`                 | 0.2   | 跨平台剪贴板访问（读取图片/文件/文本）  |
+| `aes-gcm`                      | 0.10  | AES-256-GCM 加密（API Key 加密存储）    |
+| `rand`                         | 0.8   | 随机数生成（加密密钥生成）              |
+| `directories`                  | 5     | 跨平台应用数据目录（密钥文件存储）      |
 
 #### 编译优化
 
@@ -155,16 +163,19 @@ fn main() {
 ```rust
 use crate::db::DbPool;
 use crate::sidecar::PythonSidecar;
+use crate::services::AIConfigService;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub db: DbPool,                    // SQLx 数据库连接池
-    pub python: Arc<PythonSidecar>,    // Python Sidecar 管理器
+    pub db: DbPool,                              // SQLx 数据库连接池
+    pub python: Arc<PythonSidecar>,              // Python Sidecar 管理器
+    pub ai_config: Arc<Mutex<AIConfigService>>,  // AI 配置服务（加密存储）
 }
 ```
 
-通过 `State<AppState>` 在命令间共享数据库连接和 Python Sidecar。
+通过 `State<AppState>` 在命令间共享数据库连接、Python Sidecar 和 AI 配置服务。
 
 ---
 
@@ -361,6 +372,11 @@ app.manage(AppState { db, python }) - 注入状态
 | `seed_demo_data`                  | `state`                       | `Result<SeedResponse>`          | 生成演示数据（3 个任务 + 3 个资源）      |
 | `read_clipboard`                  | `app`                         | `Result<ReadClipboardResponse>` | 读取系统剪贴板（图片/文件/HTML/文本）    |
 | `get_assets_path`                 | `app`                         | `Result<String>`                | 获取 assets 目录的完整路径               |
+| `get_ai_config_status`            | `state`                       | `Result<AIConfigStatusResponse>`| 获取 AI 配置状态（各 Provider 是否已配置）|
+| `save_api_key`                    | `state, SetApiKeyRequest`     | `Result<()>`                    | 保存 API Key 到加密配置                  |
+| `remove_api_key`                  | `state, provider`             | `Result<()>`                    | 删除指定 Provider 的 API Key            |
+| `set_default_model`               | `state, SetDefaultModelRequest`| `Result<()>`                   | 设置默认模型                             |
+| `send_chat_message`               | `state, SendChatRequest`      | `Result<ChatResponse>`          | 发送聊天消息（通过 Python 调用 LLM）     |
 
 ##### 核心逻辑详解
 
@@ -429,6 +445,43 @@ app.manage(AppState { db, python }) - 注入状态
 
 生成 3 个演示任务和 3 个演示资源，用于快速体验功能。
 
+###### `send_chat_message`
+
+发送聊天消息到 AI，通过 Python 后端调用 LLM API。
+
+**流程**：
+
+1. 从加密配置获取 API Key
+2. 构建请求发送给 Python `/chat/completions` 端点
+3. Python 根据 provider 类型调用对应的 SDK（OpenAI/Anthropic/Gemini）
+4. 返回 AI 响应内容
+
+**请求格式**（发送给 Python）：
+
+```json
+{
+  "provider": "openai",
+  "model": "gpt-4o",
+  "api_key": "sk-xxx",
+  "base_url": "https://api.openai.com/v1",
+  "messages": [
+    {"role": "user", "content": "Hello"}
+  ],
+  "context_resource_ids": [1, 2]
+}
+```
+
+**支持的 Provider**：
+
+| Provider | SDK | 模型示例 |
+| --- | --- | --- |
+| openai | OpenAI | gpt-4o, gpt-4o-mini |
+| anthropic | Anthropic | claude-sonnet-4-20250514 |
+| gemini | google-genai | gemini-2.0-flash |
+| grok | OpenAI 兼容 | grok-beta |
+| deepseek | OpenAI 兼容 | deepseek-chat |
+| qwen | OpenAI 兼容 | qwen-plus |
+
 ###### `get_assets_path`
 
 获取 assets 目录的完整路径，用于前端将相对路径（如 `assets/xxx.png`）转换为可访问的完整路径。
@@ -479,16 +532,95 @@ pub async fn update_resource_display_name(
 
 ---
 
+### `services/` 模块
+
+服务层模块，封装核心业务逻辑。
+
+#### 模块结构
+
+- **`ai_config.rs`**: AI 配置服务（加密存储 API Key）
+- **`mod.rs`**: 导出服务
+
+#### `services/ai_config.rs`
+
+AI 配置服务，负责加密存储和读取 API Key 配置。
+
+##### 数据结构
+
+| 结构体 | 功能 | 关键字段 |
+| --- | --- | --- |
+| `ProviderConfig` | 单个 Provider 配置 | api_key, base_url, enabled |
+| `AIConfigData` | 完整配置数据 | version, providers, default_provider, default_model |
+| `AIConfigService` | 配置服务实例 | config_path, crypto |
+
+##### 核心方法
+
+| 方法 | 参数 | 返回值 | 说明 |
+| --- | --- | --- | --- |
+| `new()` | `app_data_dir` | `Result<Self>` | 创建配置服务实例 |
+| `load()` | - | `Result<AIConfigData>` | 加载配置（解密） |
+| `save()` | `&AIConfigData` | `Result<()>` | 保存配置（加密） |
+| `set_api_key()` | `provider, api_key, base_url` | `Result<()>` | 设置 API Key |
+| `remove_provider()` | `provider` | `Result<()>` | 删除 Provider 配置 |
+| `get_api_key()` | `provider` | `Result<Option<String>>` | 获取 API Key |
+| `get_provider_config()` | `provider` | `Result<Option<ProviderConfig>>` | 获取完整配置 |
+| `set_default_model()` | `provider, model` | `Result<()>` | 设置默认模型 |
+
+##### 存储位置
+
+- **配置文件**: `{app_data_dir}/ai_config.enc`（AES-256-GCM 加密）
+- **密钥文件**: 由 `utils/crypto.rs` 管理
+
+---
+
 ### `utils/` 模块
 
 工具函数模块，提供通用的辅助功能。
 
 #### 模块结构
 
+- **`crypto.rs`**: AES-256-GCM 加密模块
 - **`hash.rs`**: SHA-256 哈希计算
 - **`file.rs`**: 文件操作相关工具函数
 - **`notification.rs`**: Python 后端异步通知
 - **`mod.rs`**: 导出所有工具函数
+
+#### `utils/crypto.rs`
+
+AES-256-GCM 加密模块，用于加密存储 API Key 等敏感配置。
+
+##### 核心结构
+
+```rust
+pub struct CryptoService {
+    cipher: Aes256Gcm,
+}
+```
+
+##### 主要方法
+
+| 方法 | 参数 | 返回值 | 说明 |
+| --- | --- | --- | --- |
+| `new()` | - | `Result<Self>` | 初始化加密服务（自动加载或生成密钥） |
+| `encrypt()` | `plaintext: &[u8]` | `Result<Vec<u8>>` | 加密数据，返回 [nonce][ciphertext][tag] |
+| `decrypt()` | `encrypted: &[u8]` | `Result<Vec<u8>>` | 解密数据 |
+
+##### 密钥管理
+
+- **密钥生成**: 使用 `OsRng` 生成 32 字节随机密钥
+- **密钥存储**:
+  - macOS: `~/Library/Application Support/com.hovsco.neuralvault/master.key`
+  - Windows: `C:\Users\Name\AppData\Roaming\hovsco\neuralvault\data\master.key`
+  - Linux: `~/.local/share/neuralvault/master.key`
+- **权限控制**:
+  - Unix: `chmod 600`（仅所有者可读写）
+  - Windows: `icacls` 移除继承权限，仅当前用户完全控制
+
+##### 安全特性
+
+- **AES-256-GCM**: 认证加密，提供机密性和完整性保护
+- **随机 Nonce**: 每次加密使用 12 字节随机 nonce
+- **文件权限**: 密钥文件仅当前用户可访问
 
 #### `utils/hash.rs`
 

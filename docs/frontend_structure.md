@@ -7,6 +7,9 @@ src/
 ├── api/
 │   └── index.ts          # Tauri 后端 invoke 封装
 ├── assets/               # 静态资源（图标/占位符）
+├── contexts/
+│   ├── AIContext.tsx     # AI 配置和聊天状态管理
+│   └── LanguageContext.tsx # 多语言支持
 ├── components/
 │   ├── index.ts
 │   ├── PDFViewer.tsx     # PDF 阅读器（懒加载）
@@ -67,6 +70,8 @@ src/
 - API 类型：`CreateTaskRequest/Response`、`CaptureRequest/Response`、`LinkResourceRequest/Response`、`TaskResourcesResponse`、`SeedResponse`、`CaptureSourceMeta`。
 - 剪贴板类型：`ClipboardContent`（Image/Files/Text/Html/Empty）、`ReadClipboardResponse`。
 - 常量：`priorityConfig`（中文标签 + 颜色）、`resourceTypeIcons`（emoji 图标）、`navItems`（Sidebar 菜单，包括日历）。
+- AI Provider 类型：`AIProvider`（"openai" | "anthropic" | "gemini" | "grok" | "deepseek" | "qwen"）、`aiProviderValues`、`ModelInfo`、`ProviderInfo`、`AI_PROVIDER_INFO`（各 Provider 的配置信息）。
+- AI 配置类型：`AIProviderStatus`、`AIConfigStatus`、`SaveApiKeyRequest`、`SetDefaultModelRequest`、`ChatMessagePayload`、`SendChatRequest`、`ChatResponse`、`ModelOption`、`ChatMessage`。
 
 ---
 
@@ -89,6 +94,11 @@ src/
 | `fetchTasksByDate()`      | `date: string`         | `Promise<Task[]>`                | 获取指定日期的所有任务                |
 | `fetchAllTasks()`         | -                      | `Promise<Task[]>`                | 获取所有任务（包括 todo 和 done），用于 Calendar 视图 |
 | `updateResourceContent()` | `(resourceId, content)` | `Promise<void>`                  | 更新资源内容（保存编辑器更改）        |
+| `getAIConfigStatus()`     | -                       | `Promise<AIConfigStatus>`        | 获取 AI 配置状态（各 Provider 是否已配置）|
+| `saveApiKey()`            | `SaveApiKeyRequest`     | `Promise<void>`                  | 保存 API Key 到加密配置              |
+| `removeApiKey()`          | `provider: string`      | `Promise<void>`                  | 删除指定 Provider 的 API Key        |
+| `setDefaultModel()`       | `SetDefaultModelRequest`| `Promise<void>`                  | 设置默认模型                         |
+| `sendChatMessage()`       | `SendChatRequest`       | `Promise<ChatResponse>`          | 发送聊天消息并获取 AI 回复           |
 
 ---
 
@@ -376,6 +386,61 @@ const PDFViewer = lazy(() =>
 
 ---
 
+### `contexts/`
+
+Context 模块，提供全局状态管理。
+
+#### `AIContext.tsx`
+
+AI 配置和聊天状态管理 Context，负责与 Rust 后端通信管理 API Key 和发送聊天消息。
+
+**提供的状态**：
+
+| 状态 | 类型 | 说明 |
+| --- | --- | --- |
+| `config` | `AIConfigStatus \| null` | AI 配置状态（各 Provider 是否已配置） |
+| `loading` | `boolean` | 配置加载状态 |
+| `error` | `string \| null` | 错误信息 |
+| `messages` | `ChatMessage[]` | 当前会话的聊天消息 |
+| `sending` | `boolean` | 消息发送状态 |
+| `selectedModel` | `ModelOption \| null` | 当前选中的模型 |
+| `availableModels` | `ModelOption[]` | 可用的模型列表（基于已配置的 Provider） |
+
+**提供的方法**：
+
+| 方法 | 参数 | 返回值 | 说明 |
+| --- | --- | --- | --- |
+| `saveKey()` | `provider, apiKey, baseUrl?` | `Promise<void>` | 保存 API Key |
+| `removeKey()` | `provider` | `Promise<void>` | 删除 API Key |
+| `refreshConfig()` | - | `Promise<void>` | 刷新配置状态 |
+| `selectModel()` | `ModelOption` | `void` | 选择模型 |
+| `sendMessage()` | `content` | `Promise<void>` | 发送聊天消息 |
+| `clearMessages()` | - | `void` | 清空聊天记录 |
+
+**使用示例**：
+
+```tsx
+import { useAI } from "@/contexts/AIContext";
+
+function MyComponent() {
+  const { config, availableModels, sendMessage } = useAI();
+
+  // 检查是否有可用模型
+  if (availableModels.length === 0) {
+    return <div>请先配置 API Key</div>;
+  }
+
+  // 发送消息
+  await sendMessage("Hello, AI!");
+}
+```
+
+#### `LanguageContext.tsx`
+
+多语言支持 Context，提供中英文切换功能。
+
+---
+
 ### `pages/`
 
 页面组件对应设计文档中的页面与 HUD 窗口。
@@ -586,22 +651,53 @@ interface EditorPanelProps {
 
 ##### `workspace/ChatPanel.tsx`
 
-右侧聊天面板组件，AI 助手占位。
+右侧聊天面板组件，集成 AI 聊天功能。
+
+**核心功能**：
+
+- **模型选择**：下拉菜单显示所有已配置 API Key 的 Provider 及其模型
+- **消息发送**：输入消息并通过 Enter 键或发送按钮发送
+- **消息展示**：显示用户和 AI 的对话历史
+- **加载状态**：发送消息时显示"思考中..."状态
+- **未配置提示**：如果没有配置任何 API Key，显示引导用户前往设置页
 
 ```tsx
 interface ChatPanelProps {
-  chatInput: string;
-  onChatInputChange: (value: string) => void;
   width: number;
   tempWidth: number | null;
   isResizing: boolean;
   onMouseDown: (e: React.MouseEvent) => void;
+  onNavigateToSettings?: () => void; // 导航到设置页的回调
 }
 ```
 
+**使用的 Context**：
+- `useAI()` - 获取 AI 配置状态、可用模型、发送消息等功能
+
 #### `Settings.tsx` (Page E)
 
-设置：API Key 输入，本地模型开关与 URL，快捷键展示，关于信息。
+设置页面，包含 API Key 管理、外观设置、快捷键展示和关于信息。
+
+**API Key 管理**：
+
+- **Provider 卡片**：为每个支持的 AI Provider（ChatGPT、Claude、Gemini、Grok、Deepseek、Qwen）显示独立的配置卡片
+- **状态显示**：已配置的 Provider 显示绿色"已配置"徽章，未配置显示"未配置"
+- **API Key 输入**：密码样式输入框，支持显示/隐藏切换（Eye 图标）
+- **保存/删除**：点击"配置"或"更新"按钮保存，已配置的 Provider 可删除
+
+```tsx
+interface APIKeyCardProps {
+  provider: AIProvider;
+  hasKey: boolean;
+  enabled: boolean;
+  baseUrl: string | null;
+  onSave: (apiKey: string, baseUrl?: string) => Promise<void>;
+  onRemove: () => Promise<void>;
+}
+```
+
+**使用的 Context**：
+- `useAI()` - 获取配置状态、保存/删除 API Key
 
 #### `HUD.tsx` (Quick Capture HUD)
 

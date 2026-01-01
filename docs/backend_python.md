@@ -45,10 +45,31 @@ src-python/
       1. Request: { "query": "深度学习", "top_k": 20, "filters": { "task_id": 5, "file_type": "pdf" } }
    2. （预留）POST: /search/rerank 对检索结果进行重排序。
 3. chat.py:
-   1. POST: /chat/completions 发送消息并获取回复。支持流式输出。内部会自动根据 task_id 挂载相关的 Context。
-      1. Request: { "session_id": 1, "context": "main.py", "message": "如何部署?", "stream": true }
-   2. GET: /chat/history/{session_id} 获取历史聊天记录。
-   3. POST: /chat/session/new 创建一个新的会话，绑定特定的 Task 或 Resource。
+   1. POST: /chat/completions 发送消息并获取回复。Rust 传入 API Key，Python 调用对应 Provider 的 SDK。
+      1. Request:
+         ```json
+         {
+           "provider": "openai" | "anthropic" | "gemini" | "grok" | "deepseek" | "qwen",
+           "model": "gpt-4o",
+           "api_key": "sk-xxx",
+           "base_url": "https://api.openai.com/v1",  // 可选，用于自定义端点
+           "messages": [{"role": "user", "content": "Hello"}],
+           "context_resource_ids": [1, 2]  // 可选，关联的资源 ID
+         }
+         ```
+      2. Response:
+         ```json
+         {
+           "content": "AI 回复内容",
+           "usage": {"prompt_tokens": 10, "completion_tokens": 20}
+         }
+         ```
+      3. Provider 路由：
+         - **openai/grok/deepseek/qwen**: 使用 OpenAI SDK（兼容 API）
+         - **anthropic**: 使用 Anthropic SDK
+         - **gemini**: 使用 Google GenAI SDK
+   2. GET: /chat/history/{session_id} 获取历史聊天记录。（预留）
+   3. POST: /chat/session/new 创建一个新的会话，绑定特定的 Task 或 Resource。（预留）
       1. Request: { "task_id": 12, "title": "关于部署的讨论" }
 4. agent.py:
    1. POST: /agent/decompose 任务拆解。读取 Task 标题和描述以及相关 context，生成建议的子任务列表。存到 suggested_subtasks 里面。异步展示。任务先创建成功（状态为 todo），然后 UI 上显示一个“✨ AI 正在分析...”的微动画，分析完了悄悄把建议挂在旁边，而不是阻断用户操作。
