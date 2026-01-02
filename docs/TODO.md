@@ -24,3 +24,4 @@
    2. API Key 的加密获取
 18. HUD周边有白框
 19. 统一路径获取方式
+20. 优化API调用方法（Prompt / Batch API）

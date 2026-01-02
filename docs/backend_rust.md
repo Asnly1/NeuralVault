@@ -919,30 +919,6 @@ commands/* (业务逻辑)
 
 ---
 
-## 测试
-
-### 集成测试
-
-位于 `db/tests.rs` 模块：
-
-- **数据库初始化测试**：验证 WAL 模式启用
-- **CRUD 测试**：测试任务和资源的插入、查询、关联操作
-- **使用 tempfile**：每个测试创建临时数据库，隔离环境
-
-运行测试：
-
-```bash
-cd src-tauri
-cargo test
-```
-
-测试覆盖：
-
-- `db::tests::tests::init_db_runs_migrations_and_enables_wal`: 数据库初始化
-- `db::tests::tests::insert_and_query_task_and_resource`: 任务和资源的完整流程
-
----
-
 ## 开发建议
 
 ### 1. 新增命令

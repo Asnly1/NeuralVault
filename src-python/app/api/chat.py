@@ -1,6 +1,32 @@
 """
 聊天对话接口
 API Key 由 Rust 在请求中传入，Python 不持久化存储
+1. POST: /chat/completions 发送消息并获取回复。Rust 传入 API Key，Python 调用对应 Provider 的 SDK。
+    1. Request:
+        ```json
+        {
+        "provider": "openai" | "anthropic" | "gemini" | "grok" | "deepseek" | "qwen",
+        "model": "gpt-4o",
+        "api_key": "sk-xxx",
+        "base_url": "https://api.openai.com/v1",  // 可选，用于自定义端点
+        "messages": [{"text": "Hello", "images": ["path/to/image.jpg"], "files": ["path/to/file.pdf"]}],
+        "context_resource_ids": [1, 2]  // 可选，关联的资源 ID
+        }
+        ```
+    2. Response:
+        ```json
+        {
+        "content": "AI 回复内容",
+        "usage": {"prompt_tokens": 10, "completion_tokens": 20}
+        }
+        ```
+    3. Provider 路由：
+        - **openai/grok/deepseek/qwen**: 使用 OpenAI SDK（兼容 API）
+        - **anthropic**: 使用 Anthropic SDK
+        - **gemini**: 使用 Google GenAI SDK
+2. GET: /chat/history/{session_id} 获取历史聊天记录。
+3. POST: /chat/session/new 创建一个新的会话，绑定特定的 Task 或 Resource。
+    1. Request: { "task_id": 12, "title": "关于部署的讨论" }
 """
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
