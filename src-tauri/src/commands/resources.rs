@@ -10,7 +10,7 @@ use crate::{
         unlink_resource_from_task, LinkResourceParams, NewResource, ResourceClassificationStatus,
         ResourceProcessingStage, ResourceSyncStatus, SourceMeta, VisibilityScope,
     },
-    utils::{compute_sha256, get_assets_dir, get_extension, notify_python, parse_file_type, NotifySource, NotifyAction},
+    utils::{compute_sha256, get_assets_dir, get_extension, notify_python, parse_file_type, NotifyAction},
 };
 
 use super::{
@@ -271,7 +271,6 @@ pub async fn capture_resource(
     let base_url = state.python.get_base_url();
     tauri::async_runtime::spawn(notify_python(
         base_url.leak(),
-        NotifySource::Resource,
         resource_id,
         NotifyAction::Created,
     ));

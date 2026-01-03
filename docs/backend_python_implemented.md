@@ -43,7 +43,7 @@ src-python/
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/ingest/notify` | Rust 通知数据变更，立即返回，后台处理 |
+| POST | `/ingest` | Rust 通知数据变更，立即返回，后台处理 |
 | GET | `/ingest/status/{resource_id}` | 查询处理状态 |
 | GET | `/ingest/stream` | 向 Rust 推送进度 |
 
@@ -65,7 +65,7 @@ src-python/
 ## Ingestion 流水线
 
 ```
-/ingest/notify → IngestionQueue → Worker
+/ingest → IngestionQueue → Worker
                                     ↓
                     Fetch → Parse → Chunk → Embed → Upsert
                                     ↓

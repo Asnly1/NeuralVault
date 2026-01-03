@@ -516,14 +516,13 @@ class ChatMessage(SQLModel, table=True):
 # API DTO (请求/响应)
 # ============================================================
 
-class IngestNotifyRequest(PydanticBaseModel):
+class IngestRequest(PydanticBaseModel):
     """Ingest 通知请求"""
-    source_type: Literal["resource", "task"]
     id: int
     action: Literal["created", "updated", "deleted"]
 
 
-class IngestNotifyResponse(PydanticBaseModel):
+class IngestResponse(PydanticBaseModel):
     """Ingest 通知响应"""
     status: Literal["accepted", "rejected"]
     message: Optional[str] = None

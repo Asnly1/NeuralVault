@@ -42,7 +42,6 @@ async def process_ingestion_job(
         await _process_resource_ingestion(job.source_id, job.action, progress_callback)
     elif job.job_type == JobType.DELETE_RESOURCE:
         await _process_resource_deletion(job.source_id)
-    # TODO: 处理 Task 相关的 ingestion
 
 
 async def _process_resource_ingestion(

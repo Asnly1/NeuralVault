@@ -101,7 +101,6 @@ progress_broadcaster = ProgressBroadcaster.get_instance()
 class JobType(str, Enum):
     """任务类型"""
     INGEST_RESOURCE = "ingest_resource"
-    INGEST_TASK = "ingest_task"
     DELETE_RESOURCE = "delete_resource"
 
 class JobAction(str, Enum):
@@ -114,7 +113,7 @@ class JobAction(str, Enum):
 class IngestionJob:
     """Ingestion 任务"""
     job_type: JobType
-    source_id: int  # resource_id 或 task_id
+    source_id: int  # resource_id
     action: JobAction
     retry_count: int = 0
     max_retries: int = 3

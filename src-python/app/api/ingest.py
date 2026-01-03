@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_db
 from app.models.sql_models import (
     Resource, ProcessingStage,
-    IngestNotifyRequest, IngestNotifyResponse, IngestStatusResponse
+    IngestRequest, IngestResponse, IngestStatusResponse
 )
 from app.workers.queue_manager import (
     ingestion_queue, IngestionJob, JobType, JobAction,
@@ -19,21 +19,18 @@ from app.workers.queue_manager import (
 router = APIRouter()
 
 
-@router.post("/notify", response_model=IngestNotifyResponse)
-async def notify_ingestion(request: IngestNotifyRequest):
+@router.post("/", response_model=IngestResponse)
+async def ingestion(request: IngestRequest):
     """
     接收 Rust 发来的数据变更通知
     
     立即返回 200 OK，使用后台任务队列处理
     """
     # 确定任务类型
-    if request.source_type == "resource":
-        if request.action == "deleted":
-            job_type = JobType.DELETE_RESOURCE
-        else:
-            job_type = JobType.INGEST_RESOURCE
+    if request.action == "deleted":
+        job_type = JobType.DELETE_RESOURCE
     else:
-        job_type = JobType.INGEST_TASK
+        job_type = JobType.INGEST_RESOURCE
     
     # 确定动作类型
     action_map = {
@@ -52,9 +49,9 @@ async def notify_ingestion(request: IngestNotifyRequest):
     
     await ingestion_queue.enqueue(job)
     
-    return IngestNotifyResponse(
+    return IngestResponse(
         status="accepted",
-        message=f"Job {job_type.value} for {request.source_type} {request.id} queued"
+        message=f"Job {job_type.value} for {request.id} queued"
     )
 
 

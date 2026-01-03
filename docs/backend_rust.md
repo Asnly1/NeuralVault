@@ -398,7 +398,7 @@ app.manage(AppState { db, python }) - 注入状态
 
 **哈希计算**：使用 SHA-256 对文本/文件字节计算 hash，用于去重
 
-**异步通知 Python**：捕获成功后通过 `PythonSidecar.get_base_url()` 获取动态端口的 URL，异步调用 `/ingest/notify`，失败不影响主流程
+**异步通知 Python**：捕获成功后通过 `PythonSidecar.get_base_url()` 获取动态端口的 URL，异步调用 `/ingest`，失败不影响主流程
 
 ###### `get_tasks_by_date`
 
@@ -656,22 +656,19 @@ Python 后端通知，使用动态端口与 Python 后端通信。
 
 | 枚举类型 | 可选值 | 说明 |
 | --- | --- | --- |
-| `NotifySource` | Resource/Task | 通知的来源类型 |
 | `NotifyAction` | Created/Updated/Deleted | 通知的动作类型 |
 
 **函数**：
 
-- `notify_python(base_url: &str, source: NotifySource, id: i64, action: NotifyAction)`: 异步通知 Python 后端处理资源或任务
+- `notify_python(base_url: &str, id: i64, action: NotifyAction)`: 异步通知 Python 后端处理资源或任务
   - `base_url`: 从 `PythonSidecar.get_base_url()` 获取的动态 URL
-  - `source`: 通知类型（Resource 或 Task）
   - `id`: 资源或任务的 ID
   - `action`: 动作类型（Created, Updated, Deleted）
 
-**请求格式**（匹配 Python 的 `IngestNotifyRequest`）：
+**请求格式**（匹配 Python 的 `IngestRequest`）：
 
 ```json
 {
-  "source_type": "resource",
   "id": 123,
   "action": "created"
 }
