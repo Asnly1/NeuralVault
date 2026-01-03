@@ -3,7 +3,9 @@ from anthropic import Anthropic
 from google import genai
 import base64
 
+# ============================================================
 # OpenAI Example
+# ============================================================
 client = OpenAI(api_key="")
 
 # Function to create a file with the Files API
@@ -63,8 +65,68 @@ res2 = client.responses.create(
     stream=True
 )
 
+# Response
+# {
+#   "id": "resp_67ccd2bed1ec8190b14f964abc0542670bb6a6b452d3795b",
+#   "object": "response",
+#   "created_at": 1741476542,
+#   "status": "completed",
+#   "error": null,
+#   "incomplete_details": null,
+#   "instructions": null,
+#   "max_output_tokens": null,
+#   "model": "gpt-4.1-2025-04-14",
+#   "output": [
+#     {
+#       "type": "message",
+#       "id": "msg_67ccd2bf17f0819081ff3bb2cf6508e60bb6a6b452d3795b",
+#       "status": "completed",
+#       "role": "assistant",
+#       "content": [
+#         {
+#           "type": "output_text",
+#           "text": "In a peaceful grove beneath a silver moon, a unicorn named Lumina discovered a hidden pool that reflected the stars. As she dipped her horn into the water, the pool began to shimmer, revealing a pathway to a magical realm of endless night skies. Filled with wonder, Lumina whispered a wish for all who dream to find their own hidden magic, and as she glanced back, her hoofprints sparkled like stardust.",
+#           "annotations": []
+#         }
+#       ]
+#     }
+#   ],
+#   "parallel_tool_calls": true,
+#   "previous_response_id": null,
+#   "reasoning": {
+#     "effort": null,
+#     "summary": null
+#   },
+#   "store": true,
+#   "temperature": 1.0,
+#   "text": {
+#     "format": {
+#       "type": "text"
+#     }
+#   },
+#   "tool_choice": "auto",
+#   "tools": [],
+#   "top_p": 1.0,
+#   "truncation": "disabled",
+#   "usage": {
+#     "input_tokens": 36,
+#     "input_tokens_details": {
+#       "cached_tokens": 0
+#     },
+#     "output_tokens": 87,
+#     "output_tokens_details": {
+#       "reasoning_tokens": 0
+#     },
+#     "total_tokens": 123
+#   },
+#   "user": null,
+#   "metadata": {}
+# }
 
+
+# ============================================================
 # Anthropic Example
+# ============================================================
 client = Anthropic(api_key="")
 
 # image支持类型：.png, .jpg, .jpeg, .webp
@@ -112,7 +174,7 @@ message = client.messages.create(
     betas=["files-api-2025-04-14"],
 )
 
-# Multi-turn conversation: Compact messages manully
+# Multi-turn conversation: Manage messages manully
 message = client.messages.create(
     model="claude-sonnet-4-5",
     max_tokens=1024,
@@ -133,7 +195,29 @@ with client.messages.stream(
   for text in stream.text_stream:
       print(text, end="", flush=True)
 
+# Response
+# {
+#   "id": "msg_01XFDUDYJgAACzvnptvVoYEL",
+#   "type": "message",
+#   "role": "assistant",
+#   "content": [
+#     {
+#       "type": "text",
+#       "text": "Hello!"
+#     }
+#   ],
+#   "model": "claude-sonnet-4-5",
+#   "stop_reason": "end_turn",
+#   "stop_sequence": null,
+#   "usage": {
+#     "input_tokens": 12,
+#     "output_tokens": 6
+#   }
+# }
+
+# ============================================================
 # Google Example
+# ============================================================
 client = genai.Client(api_key="")
 
 # image支持类型：.png, .jpg, .jpeg, .webp
@@ -193,3 +277,181 @@ for chunk in response:
     print(chunk.text)
 
 print(chat.get_history())
+print(response.usage_metadata)
+
+# ============================================================
+# Grok Example
+# ============================================================
+
+from xai_sdk import Client
+from xai_sdk.chat import user, system
+
+client = Client(api_key="")
+
+# 单轮对话
+
+chat = client.chat.create(model="grok-4", store_messages=False)
+chat.append(system("You are Grok, a chatbot inspired by the Hitchhiker's Guide to the Galaxy."))
+chat.append(user("What is the meaning of life, the universe, and everything?"))
+response = chat.sample()
+
+print(response)
+
+# 流式多轮对话
+image_grok = client.files.upload("/path/to/your/image.jpg")
+pdf_grok = client.files.upload("/path/to/your/document.pdf")
+
+chat = client.chat.create(model="grok-4", store_messages=False)
+chat.append(
+    system("You are Grok, a chatbot inspired by the Hitchhiker's Guide to the Galaxy."),
+)
+chat.append(
+    user("What is the meaning of life, the universe, and everything?, file(image_grok.id), file(pdf_grok.id)")
+)
+for response, chunk in chat.stream():
+    print(chunk.content, end="", flush=True) # Each chunk's content
+    print(response.content, end="", flush=True) # The response object auto-accumulates the chunks
+
+print(response.content) # The full response
+
+# Response Format
+# data: {
+#     "id":"<completion_id>","object":"chat.completion.chunk","created":<creation_time>,
+#     "model":"grok-4",
+#     "choices":[{"index":0,"delta":{"content":"Ah","role":"assistant"}}],
+#     "usage":{"prompt_tokens":41,"completion_tokens":1,"total_tokens":42,
+#     "prompt_tokens_details":{"text_tokens":41,"audio_tokens":0,"image_tokens":0,"cached_tokens":0}},
+#     "system_fingerprint":"fp_xxxxxxxxxx"
+# }
+
+# data: {
+#     "id":"<completion_id>","object":"chat.completion.chunk","created":<creation_time>,
+#     "model":"grok-4",
+#     "choices":[{"index":0,"delta":{"content":",","role":"assistant"}}],
+#     "usage":{"prompt_tokens":41,"completion_tokens":2,"total_tokens":43,
+#     "prompt_tokens_details":{"text_tokens":41,"audio_tokens":0,"image_tokens":0,"cached_tokens":0}},
+#     "system_fingerprint":"fp_xxxxxxxxxx"
+# }
+
+# data: [DONE]
+
+# ============================================================
+# Deepseek Example
+# ============================================================
+
+client = OpenAI(
+    api_key=os.environ.get('DEEPSEEK_API_KEY'),
+    base_url="https://api.deepseek.com")
+
+# 单轮对话
+response = client.chat.completions.create(
+    model="deepseek-chat", # deepseek-chat / deepseek-reasoner
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant"},
+        {"role": "user", "content": "Hello"},
+    ],
+    stream=False
+)
+
+print(response.choices[0].message.content)
+
+# 多轮对话
+
+messages = [{"role": "user", "content": "What's the highest mountain in the world?"}]
+response = client.chat.completions.create(
+    model="deepseek-chat",
+    messages=messages
+)
+
+messages.append(response.choices[0].message)
+print(f"Messages Round 1: {messages}")
+
+# Round 2
+messages.append({"role": "user", "content": "What is the second?"})
+response = client.chat.completions.create(
+    model="deepseek-chat",
+    messages=messages
+)
+
+messages.append(response.choices[0].message)
+print(f"Messages Round 2: {messages}")
+
+# 流式
+response = client.chat.completions.create(
+    model="deepseek-chat", # deepseek-chat / deepseek-reasoner
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant"},
+        {"role": "user", "content": "Hello"},
+    ],
+    stream=True
+)
+
+for chunk in response:
+  print(chunk.choices[0].delta)
+
+
+# ============================================================
+# Qwen Example
+# ============================================================
+
+client = OpenAI(
+    api_key=os.getenv("DASHSCOPE_API_KEY"),
+    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+)
+# 单轮对话
+response = client.chat.completions.create(
+    model="qwen-plus",
+    messages=[{'role': 'system', 'content': 'You are a helpful assistant.'},
+                {'role': 'user', 'content': '你是谁？'}]
+    )
+
+print(response.choices[0].message.content)
+
+print(completion.model_dump_json())
+
+# {
+#     "id": "chatcmpl-xxx",
+#     "choices": [
+#         {
+#             "finish_reason": "stop",
+#             "index": 0,
+#             "logprobs": null,
+#             "message": {
+#                 "content": "我是来自阿里云的超大规模预训练模型，我叫通义千问。",
+#                 "role": "assistant",
+#                 "function_call": null,
+#                 "tool_calls": null
+#             }
+#         }
+#     ],
+#     "created": 1716430652,
+#     "model": "qwen-plus",
+#     "object": "chat.completion",
+#     "system_fingerprint": null,
+#     "usage": {
+#         "completion_tokens": 18,
+#         "prompt_tokens": 22,
+#         "total_tokens": 40
+#     }
+# }
+
+# 流式对话
+
+completion = client.chat.completions.create(
+    model="qwen-plus",
+    messages=[{'role': 'system', 'content': 'You are a helpful assistant.'},
+                {'role': 'user', 'content': '你是谁？'}],
+    stream=True,
+    stream_options={"include_usage": True}
+    )
+for chunk in completion:
+    print(chunk.model_dump_json())
+
+# {"id":"chatcmpl-xxx","choices":[{"delta":{"content":"","function_call":null,"role":"assistant","tool_calls":null},"finish_reason":null,"index":0,"logprobs":null}],"created":1719286190,"model":"qwen-plus","object":"chat.completion.chunk","system_fingerprint":null,"usage":null}
+# {"id":"chatcmpl-xxx","choices":[{"delta":{"content":"我是","function_call":null,"role":null,"tool_calls":null},"finish_reason":null,"index":0,"logprobs":null}],"created":1719286190,"model":"qwen-plus","object":"chat.completion.chunk","system_fingerprint":null,"usage":null}
+# {"id":"chatcmpl-xxx","choices":[{"delta":{"content":"来自","function_call":null,"role":null,"tool_calls":null},"finish_reason":null,"index":0,"logprobs":null}],"created":1719286190,"model":"qwen-plus","object":"chat.completion.chunk","system_fingerprint":null,"usage":null}
+# {"id":"chatcmpl-xxx","choices":[{"delta":{"content":"阿里","function_call":null,"role":null,"tool_calls":null},"finish_reason":null,"index":0,"logprobs":null}],"created":1719286190,"model":"qwen-plus","object":"chat.completion.chunk","system_fingerprint":null,"usage":null}
+# {"id":"chatcmpl-xxx","choices":[{"delta":{"content":"云的大规模语言模型","function_call":null,"role":null,"tool_calls":null},"finish_reason":null,"index":0,"logprobs":null}],"created":1719286190,"model":"qwen-plus","object":"chat.completion.chunk","system_fingerprint":null,"usage":null}
+# {"id":"chatcmpl-xxx","choices":[{"delta":{"content":"，我叫通义千问。","function_call":null,"role":null,"tool_calls":null},"finish_reason":null,"index":0,"logprobs":null}],"created":1719286190,"model":"qwen-plus","object":"chat.completion.chunk","system_fingerprint":null,"usage":null}
+# {"id":"chatcmpl-xxx","choices":[{"delta":{"content":"","function_call":null,"role":null,"tool_calls":null},"finish_reason":"stop","index":0,"logprobs":null}],"created":1719286190,"model":"qwen-plus","object":"chat.completion.chunk","system_fingerprint":null,"usage":null}
+# {"id":"chatcmpl-xxx","choices":[],"created":1719286190,"model":"qwen-plus","object":"chat.completion.chunk","system_fingerprint":null,"usage":{"completion_tokens":16,"prompt_tokens":22,"total_tokens":38}}
