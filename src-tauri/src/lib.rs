@@ -20,9 +20,7 @@ pub use commands::{
     mark_task_as_done_command, mark_task_as_todo_command, update_task_priority_command,
     update_task_due_date_command, update_task_title_command, update_task_description_command,
     get_tasks_by_date, get_all_tasks, update_resource_content_command, update_resource_display_name_command,
-    check_python_health, is_python_running,
-    // AI 配置命令
-    get_ai_config_status, save_api_key, remove_api_key, set_default_model, send_chat_message,
+    check_python_health, is_python_running, get_ai_config_status, save_api_key, remove_api_key, set_default_model, send_chat_message,
 };
 pub use sidecar::PythonSidecar;
 pub use window::{hide_hud, toggle_hud};
