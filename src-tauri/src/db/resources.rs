@@ -153,7 +153,11 @@ pub async fn update_resource_content(
     resource_id: i64,
     content: &str,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query("UPDATE resources SET content = ? WHERE resource_id = ?")
+    sqlx::query(
+        "UPDATE resources \
+         SET content = ?, sync_status = 'dirty', processing_stage = 'todo', last_error = NULL \
+         WHERE resource_id = ?"
+    )
         .bind(content)
         .bind(resource_id)
         .execute(pool)

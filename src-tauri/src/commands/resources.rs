@@ -269,11 +269,9 @@ pub async fn capture_resource(
     // ========== 异步通知 Python ==========
     // 捕获成功后立即通知 Python 后台处理
     let base_url = state.python.get_base_url();
-    tauri::async_runtime::spawn(notify_python(
-        base_url.leak(),
-        resource_id,
-        NotifyAction::Created,
-    ));
+    tauri::async_runtime::spawn(async move {
+        notify_python(&base_url, resource_id, NotifyAction::Created).await;
+    });
 
     Ok(CaptureResponse {
         resource_id,
@@ -387,6 +385,11 @@ pub async fn update_resource_content_command(
         .await
         .map_err(|e| e.to_string())?;
 
+    let base_url = state.python.get_base_url();
+    tauri::async_runtime::spawn(async move {
+        notify_python(&base_url, resource_id, NotifyAction::Updated).await;
+    });
+
     Ok(())
 }
 
@@ -446,6 +449,11 @@ pub async fn hard_delete_resource_command(
             }
         }
     }
+
+    let base_url = state.python.get_base_url();
+    tauri::async_runtime::spawn(async move {
+        notify_python(&base_url, resource_id, NotifyAction::Deleted).await;
+    });
 
     Ok(LinkResourceResponse { success: true })
 }

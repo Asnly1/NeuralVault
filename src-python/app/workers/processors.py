@@ -115,6 +115,8 @@ async def _process_resource_ingestion(
             # 无内容时发送空结果
             if not text_content or not text_content.strip():
                 logger.info(f"No content to process for resource: {resource_id}")
+                if action == JobAction.UPDATED:
+                    await vector_service.delete_by_resource(resource_id, qdrant_client)
                 await progress_broadcaster.broadcast_result(IngestionResult(
                     resource_id=resource_id,
                     success=True,
@@ -131,6 +133,8 @@ async def _process_resource_ingestion(
 
             if not chunks:
                 logger.info(f"No chunks generated for resource: {resource_id}")
+                if action == JobAction.UPDATED:
+                    await vector_service.delete_by_resource(resource_id, qdrant_client)
                 await progress_broadcaster.broadcast_result(IngestionResult(
                     resource_id=resource_id,
                     success=True,
@@ -195,9 +199,13 @@ async def _process_resource_deletion(resource_id: int):
     """处理资源删除 - 清理 Qdrant 数据"""
     db_manager = await DatabaseManager.get_instance()
     qdrant_client = db_manager.get_qdrant()
-    
-    await vector_service.delete_by_resource(resource_id, qdrant_client)
-    logger.info(f"Resource {resource_id} vectors deleted from Qdrant")
+
+    try:
+        await vector_service.delete_by_resource(resource_id, qdrant_client)
+        logger.info(f"Resource {resource_id} vectors deleted from Qdrant")
+    except Exception as e:
+        logger.error(f"Resource {resource_id} deletion failed: {e}")
+        raise
 
 
 async def rebuild_pending_queue():
