@@ -12,7 +12,7 @@ from typing import Optional
 
 from app.core.db import DatabaseManager
 from app.core.logging import get_logger
-from app.schemas import ProcessingStage, ChunkResult, IngestionResult, JobType, IngestionJob, ProgressCallback
+from app.schemas import ProcessingStage, ChunkResult, IngestionResult, JobType, JobAction, IngestionJob, ProgressCallback
 from app.services.file_service import file_service
 from app.services.vector_service import vector_service
 from app.workers.queue_manager import progress_broadcaster

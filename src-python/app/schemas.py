@@ -2,7 +2,7 @@
 Shared schemas and enums for the Python service.
 """
 from enum import Enum
-from typing import Optional, List, Literal
+from typing import Optional, List, Literal, Callable, Awaitable
 
 from pydantic import BaseModel
 

@@ -4,11 +4,9 @@
 """
 import asyncio
 import json
-from dataclasses import dataclass
-from enum import Enum
 from typing import Optional, Callable, Awaitable, AsyncGenerator
 
-from app.schemas import ProcessingStage, IngestProgress, IngestionResult
+from app.schemas import ProcessingStage, IngestProgress, IngestionResult, IngestionJob, ProgressCallback
 from app.core.logging import get_logger
 
 logger = get_logger("IngestionQueue")
