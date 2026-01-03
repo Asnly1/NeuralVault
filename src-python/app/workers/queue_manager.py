@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Callable, Awaitable, AsyncGenerator
 
-from app.models.sql_models import ProcessingStage
+from app.models.sql_models import ProcessingStage, IngestProgress, IngestionResult
 from app.core.logging import get_logger
 
 logger = get_logger("IngestionQueue")
@@ -74,16 +74,20 @@ class ProgressBroadcaster:
             percentage: 进度百分比 (0-100)
             error: 错误信息（如果有）
         """
-        message = {
-            "type": "progress",
-            "resource_id": resource_id,
-            "stage": stage.value,
-            "percentage": percentage,
-        }
+        message = IngestProgress(
+            resource_id=resource_id,
+            status=stage,
+            percentage=percentage,
+            error=error if error else None
+        )
+        await self._broadcast_message(message.model_dump(exclude_none=True))
 
-        if error:
-            message["error"] = error
+    async def broadcast_result(self, result: IngestionResult):
+        """广播处理结果"""
+        await self._broadcast_message(result.model_dump(exclude_none=True))
 
+    async def _broadcast_message(self, message: dict):
+        """内部广播方法"""
         async with self._lock:
             subscribers = list(self._subscribers)
 

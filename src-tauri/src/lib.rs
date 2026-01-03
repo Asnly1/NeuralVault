@@ -71,6 +71,12 @@ pub fn run() {
             // 启动 Python 进程（非阻塞）
             python_sidecar.start(app)?;
             
+            // 在后台等待 Python 就绪（不阻塞 UI 显示）
+            // 需要先 clone pool，因为下面会把 pool 移动到 AppState 中
+            let python_for_health = python_sidecar.clone();
+            let app_handle = app.handle().clone();
+            let db_pool_for_stream = pool.clone();
+
             // 初始化好的 AppState（包含数据库连接池、Python sidecar 和 AI 配置服务）注入到 Tauri 的全局管理器中
             // 注意：此时不等待 Python 健康检查，让 UI 先显示
             app.manage(AppState {
@@ -78,11 +84,7 @@ pub fn run() {
                 python: python_sidecar.clone(),
                 ai_config: Arc::new(Mutex::new(ai_config_service)),
             });
-            
-            // 在后台等待 Python 就绪（不阻塞 UI 显示）
-            let python_for_health = python_sidecar.clone();
-            let app_handle = app.handle().clone();
-            // move 关键字强制将该闭包（closure）内部使用到的外部变量（如 client, url, app_handle）的所有权（Ownership） 从外部环境“移动”到这个异步任务内部
+            // move 关键字强制将该闭包（closure）内部使用到的外部变量（如 client, url, app_handle）的所有权（Ownership） 从外部环境"移动"到这个异步任务内部
             tauri::async_runtime::spawn(async move {
                 println!("[Tauri] Waiting for Python backend in background...");
                 match python_for_health.wait_for_health(20).await {
@@ -94,9 +96,10 @@ pub fn run() {
                         }));
 
                         // 启动全局进度流连接
-                        // 通过 HTTP StreamingResponse + NDJSON 接收 Python 的处理进度，
-                        // 并通过 Tauri Events 转发给前端
-                        python_for_health.start_progress_stream(app_handle.clone());
+                        // 通过 HTTP StreamingResponse + NDJSON 接收 Python 的处理进度和结果，
+                        // 进度消息通过 Tauri Events 转发给前端，
+                        // 结果消息由 Rust 统一写入数据库
+                        python_for_health.start_progress_stream(app_handle.clone(), db_pool_for_stream);
                     }
                     Err(e) => {
                         eprintln!("[Tauri] Python backend failed to start: {}", e);

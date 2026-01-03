@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 
 import { Sparkles, CheckCircle2, LayoutGrid, Plus } from "lucide-react";
 
-import { Task, Resource, PythonProgress } from "../types";
+import { Task, Resource, IngestProgress } from "../types";
 import { TaskCard } from "../components/TaskCard";
 import { ResourceCard } from "../components/ResourceCard";
 import { QuickCapture } from "../components/QuickCapture";
@@ -25,7 +25,7 @@ interface DashboardPageProps {
   onSelectTask: (task: Task) => void;
   onSelectResource: (resource: Resource) => void;
   onLinkResource: (resourceId: number, taskId: number) => Promise<void>;
-  progressMap?: Map<number, PythonProgress>;
+  progressMap?: Map<number, IngestProgress>;
 }
 
 export function DashboardPage({

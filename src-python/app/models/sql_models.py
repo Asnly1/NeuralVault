@@ -535,12 +535,33 @@ class IngestStatusResponse(PydanticBaseModel):
     error: Optional[str] = None
 
 
-class PythonMessage(PydanticBaseModel):
-    """Python 消息"""
+class IngestProgress(PydanticBaseModel):
+    """Ingest 消息"""
+    type: Literal["progress"] = "progress"
     resource_id: int
-    event: Literal["ingest", "decompose", "tag", "report"]
     status: ProcessingStage
     percentage: Optional[int] = None
+    error: Optional[str] = None
+
+
+class ChunkResult(PydanticBaseModel):
+    """单个 chunk 的处理结果"""
+    chunk_text: str
+    chunk_index: int
+    page_number: Optional[int] = None
+    qdrant_uuid: str
+    embedding_hash: str
+    token_count: Optional[int] = None
+
+
+class IngestionResult(PydanticBaseModel):
+    """Ingestion 结果消息（返回给 Rust）"""
+    type: Literal["result"] = "result"
+    resource_id: int
+    success: bool
+    chunks: Optional[List["ChunkResult"]] = None
+    embedding_model: Optional[str] = None
+    indexed_hash: Optional[str] = None
     error: Optional[str] = None
 
 

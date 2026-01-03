@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { listen } from "@tauri-apps/api/event";
-import type { PythonProgress } from "../types";
+import type { IngestProgress } from "../types";
 
 /**
  * Ingest 进度管理 Hook
@@ -12,7 +12,7 @@ import type { PythonProgress } from "../types";
  * @returns clearProgress - 清除特定资源的进度
  */
 export function useIngestProgress() {
-  const [progressMap, setProgressMap] = useState<Map<number, PythonProgress>>(new Map());
+  const [progressMap, setProgressMap] = useState<Map<number, IngestProgress>>(new Map());
 
   // 监听 Tauri Events
 
@@ -38,11 +38,11 @@ export function useIngestProgress() {
         // 参数：{
         //   event: "ingest-progress", // 事件名
         //   windowLabel: "main",      // 发出事件的窗口（如果是全局事件则可能不同）
-        //   payload: { ... }          // Rust 传递过来的实际数据（对应你的 PythonProgress）
+        //   payload: { ... }          // Rust 传递过来的实际数据（对应你的 IngestProgress）
         //   id: number                // 事件唯一ID
         // }
         // listen 会返回一个 UnlistenFn，用于取消监听
-        const fn = await listen<PythonProgress>("ingest-progress", (event) => {
+        const fn = await listen<IngestProgress>("ingest-progress", (event) => {
           if (!isMounted) return; // 防止在卸载后设置状态
           const progress = event.payload;
           console.log("[IngestProgress] Progress update:", progress);

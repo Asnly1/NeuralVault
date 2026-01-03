@@ -183,3 +183,25 @@ pub struct LinkResourceParams<'a> {
     pub visibility_scope: VisibilityScope,
     pub local_alias: Option<&'a str>,
 }
+
+/// Python 处理后返回的 chunk 数据
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChunkData {
+    pub chunk_text: String,
+    pub chunk_index: i32,
+    pub page_number: Option<i32>,
+    pub qdrant_uuid: String,
+    pub embedding_hash: String,
+    pub token_count: Option<i32>,
+}
+
+/// Python 处理结果
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IngestionResultData {
+    pub resource_id: i64,
+    pub success: bool,
+    pub chunks: Option<Vec<ChunkData>>,
+    pub embedding_model: Option<String>,
+    pub indexed_hash: Option<String>,
+    pub error: Option<String>,
+}

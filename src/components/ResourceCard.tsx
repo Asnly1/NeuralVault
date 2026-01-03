@@ -21,7 +21,7 @@ import {
   Trash2,
   Loader2
 } from "lucide-react";
-import { Resource, Task, ResourceType, PythonProgress, ProcessingStage } from "../types";
+import { Resource, Task, ResourceType, IngestProgress, ProcessingStage } from "../types";
 
 interface ResourceCardProps {
   resource: Resource;
@@ -29,7 +29,7 @@ interface ResourceCardProps {
   onLinkToTask?: (resourceId: number, taskId: number) => Promise<void>;
   onDelete?: (resourceId: number) => Promise<void>;
   onClick?: (resource: Resource) => void;
-  progress?: PythonProgress;
+  progress?: IngestProgress;
 }
 
 const iconMap: Record<ResourceType, React.ReactNode> = {

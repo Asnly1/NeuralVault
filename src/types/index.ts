@@ -206,7 +206,7 @@ export interface ReadClipboardResponse {
 }
 
 // ============================================
-// WebSocket Progress Types (对应 Python: PythonMessage)
+// Ingest Progress Types (对应 Python: IngestProgress)
 // ============================================
 
 /**
@@ -216,11 +216,10 @@ export const processingStageValues = ["todo", "chunking", "embedding", "done"] a
 export type ProcessingStage = (typeof processingStageValues)[number];
 
 /**
- * WebSocket 进度消息 (对应 Python: PythonMessage)
+ * 进度消息 (对应 Python: IngestProgress)
  */
-export interface PythonProgress {
+export interface IngestProgress {
   resource_id: number;
-  event: "ingest" | "decompose" | "tag" | "report";
   status: ProcessingStage;
   percentage?: number;
   error?: string;

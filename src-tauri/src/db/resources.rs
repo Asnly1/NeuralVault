@@ -180,18 +180,109 @@ pub async fn update_resource_display_name(
 }
 
 /// 硬删除资源（物理删除数据库记录）
-/// 
+///
 /// 注意：由于配置了 ON DELETE CASCADE，删除资源会级联删除：
 /// - task_resource_link 表中的关联记录
 /// - context_chunks 表中的所有分块记录
-/// 
+///
 /// 注意：此函数不会删除物理文件（assets 目录中的文件）
 /// 如需删除文件，请在调用此函数前先获取 file_path 并手动删除
+/// TODO：删除物理文件
 pub async fn hard_delete_resource(
     pool: &DbPool,
     resource_id: i64,
 ) -> Result<(), sqlx::Error> {
     sqlx::query("DELETE FROM resources WHERE resource_id = ?")
+        .bind(resource_id)
+        .execute(pool)
+        .await?;
+
+    Ok(())
+}
+
+/// 批量插入 context_chunks
+///
+/// 由 Rust 端统一写入，接收 Python 处理后的结果
+pub async fn insert_context_chunks(
+    pool: &DbPool,
+    resource_id: i64,
+    chunks: &[super::ChunkData],
+    embedding_model: Option<&str>,
+) -> Result<(), sqlx::Error> {
+    for chunk in chunks {
+        sqlx::query(
+            "INSERT INTO context_chunks \
+             (resource_id, chunk_text, chunk_index, page_number, \
+              qdrant_uuid, embedding_hash, embedding_model, embedding_at, token_count) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)"
+        )
+        .bind(resource_id)
+        .bind(&chunk.chunk_text)
+        .bind(chunk.chunk_index)
+        .bind(chunk.page_number)
+        .bind(&chunk.qdrant_uuid)
+        .bind(&chunk.embedding_hash)
+        .bind(embedding_model)
+        .bind(chunk.token_count)
+        .execute(pool)
+        .await?;
+    }
+
+    Ok(())
+}
+
+/// 更新资源处理状态
+///
+/// 由 Rust 端统一更新，接收 Python 处理后的状态
+pub async fn update_resource_sync_status(
+    pool: &DbPool,
+    resource_id: i64,
+    sync_status: &str,
+    processing_stage: &str,
+    indexed_hash: Option<&str>,
+    last_error: Option<&str>,
+) -> Result<(), sqlx::Error> {
+    // 如果是 synced 状态，同时更新 last_indexed_at
+    if sync_status == "synced" {
+        sqlx::query(
+            "UPDATE resources SET \
+             sync_status = ?, processing_stage = ?, indexed_hash = ?, \
+             last_indexed_at = CURRENT_TIMESTAMP, last_error = ? \
+             WHERE resource_id = ?"
+        )
+        .bind(sync_status)
+        .bind(processing_stage)
+        .bind(indexed_hash)
+        .bind(last_error)
+        .bind(resource_id)
+        .execute(pool)
+        .await?;
+    } else {
+        sqlx::query(
+            "UPDATE resources SET \
+             sync_status = ?, processing_stage = ?, indexed_hash = ?, last_error = ? \
+             WHERE resource_id = ?"
+        )
+        .bind(sync_status)
+        .bind(processing_stage)
+        .bind(indexed_hash)
+        .bind(last_error)
+        .bind(resource_id)
+        .execute(pool)
+        .await?;
+    }
+
+    Ok(())
+}
+
+/// 删除资源的所有 chunks
+///
+/// 用于资源更新前清理旧数据
+pub async fn delete_context_chunks(
+    pool: &DbPool,
+    resource_id: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM context_chunks WHERE resource_id = ?")
         .bind(resource_id)
         .execute(pool)
         .await?;

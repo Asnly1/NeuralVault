@@ -4,11 +4,17 @@ use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{App, AppHandle, Emitter, Manager};
+use serde::Deserialize;
 
 // Unix 进程组支持
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
 use futures_util::StreamExt;
+
+use crate::db::{
+    DbPool, IngestionResultData,
+    insert_context_chunks, update_resource_sync_status, delete_context_chunks,
+};
 
 /// 编译时获取项目根目录（Cargo.toml 所在目录）
 /// 在开发模式下，这会指向 src-tauri 目录
@@ -292,10 +298,12 @@ impl PythonSidecar {
     /// 启动全局进度流连接
     ///
     /// 建立到 Python `/ingest/stream` 端点的 HTTP 长连接，
-    /// 读取 NDJSON 格式的进度消息，并通过 Tauri Events 转发给前端。
+    /// 读取 NDJSON 格式的消息，区分进度消息和结果消息：
+    /// - 进度消息 (type: "progress")：通过 Tauri Events 转发给前端
+    /// - 结果消息 (type: "result")：写入数据库并通知前端
     ///
     /// 该方法会在后台持续运行，连接断开后自动重连。
-    pub fn start_progress_stream(&self, app_handle: AppHandle) {
+    pub fn start_progress_stream(&self, app_handle: AppHandle, db_pool: DbPool) {
         let url = format!("{}/ingest/stream", self.get_base_url());
         let client = self.client.clone();
 
@@ -303,7 +311,7 @@ impl PythonSidecar {
 
         tauri::async_runtime::spawn(async move {
             loop {
-                match Self::connect_and_read_stream(&client, &url, &app_handle).await {
+                match Self::connect_and_read_stream(&client, &url, &app_handle, &db_pool).await {
                     Ok(_) => {
                         println!("[Sidecar] Progress stream ended normally");
                     }
@@ -324,6 +332,7 @@ impl PythonSidecar {
         client: &reqwest::Client,
         url: &str,
         app_handle: &AppHandle,
+        db_pool: &DbPool,
     ) -> Result<(), String> {
         let response = client
             .get(url)
@@ -365,15 +374,47 @@ impl PythonSidecar {
                             continue;
                         }
 
-                        // 解析 JSON 并发送 Tauri Event
-                        match serde_json::from_str::<serde_json::Value>(&line) {
-                            Ok(progress) => {
-                                if let Err(e) = app_handle.emit("ingest-progress", &progress) {
-                                    eprintln!("[Sidecar] Failed to emit progress event: {}", e);
+                        // 解析 JSON 并根据消息类型处理
+                        match serde_json::from_str::<StreamMessage>(&line) {
+                            Ok(msg) => {
+                                match msg.msg_type.as_str() {
+                                    "progress" => {
+                                        // 进度消息：emit 给前端
+                                        if let Err(e) = app_handle.emit("ingest-progress", &msg.payload) {
+                                            eprintln!("[Sidecar] Failed to emit progress event: {}", e);
+                                        }
+                                    }
+                                    "result" => {
+                                        // 结果消息：写入数据库
+                                        match serde_json::from_value::<IngestionResultData>(msg.payload.clone()) {
+                                            Ok(result) => {
+                                                if let Err(e) = Self::handle_ingestion_result(db_pool, &result).await {
+                                                    eprintln!("[Sidecar] Failed to handle ingestion result: {}", e);
+                                                }
+                                                // emit done 状态给前端
+                                                let done_msg = serde_json::json!({
+                                                    "type": "progress",
+                                                    "resource_id": result.resource_id,
+                                                    "status": if result.success { "done" } else { "error" },
+                                                    "percentage": if result.success { 100 } else { 0 },
+                                                    "error": result.error
+                                                });
+                                                if let Err(e) = app_handle.emit("ingest-progress", &done_msg) {
+                                                    eprintln!("[Sidecar] Failed to emit done event: {}", e);
+                                                }
+                                            }
+                                            Err(e) => {
+                                                eprintln!("[Sidecar] Failed to parse ingestion result: {}", e);
+                                            }
+                                        }
+                                    }
+                                    _ => {
+                                        // 未知消息类型，忽略
+                                    }
                                 }
                             }
                             Err(e) => {
-                                eprintln!("[Sidecar] Failed to parse progress JSON: {} - line: {}", e, line);
+                                eprintln!("[Sidecar] Failed to parse stream message: {} - line: {}", e, line);
                             }
                         }
                     }
@@ -386,6 +427,86 @@ impl PythonSidecar {
 
         Ok(())
     }
+
+    /// 处理 Python 返回的 Ingestion 结果
+    ///
+    /// 将处理结果写入数据库：
+    /// - 成功：插入 context_chunks，更新 resources 状态为 synced
+    /// - 失败：更新 resources 状态为 error
+    async fn handle_ingestion_result(
+        db_pool: &DbPool,
+        result: &IngestionResultData,
+    ) -> Result<(), String> {
+        let resource_id = result.resource_id;
+
+        if result.success {
+            // 成功：写入 chunks 并更新状态
+            if let Some(chunks) = &result.chunks {
+                // 先删除旧的 chunks（如果是更新操作）
+                delete_context_chunks(db_pool, resource_id)
+                    .await
+                    .map_err(|e| format!("Failed to delete old chunks: {}", e))?;
+
+                // 插入新的 chunks
+                if !chunks.is_empty() {
+                    insert_context_chunks(
+                        db_pool,
+                        resource_id,
+                        chunks,
+                        result.embedding_model.as_deref(),
+                    )
+                    .await
+                    .map_err(|e| format!("Failed to insert chunks: {}", e))?;
+                }
+            }
+
+            // 更新资源状态为 synced
+            update_resource_sync_status(
+                db_pool,
+                resource_id,
+                "synced",
+                "done",
+                result.indexed_hash.as_deref(),
+                None,
+            )
+            .await
+            .map_err(|e| format!("Failed to update resource status: {}", e))?;
+
+            println!(
+                "[Sidecar] Ingestion result processed: resource_id={}, chunks={}",
+                resource_id,
+                result.chunks.as_ref().map(|c| c.len()).unwrap_or(0)
+            );
+        } else {
+            // 失败：更新状态为 error
+            update_resource_sync_status(
+                db_pool,
+                resource_id,
+                "error",
+                "done",
+                None,
+                result.error.as_deref(),
+            )
+            .await
+            .map_err(|e| format!("Failed to update resource error status: {}", e))?;
+
+            eprintln!(
+                "[Sidecar] Ingestion failed: resource_id={}, error={:?}",
+                resource_id, result.error
+            );
+        }
+
+        Ok(())
+    }
+}
+
+/// Stream 消息结构
+#[derive(Debug, Deserialize)]
+struct StreamMessage {
+    #[serde(rename = "type")]
+    msg_type: String,
+    #[serde(flatten)]
+    payload: serde_json::Value,
 }
 
 impl Drop for PythonSidecar {

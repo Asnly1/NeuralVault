@@ -1,27 +1,26 @@
 """
 具体的消费者逻辑 (处理 Embedding、Task Routing)
 Ingestion Worker 处理流程：
-1. Fetch: 从 SQLite 读取 Resource
+1. Fetch: 从 SQLite 读取 Resource（只读）
 2. Parse: 调用 FileService 解析文件
 3. Chunk: 调用 VectorService 切片
 4. Embed: 调用 VectorService 生成向量
-5. Upsert: 写入 Qdrant + SQLite (context_chunks)
-6. Update: 更新 sync_status 和 processing_stage
+5. Upsert: 写入 Qdrant
+6. Result: 通过 Stream 发送结果给 Rust，由 Rust 统一写入 SQLite
 """
-from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import select, delete
+from sqlalchemy import select
 
 from app.core.db import DatabaseManager
 from app.core.logging import get_logger
 from app.models.sql_models import (
-    Resource, ContextChunk, SyncStatus, ProcessingStage
+    Resource, SyncStatus, ProcessingStage, ChunkResult, IngestionResult
 )
 from app.services.file_service import file_service
 from app.services.vector_service import vector_service
 from app.workers.queue_manager import (
-    IngestionJob, JobType, JobAction, ProgressCallback
+    IngestionJob, JobType, JobAction, ProgressCallback, progress_broadcaster
 )
 
 logger = get_logger("Processor")
@@ -51,161 +50,136 @@ async def _process_resource_ingestion(
 ):
     """
     处理资源 Ingestion
-    
-    完整流程：Fetch -> Parse -> Chunk -> Embed -> Upsert -> Update
+
+    完整流程：Fetch -> Parse -> Chunk -> Embed -> Upsert to Qdrant -> Send Result to Rust
+
+    注意：不再直接写入 SQLite，而是通过 Stream 发送结果给 Rust 统一写入
     """
     db_manager = await DatabaseManager.get_instance()
     qdrant_client = db_manager.get_qdrant()
-    
+
     async for session in db_manager.get_session():
         try:
-            # 1. Fetch: 从 SQLite 读取 Resource
+            # 1. Fetch: 从 SQLite 读取 Resource（只读）
             result = await session.execute(
                 select(Resource).where(Resource.resource_id == resource_id)
             )
             # 获取单个结果，如果不存在则返回 None
             # 如果存在多条结果，会抛出异常
             resource = result.scalar_one_or_none()
-            
+
             if not resource:
                 logger.warning(f"Resource not found: {resource_id}")
                 return
-            
-            # 更新状态为 chunking
-            resource.processing_stage = ProcessingStage.chunking
-            resource.processing_hash = resource.file_hash
-            await session.commit()
+
+            file_hash = resource.file_hash
             await progress_callback(resource_id, ProcessingStage.chunking, 10)
-            
+
             # 2. Parse: 获取文本内容
-            # 合并 content（用户输入的文本）和 file_path（文件解析的文本）
             text_parts: list[str] = []
-            
-            # 2a. 如果有用户输入的文本内容，添加到列表
+
             if resource.content:
                 text_parts.append(resource.content)
-            
-            # 2b. 如果有文件，解析并添加到列表
+
             if resource.file_path:
                 try:
                     file_text = await file_service.parse_file(
-                        resource.file_path, 
+                        resource.file_path,
                         resource.file_type
                     )
                     if file_text and file_text.strip():
                         text_parts.append(file_text)
                 except NotImplementedError as e:
                     logger.warning(f"Unsupported file type: {e}")
-                    resource.sync_status = SyncStatus.error
-                    resource.last_error = str(e)
-                    await session.commit()
+                    await progress_broadcaster.broadcast_result(IngestionResult(
+                        resource_id=resource_id,
+                        success=False,
+                        error=str(e)
+                    ))
                     return
                 except FileNotFoundError as e:
                     logger.warning(f"File not found: {e}")
-                    resource.sync_status = SyncStatus.error
-                    resource.last_error = str(e)
-                    await session.commit()
+                    await progress_broadcaster.broadcast_result(IngestionResult(
+                        resource_id=resource_id,
+                        success=False,
+                        error=str(e)
+                    ))
                     return
-            
-            # 合并所有文本部分
+
             text_content: Optional[str] = "\n\n".join(text_parts) if text_parts else None
-            
+
+            # 无内容时发送空结果
             if not text_content or not text_content.strip():
                 logger.info(f"No content to process for resource: {resource_id}")
-                resource.sync_status = SyncStatus.synced
-                resource.processing_stage = ProcessingStage.done
-                resource.indexed_hash = resource.file_hash
-                resource.last_indexed_at = datetime.now(timezone.utc)
-                await session.commit()
-                await progress_callback(resource_id, ProcessingStage.done, 100)
+                await progress_broadcaster.broadcast_result(IngestionResult(
+                    resource_id=resource_id,
+                    success=True,
+                    chunks=[],
+                    indexed_hash=file_hash
+                ))
                 return
-            
+
             await progress_callback(resource_id, ProcessingStage.chunking, 30)
-            
+
             # 3. Chunk: 切分文本
             chunks = vector_service.chunk_text(text_content)
-            
+
             if not chunks:
                 logger.info(f"No chunks generated for resource: {resource_id}")
-                resource.sync_status = SyncStatus.synced
-                resource.processing_stage = ProcessingStage.done
-                resource.indexed_hash = resource.file_hash
-                resource.last_indexed_at = datetime.now(timezone.utc)
-                await session.commit()
-                await progress_callback(resource_id, ProcessingStage.done, 100)
+                await progress_broadcaster.broadcast_result(IngestionResult(
+                    resource_id=resource_id,
+                    success=True,
+                    chunks=[],
+                    indexed_hash=file_hash
+                ))
                 return
-            
-            # 更新状态为 embedding
-            resource.processing_stage = ProcessingStage.embedding
-            await session.commit()
+
             await progress_callback(resource_id, ProcessingStage.embedding, 50)
-            
-            # 4 & 5. Embed + Upsert: 如果是更新，先删除旧数据
+
+            # 4. 如果是更新，先删除 Qdrant 中的旧向量
             if action == JobAction.UPDATED:
-                # 删除 Qdrant 中的旧向量
                 await vector_service.delete_by_resource(resource_id, qdrant_client)
-                
-                # 删除 SQLite 中的旧 chunks
-                await session.execute(
-                    delete(ContextChunk).where(ContextChunk.resource_id == resource_id)
-                )
-            
-            # 向量化并写入 Qdrant
+
+            # 5. Embed + Upsert to Qdrant
             chunk_metadata = await vector_service.upsert_chunks(
                 resource_id, chunks, qdrant_client
             )
-            
+
             await progress_callback(resource_id, ProcessingStage.embedding, 80)
-            
-            # 6. 批量写入 SQLite context_chunks
+
+            # 6. 构建并发送结果给 Rust（不再写入 SQLite）
             embedding_model = vector_service._dense_model.model_name if vector_service._dense_model else None
-            now = datetime.now(timezone.utc)
-            
-            context_chunks = [
-                ContextChunk(
-                    resource_id=resource_id,
+
+            chunk_results = [
+                ChunkResult(
                     chunk_text=meta["text"],
                     chunk_index=meta["chunk_index"],
                     page_number=meta["page_number"],
                     qdrant_uuid=meta["qdrant_uuid"],
                     embedding_hash=meta["embedding_hash"],
-                    embedding_model=embedding_model,
-                    embedding_at=now,
                     token_count=meta["token_count"]
                 )
                 for meta in chunk_metadata
             ]
-            
-            session.add_all(context_chunks)
-            
-            # 7. Update: 更新 Resource 状态
-            resource.sync_status = SyncStatus.synced
-            resource.processing_stage = ProcessingStage.done
-            resource.indexed_hash = resource.file_hash
-            resource.last_indexed_at = now
-            resource.last_error = None
-            
-            await session.commit()
-            await progress_callback(resource_id, ProcessingStage.done, 100)
-            
+
+            await progress_broadcaster.broadcast_result(IngestionResult(
+                resource_id=resource_id,
+                success=True,
+                chunks=chunk_results,
+                embedding_model=embedding_model,
+                indexed_hash=file_hash
+            ))
+
             logger.info(f"Resource {resource_id} ingestion completed: {len(chunks)} chunks")
-            
+
         except Exception as e:
-            await session.rollback()
-            
-            # 更新错误状态
-            try:
-                result = await session.execute(
-                    select(Resource).where(Resource.resource_id == resource_id)
-                )
-                resource = result.scalar_one_or_none()
-                if resource:
-                    resource.sync_status = SyncStatus.error
-                    resource.last_error = str(e)
-                    await session.commit()
-            except Exception:
-                pass
-            
+            logger.error(f"Resource {resource_id} ingestion failed: {e}")
+            # 发送错误结果给 Rust
+            await progress_broadcaster.broadcast_result(IngestionResult(
+                resource_id=resource_id,
+                success=False,
+                error=str(e)
+            ))
             raise
 
 
