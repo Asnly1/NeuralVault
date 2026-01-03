@@ -183,3 +183,12 @@ CREATE TABLE chat_messages (
     FOREIGN KEY(ref_resource_id) REFERENCES resources(resource_id) ON DELETE SET NULL,
     FOREIGN KEY(ref_chunk_id) REFERENCES context_chunks(chunk_id) ON DELETE SET NULL
 );
+
+CREATE TABLE message_attachments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id INTEGER NOT NULL,
+    resource_id INTEGER NOT NULL,
+
+    FOREIGN KEY(message_id) REFERENCES chat_messages(message_id) ON DELETE CASCADE,
+    FOREIGN KEY(resource_id) REFERENCES resources(resource_id) ON DELETE CASCADE
+);

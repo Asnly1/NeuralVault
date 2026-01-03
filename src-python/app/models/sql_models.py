@@ -513,6 +513,39 @@ class ChatMessage(SQLModel, table=True):
         )
 
 # ============================================================
+# 聊天消息附件 (ChatMessageAttachment)
+# ============================================================
+
+class ChatMessageAttachmentBase(PydanticBaseModel):
+    """聊天消息附件基础 DTO"""
+    message_id: int
+    resource_id: int
+
+class ChatMessageAttachmentCreate(ChatMessageAttachmentBase):
+    """创建聊天消息附件的请求 DTO"""
+    pass
+
+class ChatMessageAttachmentRead(ChatMessageAttachmentBase):
+    """读取聊天消息附件的响应 DTO"""
+    attachment_id: int
+
+class ChatMessageAttachment(SQLModel, table=True):
+    """聊天消息附件数据库模型"""
+    __tablename__ = "message_attachments"
+    
+    attachment_id: Optional[int] = Field(default=None, primary_key=True)
+    message_id: int = Field(foreign_key="chat_messages.message_id")
+    resource_id: int = Field(foreign_key="resources.resource_id")
+    
+    def to_read(self) -> ChatMessageAttachmentRead:
+        """转换为读取 DTO"""
+        return ChatMessageAttachmentRead(
+            attachment_id=self.attachment_id,
+            message_id=self.message_id,
+            resource_id=self.resource_id,
+        )
+
+# ============================================================
 # API DTO (请求/响应)
 # ============================================================
 
@@ -563,32 +596,3 @@ class IngestionResult(PydanticBaseModel):
     embedding_model: Optional[str] = None
     indexed_hash: Optional[str] = None
     error: Optional[str] = None
-
-
-class SearchFilters(PydanticBaseModel):
-    """搜索过滤条件"""
-    task_id: Optional[int] = None
-    file_type: Optional[str] = None
-
-
-class HybridSearchRequest(PydanticBaseModel):
-    """混合检索请求"""
-    query: str
-    top_k: int = 20
-    filters: Optional[SearchFilters] = None
-
-
-class SearchResult(PydanticBaseModel):
-    """搜索结果"""
-    chunk_id: int
-    resource_id: int
-    text: str
-    score: float
-    page_number: Optional[int] = None
-
-
-class HybridSearchResponse(PydanticBaseModel):
-    """混合检索响应"""
-    results: List[SearchResult]
-    total: int
-
