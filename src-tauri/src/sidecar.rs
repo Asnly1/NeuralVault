@@ -13,7 +13,7 @@ use futures_util::StreamExt;
 
 use crate::db::{
     DbPool, IngestionResultData,
-    insert_context_chunks, update_resource_sync_status, delete_context_chunks,
+    insert_context_chunks, update_resource_embedding_status, delete_context_chunks,
 };
 
 /// 编译时获取项目根目录（Cargo.toml 所在目录）
@@ -379,7 +379,25 @@ impl PythonSidecar {
                             Ok(msg) => {
                                 match msg.msg_type.as_str() {
                                     "progress" => {
-                                        // 进度消息：emit 给前端
+                                        // 进度消息：更新数据库 processing_stage 并 emit 给前端
+                                        if let (Some(resource_id), Some(status)) = (
+                                            msg.payload.get("resource_id").and_then(|v| v.as_i64()),
+                                            msg.payload.get("status").and_then(|v| v.as_str())
+                                        ) {
+                                            // 更新数据库的 processing_stage（保持 sync_status 为 pending）
+                                            if let Err(e) = update_resource_embedding_status(
+                                                db_pool,
+                                                resource_id,
+                                                "pending",
+                                                status,
+                                                None,
+                                                None,
+                                            ).await {
+                                                eprintln!("[Sidecar] Failed to update processing stage: {}", e);
+                                            }
+                                        }
+
+                                        // emit 给前端
                                         if let Err(e) = app_handle.emit("ingest-progress", &msg.payload) {
                                             eprintln!("[Sidecar] Failed to emit progress event: {}", e);
                                         }
@@ -461,7 +479,7 @@ impl PythonSidecar {
             }
 
             // 更新资源状态为 synced
-            update_resource_sync_status(
+            update_resource_embedding_status(
                 db_pool,
                 resource_id,
                 "synced",
@@ -479,7 +497,7 @@ impl PythonSidecar {
             );
         } else {
             // 失败：更新状态为 error
-            update_resource_sync_status(
+            update_resource_embedding_status(
                 db_pool,
                 resource_id,
                 "error",

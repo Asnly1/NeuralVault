@@ -234,7 +234,7 @@ pub async fn insert_context_chunks(
 /// 更新资源处理状态
 ///
 /// 由 Rust 端统一更新，接收 Python 处理后的状态
-pub async fn update_resource_sync_status(
+pub async fn update_resource_embedding_status(
     pool: &DbPool,
     resource_id: i64,
     sync_status: &str,

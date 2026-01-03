@@ -76,11 +76,14 @@ async def _process_resource_ingestion(
             await progress_callback(resource_id, ProcessingStage.chunking, 10)
 
             # 2. Parse: 获取文本内容
+            # 合并 content（用户输入的文本）和 file_path（文件解析的文本）
             text_parts: list[str] = []
 
+            # 2a. 如果有用户输入的文本内容，添加到列表
             if resource.content:
                 text_parts.append(resource.content)
 
+            # 2b. 如果有文件，解析并添加到列表
             if resource.file_path:
                 try:
                     file_text = await file_service.parse_file(
@@ -106,6 +109,7 @@ async def _process_resource_ingestion(
                     ))
                     return
 
+            # 合并所有文本部分
             text_content: Optional[str] = "\n\n".join(text_parts) if text_parts else None
 
             # 无内容时发送空结果
@@ -117,6 +121,7 @@ async def _process_resource_ingestion(
                     chunks=[],
                     indexed_hash=file_hash
                 ))
+                await progress_callback(resource_id, ProcessingStage.done, 100)
                 return
 
             await progress_callback(resource_id, ProcessingStage.chunking, 30)
@@ -132,15 +137,17 @@ async def _process_resource_ingestion(
                     chunks=[],
                     indexed_hash=file_hash
                 ))
+                await progress_callback(resource_id, ProcessingStage.done, 100)
                 return
 
             await progress_callback(resource_id, ProcessingStage.embedding, 50)
 
-            # 4. 如果是更新，先删除 Qdrant 中的旧向量
+            # 4 & 5. Embed + Upsert: 如果是更新，先删除旧数据
             if action == JobAction.UPDATED:
+                # 删除 Qdrant 中的旧向量
                 await vector_service.delete_by_resource(resource_id, qdrant_client)
 
-            # 5. Embed + Upsert to Qdrant
+            # 向量化并写入 Qdrant
             chunk_metadata = await vector_service.upsert_chunks(
                 resource_id, chunks, qdrant_client
             )
@@ -169,6 +176,7 @@ async def _process_resource_ingestion(
                 embedding_model=embedding_model,
                 indexed_hash=file_hash
             ))
+            await progress_callback(resource_id, ProcessingStage.done, 100)
 
             logger.info(f"Resource {resource_id} ingestion completed: {len(chunks)} chunks")
 
