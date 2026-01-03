@@ -25,37 +25,15 @@ POST: /chat/responses 发送消息并获取回复。
 """
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
 from typing import Optional, AsyncIterator
 import json
 import openai
 import anthropic
 import google.genai as genai
 from google.genai import types
-from app.models.sql_models import MessageRole
+from app.schemas import MessageRole, ChatMessage, ChatRequest, ChatResponse
 
 router = APIRouter()
-
-
-class ChatMessage(BaseModel):
-    role: MessageRole
-    content: str
-
-
-class ChatRequest(BaseModel):
-    provider: str
-    model: str
-    api_key: str
-    base_url: Optional[str] = None
-    messages: list[ChatMessage]
-    context_resource_ids: Optional[list[int]] = None
-    stream: bool = False
-
-
-class ChatResponse(BaseModel):
-    content: str
-    usage: Optional[dict] = None
-
 
 def _split_system_messages(
     messages: list[ChatMessage],

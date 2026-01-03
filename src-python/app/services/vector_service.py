@@ -12,8 +12,7 @@ from llama_index.core.node_parser import SentenceSplitter
 from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct, SparseVector
 
-from app.core.config import settings, DENSE_MODEL_DIMENSIONS
-from app.core.db import get_qdrant
+from app.core.config import settings
 from app.core.logging import get_logger
 
 logger = get_logger("VectorService")

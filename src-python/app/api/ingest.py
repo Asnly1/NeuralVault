@@ -1,20 +1,11 @@
 """
-接收 Rust 的"新文件/新任务"通知
+接收 Rust 的"资源变更"通知
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.db import get_db
-from app.models.sql_models import (
-    Resource, ProcessingStage,
-    IngestRequest, IngestResponse, IngestStatusResponse
-)
-from app.workers.queue_manager import (
-    ingestion_queue, IngestionJob, JobType, JobAction,
-    progress_broadcaster
-)
+from app.schemas import IngestRequest, IngestResponse, JobType, JobAction, IngestionJob
+from app.workers.queue_manager import ingestion_queue, progress_broadcaster
 
 router = APIRouter()
 
@@ -43,45 +34,19 @@ async def ingestion(request: IngestRequest):
     # 创建并入队任务
     job = IngestionJob(
         job_type=job_type,
-        source_id=request.id,
-        action=action
+        source_id=request.resource_id,
+        action=action,
+        file_hash=request.file_hash,
+        file_type=request.file_type,
+        content=request.content,
+        file_path=request.file_path
     )
     
     await ingestion_queue.enqueue(job)
     
     return IngestResponse(
         status="accepted",
-        message=f"Job {job_type.value} for {request.id} queued"
-    )
-
-
-@router.get("/status/{resource_id}", response_model=IngestStatusResponse)
-async def get_ingestion_status(
-    resource_id: int,
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    查询某个资源的 AI 处理状态
-    """
-    result = await db.execute(
-        select(Resource.processing_stage, Resource.last_error)
-        .where(Resource.resource_id == resource_id)
-    )
-    row = result.one_or_none()
-    
-    if not row:
-        return IngestStatusResponse(
-            resource_id=resource_id,
-            status=ProcessingStage.todo,
-            error="Resource not found"
-        )
-    
-    processing_stage, last_error = row
-    
-    return IngestStatusResponse(
-        resource_id=resource_id,
-        status=processing_stage,
-        error=last_error
+        message=f"Job {job_type.value} for {request.resource_id} queued"
     )
 
 

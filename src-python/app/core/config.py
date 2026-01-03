@@ -1,8 +1,6 @@
 """
 环境变量，路径配置
 """
-import os
-from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -12,9 +10,6 @@ class Settings(BaseSettings):
     # 应用配置
     app_name: str = "NeuralVault Python Backend"
     debug: bool = False
-    
-    # 数据库配置
-    database_url: str = ""  # 由 Tauri 启动时传入
     
     # Qdrant 配置
     qdrant_path: str = ""  # 由 Tauri 启动时传入，embedded mode
@@ -57,23 +52,3 @@ DENSE_MODEL_DIMENSIONS: dict[str, int] = {
 
 # 全局配置实例
 settings = Settings()
-
-
-def get_app_data_dir() -> Path:
-    """获取应用数据目录"""
-    if settings.database_url:
-        # 从数据库路径推导出应用数据目录
-        return Path(settings.database_url).parent
-    
-    # 默认路径（开发环境）
-    if os.name == "nt":  # Windows
-        base_path = Path(os.environ.get("APPDATA", ""))
-    elif os.name == "posix":
-        if "darwin" in os.sys.platform:  # macOS
-            base_path = Path.home() / "Library" / "Application Support"
-        else:  # Linux
-            base_path = Path.home() / ".local" / "share"
-    else:
-        base_path = Path.home()
-    
-    return base_path / "com.neuralvault.app"

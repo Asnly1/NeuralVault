@@ -682,6 +682,7 @@ pub struct CryptoService {
 - `parse_file_type(raw: Option<&str>) -> ResourceFileType`: 解析文件类型字符串
 - `get_extension(path: &str) -> Option<String>`: 从文件路径提取扩展名
 - `get_assets_dir(app: &AppHandle) -> Result<PathBuf, String>`: 获取 assets 目录路径，如果不存在则创建
+- `resolve_file_path(app: &AppHandle, file_path: &str) -> Result<String, String>`: 将资源路径解析为绝对路径
 
 #### `utils/notification.rs`
 
@@ -695,17 +696,20 @@ Python 后端通知，使用动态端口与 Python 后端通信。
 
 **函数**：
 
-- `notify_python(base_url: &str, id: i64, action: NotifyAction)`: 异步通知 Python 后端处理资源或任务（POST `{base_url}/ingest`）
+- `notify_python(base_url: &str, payload: &IngestPayload)`: 异步通知 Python 后端处理资源或任务（POST `{base_url}/ingest`）
   - `base_url`: 从 `PythonSidecar.get_base_url()` 获取的动态 URL
-  - `id`: 资源或任务的 ID
-  - `action`: 动作类型（Created, Updated, Deleted）
+  - `payload`: 资源变更信息（包含 action、file_hash、file_type 等）
 
 **请求格式**（匹配 Python 的 `IngestRequest`）：
 
 ```json
 {
-  "id": 123,
-  "action": "created"
+  "resource_id": 123,
+  "action": "created",
+  "file_hash": "hash-xxx",
+  "file_type": "pdf",
+  "content": null,
+  "file_path": "/abs/path/to/file.pdf"
 }
 ```
 

@@ -8,15 +8,42 @@ use crate::{
     db::{
         link_resource_to_task, list_resources_for_task,
         unlink_resource_from_task, LinkResourceParams, NewResource, ResourceClassificationStatus,
-        ResourceProcessingStage, ResourceSyncStatus, SourceMeta, VisibilityScope,
+        ResourceFileType, ResourceProcessingStage, ResourceSyncStatus, SourceMeta, VisibilityScope,
     },
-    utils::{compute_sha256, get_assets_dir, get_extension, notify_python, parse_file_type, NotifyAction},
+    utils::{
+        compute_sha256, get_assets_dir, get_extension, notify_python, parse_file_type,
+        resolve_file_path, IngestPayload, NotifyAction,
+    },
 };
 
 use super::{
     CaptureRequest, CaptureResponse, LinkResourceRequest, LinkResourceResponse,
     TaskResourcesResponse,
 };
+
+fn build_ingest_payload(
+    app: &AppHandle,
+    resource_id: i64,
+    action: NotifyAction,
+    file_hash: String,
+    file_type: ResourceFileType,
+    content: Option<String>,
+    file_path: Option<String>,
+) -> Result<IngestPayload, String> {
+    let resolved_path = match file_path {
+        Some(path) => Some(resolve_file_path(app, &path)?),
+        None => None,
+    };
+
+    Ok(IngestPayload::new(
+        resource_id,
+        action,
+        file_hash,
+        file_type,
+        content,
+        resolved_path,
+    ))
+}
 
 // 这个宏将 Rust 函数 capture_resource 标记为可供前端调用的命令
 #[tauri::command]
@@ -268,9 +295,19 @@ pub async fn capture_resource(
 
     // ========== 异步通知 Python ==========
     // 捕获成功后立即通知 Python 后台处理
+    let ingest_payload = build_ingest_payload(
+        &app,
+        resource_id,
+        NotifyAction::Created,
+        file_hash,
+        resource_type,
+        content_for_db.clone(),
+        stored_file_path.clone(),
+    )?;
+
     let base_url = state.python.get_base_url();
     tauri::async_runtime::spawn(async move {
-        notify_python(&base_url, resource_id, NotifyAction::Created).await;
+        notify_python(&base_url, &ingest_payload).await;
     });
 
     Ok(CaptureResponse {
@@ -375,19 +412,49 @@ pub async fn soft_delete_resource_command(
 /// 用于保存文本编辑器中的更改
 #[tauri::command]
 pub async fn update_resource_content_command(
+    app: AppHandle,
     state: State<'_, AppState>,
     resource_id: i64,
     content: String,
 ) -> Result<(), String> {
     let pool = &state.db;
 
-    crate::db::update_resource_content(pool, resource_id, &content)
+    let resource = crate::db::get_resource_by_id(pool, resource_id)
+        .await
+        .map_err(|e| format!("获取资源失败: {}", e))?;
+
+    let file_bytes = if let Some(file_path) = &resource.file_path {
+        let abs_path = resolve_file_path(&app, file_path)?;
+        fs::read(&abs_path).map_err(|e| format!("读取文件失败: {}", e))?
+    } else {
+        Vec::new()
+    };
+
+    let content_bytes = content.as_bytes();
+    let mut combined_bytes = Vec::with_capacity(content_bytes.len() + file_bytes.len());
+    combined_bytes.extend_from_slice(content_bytes);
+    combined_bytes.extend_from_slice(&file_bytes);
+
+    let file_hash = compute_sha256(&combined_bytes);
+    let file_size_bytes = combined_bytes.len() as i64;
+
+    crate::db::update_resource_content(pool, resource_id, &content, &file_hash, Some(file_size_bytes))
         .await
         .map_err(|e| e.to_string())?;
 
+    let ingest_payload = build_ingest_payload(
+        &app,
+        resource_id,
+        NotifyAction::Updated,
+        file_hash,
+        resource.file_type,
+        Some(content),
+        resource.file_path.clone(),
+    )?;
+
     let base_url = state.python.get_base_url();
     tauri::async_runtime::spawn(async move {
-        notify_python(&base_url, resource_id, NotifyAction::Updated).await;
+        notify_python(&base_url, &ingest_payload).await;
     });
 
     Ok(())
@@ -435,7 +502,7 @@ pub async fn hard_delete_resource_command(
         .map_err(|e| e.to_string())?;
 
     // 3. 删除物理文件（如果存在）
-    if let Some(file_path) = resource.file_path {
+    if let Some(file_path) = &resource.file_path {
         if file_path.starts_with("assets/") {
             let assets_dir = get_assets_dir(&app)?;
             let file_name = file_path.strip_prefix("assets/").unwrap_or(&file_path);
@@ -450,9 +517,19 @@ pub async fn hard_delete_resource_command(
         }
     }
 
+    let ingest_payload = build_ingest_payload(
+        &app,
+        resource_id,
+        NotifyAction::Deleted,
+        resource.file_hash.clone(),
+        resource.file_type,
+        resource.content.clone(),
+        resource.file_path.clone(),
+    )?;
+
     let base_url = state.python.get_base_url();
     tauri::async_runtime::spawn(async move {
-        notify_python(&base_url, resource_id, NotifyAction::Deleted).await;
+        notify_python(&base_url, &ingest_payload).await;
     });
 
     Ok(LinkResourceResponse { success: true })

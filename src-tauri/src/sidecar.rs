@@ -12,13 +12,35 @@ use std::os::unix::process::CommandExt;
 use futures_util::StreamExt;
 
 use crate::db::{
-    DbPool, IngestionResultData,
+    DbPool, IngestionResultData, ResourceRecord, ResourceSyncStatus,
     insert_context_chunks, update_resource_embedding_status, delete_context_chunks,
+    list_pending_resources,
 };
+use crate::utils::{notify_python, resolve_file_path, IngestPayload, NotifyAction};
 
 /// 编译时获取项目根目录（Cargo.toml 所在目录）
 /// 在开发模式下，这会指向 src-tauri 目录
 const CARGO_MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
+
+fn build_ingest_payload_for_resource(
+    app_handle: &AppHandle,
+    resource: &ResourceRecord,
+    action: NotifyAction,
+) -> Result<IngestPayload, String> {
+    let resolved_path = match &resource.file_path {
+        Some(path) => Some(resolve_file_path(app_handle, path)?),
+        None => None,
+    };
+
+    Ok(IngestPayload::new(
+        resource.resource_id,
+        action,
+        resource.file_hash.clone(),
+        resource.file_type,
+        resource.content.clone(),
+        resolved_path,
+    ))
+}
 
 pub struct PythonSidecar {
     process: Arc<Mutex<Option<Child>>>,
@@ -99,7 +121,7 @@ impl PythonSidecar {
             .app_data_dir()
             .map_err(|e| format!("Failed to get app data dir: {}", e))?;
         
-        let db_path = app_dir.join("neuralvault.sqlite3");
+        let qdrant_path = app_dir.join("qdrant_data");
         
         // 动态分配端口
         let port = Self::find_available_port()?;
@@ -122,8 +144,8 @@ impl PythonSidecar {
                     "app.main",
                     "--port",
                     &port.to_string(),
-                    "--db-path",
-                    db_path.to_str().unwrap(),
+                    "--qdrant-path",
+                    qdrant_path.to_str().unwrap(),
                 ])
                 .current_dir(python_dir)
                 .stdin(Stdio::piped()) // 把 Python 的输入管子接到了这个 Child 结构体里
@@ -205,6 +227,41 @@ impl PythonSidecar {
             "Python backend failed to become healthy after {} attempts",
             max_retries
         ))
+    }
+
+    /// 重建待处理队列（由 Rust 触发）
+    pub async fn rebuild_pending_queue(
+        &self,
+        app_handle: AppHandle,
+        db_pool: DbPool,
+    ) -> Result<(), String> {
+        let resources = list_pending_resources(&db_pool)
+            .await
+            .map_err(|e| format!("Failed to list pending resources: {}", e))?;
+
+        if resources.is_empty() {
+            return Ok(());
+        }
+
+        let base_url = self.get_base_url();
+        for resource in resources {
+            let action = match resource.sync_status {
+                ResourceSyncStatus::Dirty => NotifyAction::Updated,
+                _ => NotifyAction::Created,
+            };
+
+            let payload = match build_ingest_payload_for_resource(&app_handle, &resource, action) {
+                Ok(payload) => payload,
+                Err(e) => {
+                    eprintln!("[Sidecar] Failed to build ingest payload: {}", e);
+                    continue;
+                }
+            };
+
+            notify_python(&base_url, &payload).await;
+        }
+
+        Ok(())
     }
 
     /// 调用 Python 的健康检查接口

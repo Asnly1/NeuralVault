@@ -1,5 +1,5 @@
 """
-启动/关闭时的钩子（如开启 WAL 模式）
+启动/关闭时的钩子
 """
 import sys
 import os
@@ -20,16 +20,8 @@ async def startup_handler():
     """应用启动时的初始化"""
     logger.info("Starting up...")
     
-    # 初始化数据库
-    db_manager = await DatabaseManager.get_instance()
-    
-    # 开启 WAL 模式
-    if db_manager.engine:
-        from sqlalchemy import text
-        async with db_manager.engine.begin() as conn:
-            await conn.execute(text("PRAGMA journal_mode=WAL"))
-            await conn.execute(text("PRAGMA synchronous=NORMAL"))
-            logger.info("SQLite WAL mode enabled")
+    # 初始化 Qdrant
+    await DatabaseManager.get_instance()
     
     # 初始化 VectorService（预加载 Embedding 模型）
     if settings.qdrant_path:
@@ -38,7 +30,7 @@ async def startup_handler():
     
     # 初始化 Ingestion Queue
     from app.workers.queue_manager import ingestion_queue, progress_broadcaster
-    from app.workers.processors import process_ingestion_job, rebuild_pending_queue
+    from app.workers.processors import process_ingestion_job
 
     # 设置处理器和进度回调
     # 使用 ProgressBroadcaster 替代 WebSocket，通过 HTTP StreamingResponse 推送进度
@@ -47,10 +39,6 @@ async def startup_handler():
     
     # 启动 Worker
     await ingestion_queue.start_worker()
-    
-    # 重建待处理队列
-    if db_manager.engine:
-        await rebuild_pending_queue()
     
     # 启动心跳监控（监听 stdin）
     global _heartbeat_task
@@ -76,7 +64,7 @@ async def shutdown_handler():
     from app.workers.queue_manager import ingestion_queue
     await ingestion_queue.stop_worker()
     
-    # 关闭数据库连接
+    # 关闭 Qdrant 连接
     db_manager = await DatabaseManager.get_instance()
     await db_manager.close()
     

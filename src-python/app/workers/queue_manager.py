@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Callable, Awaitable, AsyncGenerator
 
-from app.models.sql_models import ProcessingStage, IngestProgress, IngestionResult
+from app.schemas import ProcessingStage, IngestProgress, IngestionResult
 from app.core.logging import get_logger
 
 logger = get_logger("IngestionQueue")
@@ -101,30 +101,6 @@ class ProgressBroadcaster:
 
 # 全局单例
 progress_broadcaster = ProgressBroadcaster.get_instance()
-
-class JobType(str, Enum):
-    """任务类型"""
-    INGEST_RESOURCE = "ingest_resource"
-    DELETE_RESOURCE = "delete_resource"
-
-class JobAction(str, Enum):
-    """触发动作"""
-    CREATED = "created"
-    UPDATED = "updated"
-    DELETED = "deleted"
-
-@dataclass
-class IngestionJob:
-    """Ingestion 任务"""
-    job_type: JobType
-    source_id: int  # resource_id
-    action: JobAction
-    retry_count: int = 0
-    max_retries: int = 3
-
-# 进度回调类型
-# 函数类型，接受参数：int, ProcessingStage, Optional[int]，返回值为 Awaitable[None]
-ProgressCallback = Callable[[int, ProcessingStage, Optional[int]], Awaitable[None]]
 
 class IngestionQueue:
     """

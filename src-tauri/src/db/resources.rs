@@ -152,18 +152,38 @@ pub async fn update_resource_content(
     pool: &DbPool,
     resource_id: i64,
     content: &str,
+    file_hash: &str,
+    file_size_bytes: Option<i64>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
         "UPDATE resources \
-         SET content = ?, sync_status = 'dirty', processing_stage = 'todo', last_error = NULL \
+         SET content = ?, file_hash = ?, file_size_bytes = ?, \
+             sync_status = 'dirty', processing_stage = 'todo', last_error = NULL \
          WHERE resource_id = ?"
     )
         .bind(content)
+        .bind(file_hash)
+        .bind(file_size_bytes)
         .bind(resource_id)
         .execute(pool)
         .await?;
 
     Ok(())
+}
+
+/// 获取需要重新处理的资源列表
+pub async fn list_pending_resources(
+    pool: &DbPool,
+) -> Result<Vec<ResourceRecord>, sqlx::Error> {
+    sqlx::query_as::<_, ResourceRecord>(
+        "SELECT resource_id, uuid, source_meta, file_hash, file_type, content, display_name, \
+                file_path, file_size_bytes, indexed_hash, processing_hash, sync_status, last_indexed_at, last_error, processing_stage, classification_status, created_at, is_deleted, deleted_at, user_id \
+         FROM resources \
+         WHERE sync_status IN ('pending', 'dirty', 'error') AND is_deleted = 0 \
+         ORDER BY created_at ASC",
+    )
+    .fetch_all(pool)
+    .await
 }
 
 /// 更新资源显示名称

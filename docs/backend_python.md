@@ -16,7 +16,7 @@ src-python/
 │   ├── main.py                # FastAPI 入口，生命周期管理与路由注册
 │   ├── core/
 │   │   ├── config.py          # 配置与路径推导
-│   │   ├── db.py              # SQLite (SQLModel) & Qdrant 连接池
+│   │   ├── db.py              # Qdrant 连接池
 │   │   ├── events.py          # 启动/关闭钩子 + 心跳监控
 │   │   └── logging.py         # 日志配置
 │   ├── api/
@@ -25,8 +25,7 @@ src-python/
 │   │   ├── search.py          # 预留: 搜索接口
 │   │   ├── agent.py           # 预留: 任务型 AI 接口
 │   │   └── example.py         # SDK/Provider 示例 (未注册路由)
-│   ├── models/
-│   │   └── sql_models.py      # SQLModel + API DTO
+│   ├── schemas.py             # API DTO + 枚举
 │   ├── services/
 │   │   ├── file_service.py    # 文件解析
 │   │   ├── vector_service.py  # 切分 + 向量化 + Qdrant
@@ -46,7 +45,6 @@ src-python/
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | POST | `/ingest` | Rust 通知数据变更，立即返回，后台处理 |
-| GET | `/ingest/status/{resource_id}` | 查询处理状态 (读 SQLite) |
 | GET | `/ingest/stream` | NDJSON 进度流，Rust 长连接读取 |
 
 ### /chat
@@ -71,7 +69,7 @@ src-python/
 ```
 /ingest -> IngestionQueue -> Worker
                                    |
-                     Fetch -> Parse -> Chunk -> Embed -> Upsert(Qdrant)
+                     Payload -> Parse -> Chunk -> Embed -> Upsert(Qdrant)
                                    |
                         NDJSON Progress/Result -> /ingest/stream (Rust)
 ```
@@ -81,7 +79,14 @@ src-python/
 ### /ingest 请求
 
 ```json
-{ "id": 1, "action": "created" }
+{
+  "resource_id": 1,
+  "action": "created",
+  "file_hash": "hash-xxx",
+  "file_type": "pdf",
+  "content": null,
+  "file_path": "/abs/path/to/file.pdf"
+}
 ```
 
 `action` 可选: `created` | `updated` | `deleted`
@@ -171,7 +176,7 @@ data: {"type":"error","message":"错误信息"}
 ## 文件解析与切分
 
 - 支持 `pdf` 和 `text` 类型，`epub`/`image`/`url` 目前未实现或仅支持 content 字段。
-- 相对路径会拼接应用数据目录 (由 `database_url` 推导)。
+- `file_path` 需要传入绝对路径。
 - 解析文件时带有重试，避免 Rust 写入文件的竞态。
 
 Chunking:
@@ -207,8 +212,9 @@ Chunking:
 
 ## 生命周期
 
-**启动**: DB 初始化 -> WAL -> VectorService -> IngestionQueue -> 重建待处理队列 -> 心跳监控
+**启动**: Qdrant 初始化 -> VectorService -> IngestionQueue -> 心跳监控  
+待处理队列由 Rust 在 Python 健康后触发重建。
 
-**关闭**: 停止心跳 -> 停止 Worker -> 关闭 DB
+**关闭**: 停止心跳 -> 停止 Worker -> 关闭 Qdrant
 
 > 心跳监控通过 stdin 判断父进程是否退出，若关闭则触发 SIGINT 优雅退出。

@@ -8,9 +8,8 @@ from typing import Optional
 
 import fitz  # PyMuPDF
 
-from app.core.config import get_app_data_dir
 from app.core.logging import get_logger
-from app.models.sql_models import FileType
+from app.schemas import FileType
 
 logger = get_logger("FileService")
 
@@ -24,19 +23,15 @@ class FileService:
     
     def _resolve_file_path(self, file_path: str) -> Path:
         """
-        将相对路径转换为绝对路径
-        
-        如果是相对路径（如 "assets/xxx.pdf"），则拼接应用数据目录
-        如果已经是绝对路径，则直接返回
+        将路径解析为绝对路径
+        Python 侧要求接收绝对路径，避免依赖本地数据库路径推导。
         """
         path = Path(file_path)
         
         if path.is_absolute():
             return path
         
-        # 相对路径：拼接应用数据目录
-        app_data_dir = get_app_data_dir()
-        return app_data_dir / file_path
+        raise ValueError(f"file_path must be absolute: {file_path}")
     
     async def _wait_for_file(self, path: Path, original_path: str) -> None:
         """
@@ -134,7 +129,8 @@ class FileService:
     def get_page_count(self, file_path: str) -> Optional[int]:
         """获取 PDF 页数"""
         try:
-            with fitz.open(file_path) as doc:
+            path = self._resolve_file_path(file_path)
+            with fitz.open(str(path)) as doc:
                 return len(doc)
         except Exception:
             return None

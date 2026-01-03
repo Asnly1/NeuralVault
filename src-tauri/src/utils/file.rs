@@ -46,3 +46,18 @@ pub fn get_assets_dir(app: &AppHandle) -> Result<PathBuf, String> {
 
     Ok(assets_dir)
 }
+
+/// 将资源路径解析为绝对路径
+pub fn resolve_file_path(app: &AppHandle, file_path: &str) -> Result<String, String> {
+    let path = Path::new(file_path);
+    if path.is_absolute() {
+        return Ok(path.to_string_lossy().to_string());
+    }
+
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("获取应用数据目录失败: {}", e))?;
+
+    Ok(app_data_dir.join(file_path).to_string_lossy().to_string())
+}

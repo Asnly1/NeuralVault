@@ -74,8 +74,6 @@ async def _shutdown():
 if __name__ == "__main__":
     import argparse
     import uvicorn
-    from pathlib import Path
-    
     from app.core.logging import setup_logging, get_logger
     from app.core.config import settings
     
@@ -86,22 +84,17 @@ if __name__ == "__main__":
     # 解析命令行参数
     parser = argparse.ArgumentParser(description="NeuralVault Python Backend")
     parser.add_argument("--port", type=int, default=8765, help="Server port")
-    parser.add_argument("--db-path", type=str, help="SQLite database path")
-    parser.add_argument("--qdrant-path", type=str, help="Qdrant data path (optional, defaults to db dir)")
+    parser.add_argument("--qdrant-path", type=str, help="Qdrant data path")
     args = parser.parse_args()
     
     # 更新 settings（命令行参数优先）
-    if args.db_path:
-        settings.database_url = args.db_path
-        logger.info(f"Database path: {args.db_path}")
-        
-        # 如果没有指定 qdrant_path，默认在数据库同目录下创建 qdrant_data
-        if not args.qdrant_path:
-            db_dir = Path(args.db_path).parent
-            settings.qdrant_path = str(db_dir / "qdrant_data")
-        else:
-            settings.qdrant_path = args.qdrant_path
+    if args.qdrant_path:
+        settings.qdrant_path = args.qdrant_path
         logger.info(f"Qdrant path: {settings.qdrant_path}")
+    
+    if not settings.qdrant_path:
+        logger.error("Qdrant path is required")
+        raise SystemExit(1)
     
     logger.info(f"Starting server on port {args.port}")
     
@@ -118,4 +111,3 @@ if __name__ == "__main__":
         workers=1,  # 强制单进程
         log_level="info"
     )
-

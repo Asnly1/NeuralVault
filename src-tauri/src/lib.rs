@@ -97,7 +97,13 @@ pub fn run() {
                         // 通过 HTTP StreamingResponse + NDJSON 接收 Python 的处理进度和结果，
                         // 进度消息通过 Tauri Events 转发给前端，
                         // 结果消息由 Rust 统一写入数据库
-                        python_for_health.start_progress_stream(app_handle.clone(), db_pool_for_stream);
+                        python_for_health.start_progress_stream(app_handle.clone(), db_pool_for_stream.clone());
+                        if let Err(e) = python_for_health
+                            .rebuild_pending_queue(app_handle.clone(), db_pool_for_stream)
+                            .await
+                        {
+                            eprintln!("[Tauri] Failed to rebuild pending queue: {}", e);
+                        }
                     }
                     Err(e) => {
                         eprintln!("[Tauri] Python backend failed to start: {}", e);
