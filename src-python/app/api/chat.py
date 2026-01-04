@@ -5,15 +5,43 @@ POST: /chat/responses 发送消息并获取回复。
     1. Request:
         ```json
         {
-        "provider": "openai" | "anthropic" | "gemini" | "grok" | "deepseek" | "qwen",
+        "provider": "openai",
         "model": "gpt-4o",
-        "messages": [{"text": "Hello", "images": ["/path/to/image.jpg"], "files": ["/path/to/file.pdf"]}],
+        "messages": [
+            // --- 历史记录 ---
+            {
+            "role": "system",
+            "content": "你是一个有用的助手。"
+            },
+            {
+            "role": "user",
+            "content": "帮我分析一下这个文档",
+            "files": ["/abs/path/to/history_file.pdf"]
+            },
+            {
+            "role": "assistant",
+            "content": "好的，文档指出了..."
+            },
+            
+            // --- 当前新消息 (Rust 传入路径) ---
+            {
+            "role": "user",
+            "content": "那这个图片里是什么？",
+            "images": ["/abs/path/to/new_image.jpg"],
+            "files": ["/abs/path/to/new_spec.pdf"]
+            }
+        ]
         }
         ```
     2. Response:
         ```json
         {
-        "content": "AI 回复内容",
+        data: {"type": "content", "delta": "这"}
+        data: {"type": "content", "delta": "是"}
+        data: {"type": "content", "delta": "一"}
+        data: {"type": "content", "delta": "张"}
+        data: {"type": "usage", "usage": {"prompt_tokens": 50, "completion_tokens": 4}}
+        data: [DONE]
         "usage": {"prompt_tokens": 10, "completion_tokens": 20}
         }
         ```
