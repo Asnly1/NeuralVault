@@ -5,9 +5,10 @@ use crate::{
     app_state::AppState,
     db::{
         insert_resource, insert_task, list_active_tasks, list_unclassified_resources, NewResource,
-        NewTask, ResourceClassificationStatus, ResourceFileType, ResourceProcessingStage,
-        ResourceSyncStatus, SourceMeta, TaskPriority, TaskStatus,
+        NewTask, ResourceClassificationStatus, ResourceProcessingStage, ResourceSyncStatus,
+        SourceMeta, TaskPriority, TaskStatus,
     },
+    utils::parse_file_type,
 };
 
 use super::{DashboardData, SeedResponse};
@@ -97,14 +98,7 @@ pub async fn seed_demo_data(state: State<'_, AppState>) -> Result<SeedResponse, 
                 uuid: &uuid,
                 source_meta: meta.as_ref(),
                 file_hash: &file_hash,
-                file_type: match *file_type {
-                    "pdf" => ResourceFileType::Pdf,
-                    "url" => ResourceFileType::Url,
-                    "image" => ResourceFileType::Image,
-                    "epub" => ResourceFileType::Epub,
-                    "other" => ResourceFileType::Other,
-                    _ => ResourceFileType::Text,
-                },
+                file_type: parse_file_type(Some(file_type)),
                 content: *content,
                 display_name: Some(name),
                 file_path: None,

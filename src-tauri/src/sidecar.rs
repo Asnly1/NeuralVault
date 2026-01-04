@@ -141,6 +141,12 @@ impl PythonSidecar {
             
             println!("[Sidecar] Starting Python in development mode from {:?}", python_dir);
             println!("[Sidecar] Using dynamically allocated port: {}", port);
+
+            let qdrant_path_str = qdrant_path.to_string_lossy(); // 把非UTF-8的字符用 � 替换
+            if qdrant_path_str.contains('\u{FFFD}') {
+                return Err("qdrant_path contains invalid UTF-8".to_string());
+            }
+            let qdrant_path_str = qdrant_path_str.into_owned();
             
             let mut cmd = Command::new("uv");
             cmd.args(&[
@@ -151,7 +157,7 @@ impl PythonSidecar {
                     "--port",
                     &port.to_string(),
                     "--qdrant-path",
-                    qdrant_path.to_str().unwrap(),
+                    &qdrant_path_str,
                 ])
                 .current_dir(python_dir)
                 .stdin(Stdio::piped()) // 把 Python 的输入管子接到了这个 Child 结构体里
@@ -264,7 +270,7 @@ impl PythonSidecar {
                 }
             };
 
-            notify_python(&base_url, &payload).await;
+            notify_python(&self.client, &base_url, &payload).await;
         }
 
         Ok(())

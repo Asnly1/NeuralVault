@@ -203,7 +203,8 @@ Python Sidecar 进程管理模块，负责启动、监控和关闭 Python 后端
 ```rust
 pub struct PythonSidecar {
     process: Arc<Mutex<Option<Child>>>,  // 子进程句柄
-    client: reqwest::Client,              // HTTP 客户端（复用连接池）
+    client: reqwest::Client,              // 通用 HTTP 客户端（复用连接池）
+    stream_client: reqwest::Client,       // Streaming 专用客户端（更长超时）
     port: Mutex<u16>,                     // 动态分配的端口号
 }
 ```
@@ -217,7 +218,7 @@ pub struct PythonSidecar {
 | `get_base_url()` | `&self` | `String` | 返回 Python 后端的基础 URL（如 `http://127.0.0.1:8123`） |
 | `get_port()` | `&self` | `u16` | 获取当前分配的端口号 |
 | `get_python_dir()` | - | `PathBuf` | 获取 Python 项目目录（开发模式：`src-python`） |
-| `start()` | `&self, app: &mut App` | `Result<(), String>` | 启动 Python 进程，传递端口和数据库路径 |
+| `start()` | `&self, app: &mut App` | `Result<(), String>` | 启动 Python 进程，传递端口和 Qdrant 路径（需可转 UTF-8） |
 | `is_running()` | `&self` | `bool` | 检查 Python 进程是否存活 |
 | `wait_for_health()` | `&self, max_retries: u32` | `Result<(), String>` | 等待 Python 服务健康检查通过 |
 | `check_health()` | `&self` | `Result<Value, String>` | 调用 `/health` 接口检查服务状态 |
@@ -228,7 +229,7 @@ pub struct PythonSidecar {
 ##### 设计要点
 
 1. **动态端口分配**：通过 `TcpListener::bind("127.0.0.1:0")` 让操作系统分配可用端口，避免端口冲突
-2. **HTTP 客户端复用**：创建单个 `reqwest::Client` 实例并复用，利用内部连接池提高性能
+2. **HTTP 客户端复用**：创建 `client + stream_client` 并复用，分别用于普通请求和长连接流
 3. **线程安全**：使用 `Arc<Mutex<...>>` 保护进程句柄，支持多线程访问
 4. **开发/生产模式**：开发模式使用 `uv run` 直接运行 Python，生产模式预留打包二进制支持
 5. **优雅关闭**：先调用 shutdown 接口，等待 1 秒后如仍运行则强制终止
@@ -332,7 +333,7 @@ app.manage(AppState { db, python }) - 注入状态
 | `unlink_resource_from_task()`   | `pool, task_id, resource_id` | `Result<()>`                  | 取消关联，检查是否需恢复为 unclassified            |
 | `list_resources_for_task()`     | `pool, task_id`              | `Result<Vec<ResourceRecord>>` | 查询任务的所有关联资源                             |
 | `insert_context_chunks()`       | `pool, resource_id, chunks, embedding_model`  | `Result<()>`       | 写入 Python 处理后的分块结果                        |
-| `update_resource_embedding_status()` | `pool, resource_id, sync_status, processing_stage, indexed_hash, last_error` | `Result<()>` | 更新向量化同步/处理状态                           |
+| `update_resource_embedding_status()` | `pool, resource_id, sync_status, processing_stage, indexed_hash, last_error` | `Result<()>` | 更新向量化同步/处理状态（仅在 synced 时更新 last_indexed_at） |
 | `delete_context_chunks()`       | `pool, resource_id`          | `Result<()>`                  | 删除资源分块（更新前清理旧数据）                    |
 
 ##### 数据库配置
@@ -702,7 +703,7 @@ pub struct CryptoService {
 
 #### `utils/notification.rs`
 
-Python 后端通知，使用动态端口与 Python 后端通信。
+Python 后端通知，使用动态端口与 Python 后端通信，复用 HTTP Client。
 
 **枚举类型**：
 
@@ -712,7 +713,8 @@ Python 后端通知，使用动态端口与 Python 后端通信。
 
 **函数**：
 
-- `notify_python(base_url: &str, payload: &IngestPayload)`: 异步通知 Python 后端处理资源或任务（POST `{base_url}/ingest`）
+- `notify_python(client: &reqwest::Client, base_url: &str, payload: &IngestPayload)`: 异步通知 Python 后端处理资源或任务（POST `{base_url}/ingest`）
+  - `client`: 复用的 HTTP Client（建议使用 `PythonSidecar.client`）
   - `base_url`: 从 `PythonSidecar.get_base_url()` 获取的动态 URL
   - `payload`: 资源变更信息（包含 action、file_hash、file_type 等）
 

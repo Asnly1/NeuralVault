@@ -52,11 +52,10 @@ impl IngestPayload {
 /// 通知 Python 后端处理资源或任务
 /// 
 /// # 参数
+/// - `client`: 复用的 HTTP Client（建议复用 PythonSidecar.client）
 /// - `base_url`: Python 后端的基础 URL，从 PythonSidecar.get_base_url() 获取
 /// - `payload`: Ingest 请求体
-pub async fn notify_python(base_url: &str, payload: &IngestPayload) {
-    let client = reqwest::Client::new();
-    
+pub async fn notify_python(client: &reqwest::Client, base_url: &str, payload: &IngestPayload) {
     if let Err(err) = client
         .post(&format!("{}/ingest", base_url))
         .json(payload)

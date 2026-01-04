@@ -45,6 +45,64 @@ fn build_ingest_payload(
     ))
 }
 
+fn load_or_copy_file_for_capture(
+    app: &AppHandle,
+    source_path: &str,
+    resource_uuid: &str,
+) -> Result<(Vec<u8>, i64, String, Option<String>), String> {
+    // 检查是否是从剪贴板粘贴的文件（已保存到 assets 目录）
+    // 相对路径格式: "assets/xxx.png"
+    if source_path.starts_with("assets/") {
+        // 从剪贴板粘贴的图片，文件已经保存到 assets 目录
+        let assets_dir = get_assets_dir(app)?;
+        let file_name = source_path.strip_prefix("assets/").unwrap_or(source_path);
+        let full_path = assets_dir.join(file_name);
+
+        // 读取文件内容
+        let bytes = fs::read(&full_path).map_err(|e| format!("读取文件失败: {}", e))?;
+        let size = bytes.len() as i64;
+
+        Ok((
+            bytes,
+            size,
+            source_path.to_string(),
+            Some(file_name.to_string()),
+        ))
+    } else {
+        // 正常的外部文件，需要复制到 assets 目录
+        // 读取原始文件
+        let bytes = fs::read(source_path).map_err(|e| format!("读取文件失败: {}", e))?;
+        let size = bytes.len() as i64;
+
+        // 提取原始文件名
+        let original_name = Path::new(source_path)
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string());
+
+        // 获取文件扩展名
+        let ext = get_extension(source_path);
+
+        // 构建目标文件名: {uuid}.{ext}
+        let target_filename = match &ext {
+            Some(e) => format!("{}.{}", resource_uuid, e),
+            None => resource_uuid.to_string(),
+        };
+
+        // 获取 assets 目录并复制文件
+        let assets_dir = get_assets_dir(app)?;
+        let target_path = assets_dir.join(&target_filename);
+
+        // 复制文件到应用目录
+        fs::copy(source_path, &target_path)
+            .map_err(|e| format!("复制文件失败: {}", e))?;
+
+        // 存储相对路径
+        let relative_path = format!("assets/{}", target_filename);
+
+        Ok((bytes, size, relative_path, original_name))
+    }
+}
+
 // 这个宏将 Rust 函数 capture_resource 标记为可供前端调用的命令
 #[tauri::command]
 pub async fn capture_resource(
@@ -69,87 +127,33 @@ pub async fn capture_resource(
     // file_size_bytes: 文件大小（仅文件有）
     // stored_file_path: 存储在应用目录中的相对路径（如 "assets/abc123.pdf"）
     // generated_display_name: 自动生成的显示名称
+    let file_info = match file_path.as_deref() {
+        Some(source_path) => Some(load_or_copy_file_for_capture(&app, source_path, &resource_uuid)?),
+        None => None,
+    };
+
     let (content_bytes, content_for_db, file_size_bytes, stored_file_path, generated_display_name) =
         // take() 会把 content: Option<String> 中的值取出来（变成 None 留在原地），并将所有权转移出来
-        match (content.take(), file_path.clone()) {
+        match (content.take(), file_info) {
             // ========== 情况1: 既有文本又有文件 ==========
-            (Some(text), Some(source_path)) => {
-                // 检查是否是从剪贴板粘贴的文件（已保存到 assets 目录）
-                if source_path.starts_with("assets/") {
-                    // 从剪贴板粘贴的图片，文件已经保存到 assets 目录
-                    let assets_dir = get_assets_dir(&app)?;
-                    let file_name = source_path.strip_prefix("assets/").unwrap_or(&source_path);
-                    let full_path = assets_dir.join(file_name);
+            (Some(text), Some((file_bytes, _file_size_bytes, stored_path, file_display_name))) => {
+                // 拼接文本和文件字节
+                let text_bytes = text.as_bytes();
+                let mut combined_bytes =
+                    Vec::with_capacity(text_bytes.len() + file_bytes.len());
+                combined_bytes.extend_from_slice(text_bytes);
+                combined_bytes.extend_from_slice(&file_bytes);
 
-                    // 读取文件内容
-                    let file_bytes =
-                        fs::read(&full_path).map_err(|e| format!("读取文件失败: {}", e))?;
+                // 总大小 = 文本 + 文件
+                let combined_size = combined_bytes.len() as i64;
 
-                    // 拼接文本和文件字节
-                    let text_bytes = text.as_bytes();
-                    let mut combined_bytes =
-                        Vec::with_capacity(text_bytes.len() + file_bytes.len());
-                    combined_bytes.extend_from_slice(text_bytes);
-                    combined_bytes.extend_from_slice(&file_bytes);
-
-                    let combined_size = combined_bytes.len() as i64;
-
-                    (
-                        combined_bytes,
-                        Some(text),
-                        Some(combined_size),
-                        Some(source_path.clone()),
-                        Some(file_name.to_string()),
-                    )
-                } else {
-                    // 正常的外部文件
-                    // 读取文件内容
-                    let file_bytes =
-                        fs::read(&source_path).map_err(|e| format!("读取文件失败: {}", e))?;
-
-                    // 拼接文本和文件字节
-                    let text_bytes = text.as_bytes();
-                    let mut combined_bytes =
-                        Vec::with_capacity(text_bytes.len() + file_bytes.len());
-                    combined_bytes.extend_from_slice(text_bytes);
-                    combined_bytes.extend_from_slice(&file_bytes);
-
-                    // 总大小 = 文本 + 文件
-                    let combined_size = combined_bytes.len() as i64;
-
-                    // 提取原始文件名作为 display_name
-                    let original_name = Path::new(&source_path)
-                        .file_name()
-                        .map(|n| n.to_string_lossy().to_string());
-
-                    // 获取文件扩展名
-                    let ext = get_extension(&source_path);
-
-                    // 构建目标文件名: {uuid}.{ext}
-                    let target_filename = match &ext {
-                        Some(e) => format!("{}.{}", resource_uuid, e),
-                        None => resource_uuid.clone(),
-                    };
-
-                    // 获取 assets 目录并复制文件
-                    let assets_dir = get_assets_dir(&app)?;
-                    let target_path = assets_dir.join(&target_filename);
-
-                    // 复制文件到应用目录
-                    fs::copy(&source_path, &target_path)
-                        .map_err(|e| format!("复制文件失败: {}", e))?;
-
-                    // 存储相对路径
-                    let relative_path = format!("assets/{}", target_filename);
-
-                    (
-                        combined_bytes,      // hash 用拼接后的字节
-                        Some(text),          // 文本存数据库
-                        Some(combined_size), // 文本+文件 总大小
-                        Some(relative_path), // 文件路径
-                        original_name,       // 文件名作为 display_name
-                    )
-                }
+                (
+                    combined_bytes,         // hash 用拼接后的字节
+                    Some(text),             // 文本存数据库
+                    Some(combined_size),    // 文本+文件 总大小
+                    Some(stored_path),      // 文件路径
+                    file_display_name,      // 文件名作为 display_name
+                )
             }
 
             // ========== 情况2: 只有文本 ==========
@@ -182,68 +186,13 @@ pub async fn capture_resource(
             }
 
             // ========== 情况3: 只有文件 ==========
-            (None, Some(source_path)) => {
-                // 检查是否是从剪贴板粘贴的文件（已保存到 assets 目录）
-                // 相对路径格式: "assets/xxx.png"
-                if source_path.starts_with("assets/") {
-                    // 从剪贴板粘贴的图片，文件已经保存到 assets 目录
-                    let assets_dir = get_assets_dir(&app)?;
-                    let file_name = source_path.strip_prefix("assets/").unwrap_or(&source_path);
-                    let full_path = assets_dir.join(file_name);
-
-                    // 读取文件内容计算 hash
-                    let bytes =
-                        fs::read(&full_path).map_err(|e| format!("读取文件失败: {}", e))?;
-                    let size = bytes.len() as i64;
-
-                    (
-                        bytes,                    // hash 用文件字节
-                        None,                     // 无文本
-                        Some(size),               // 文件大小
-                        Some(source_path.clone()), // 保持相对路径
-                        Some(file_name.to_string()), // 文件名
-                    )
-                } else {
-                    // 正常的外部文件，需要复制到 assets 目录
-                    // 读取原始文件
-                    let bytes =
-                        fs::read(&source_path).map_err(|e| format!("读取文件失败: {}", e))?;
-                    let size = bytes.len() as i64;
-
-                    // 提取原始文件名
-                    let original_name = Path::new(&source_path)
-                        .file_name()
-                        .map(|n| n.to_string_lossy().to_string());
-
-                    // 获取文件扩展名
-                    let ext = get_extension(&source_path);
-
-                    // 构建目标文件名: {uuid}.{ext}
-                    let target_filename = match &ext {
-                        Some(e) => format!("{}.{}", resource_uuid, e),
-                        None => resource_uuid.clone(),
-                    };
-
-                    // 获取 assets 目录并复制文件
-                    let assets_dir = get_assets_dir(&app)?;
-                    let target_path = assets_dir.join(&target_filename);
-
-                    // 复制文件到应用目录
-                    fs::copy(&source_path, &target_path)
-                        .map_err(|e| format!("复制文件失败: {}", e))?;
-
-                    // 存储相对路径
-                    let relative_path = format!("assets/{}", target_filename);
-
-                    (
-                        bytes,               // hash 用文件字节
-                        None,                // 无文本
-                        Some(size),          // 文件大小
-                        Some(relative_path), // 文件路径
-                        original_name,       // 文件名
-                    )
-                }
-            }
+            (None, Some((file_bytes, size, stored_path, file_display_name))) => (
+                file_bytes,             // hash 用文件字节
+                None,                   // 无文本
+                Some(size),             // 文件大小
+                Some(stored_path),      // 文件路径
+                file_display_name,      // 文件名
+            ),
 
             // ========== 情况4: 什么都没有 ==========
             (None, None) => return Err("content 或 file_path 至少提供一个".into()),
@@ -306,8 +255,9 @@ pub async fn capture_resource(
     )?;
 
     let base_url = state.python.get_base_url();
+    let client = state.python.client.clone();
     tauri::async_runtime::spawn(async move {
-        notify_python(&base_url, &ingest_payload).await;
+        notify_python(&client, &base_url, &ingest_payload).await;
     });
 
     Ok(CaptureResponse {
@@ -453,8 +403,9 @@ pub async fn update_resource_content_command(
     )?;
 
     let base_url = state.python.get_base_url();
+    let client = state.python.client.clone();
     tauri::async_runtime::spawn(async move {
-        notify_python(&base_url, &ingest_payload).await;
+        notify_python(&client, &base_url, &ingest_payload).await;
     });
 
     Ok(())
@@ -528,8 +479,9 @@ pub async fn hard_delete_resource_command(
     )?;
 
     let base_url = state.python.get_base_url();
+    let client = state.python.client.clone();
     tauri::async_runtime::spawn(async move {
-        notify_python(&base_url, &ingest_payload).await;
+        notify_python(&client, &base_url, &ingest_payload).await;
     });
 
     Ok(LinkResourceResponse { success: true })

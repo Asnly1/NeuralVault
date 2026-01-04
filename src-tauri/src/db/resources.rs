@@ -266,35 +266,21 @@ pub async fn update_resource_embedding_status(
     indexed_hash: Option<&str>,
     last_error: Option<&str>,
 ) -> Result<(), sqlx::Error> {
-    // 如果是 synced 状态，同时更新 last_indexed_at
-    if sync_status == "synced" {
-        sqlx::query(
-            "UPDATE resources SET \
-             sync_status = ?, processing_stage = ?, indexed_hash = ?, \
-             last_indexed_at = CURRENT_TIMESTAMP, last_error = ? \
-             WHERE resource_id = ?"
-        )
-        .bind(sync_status)
-        .bind(processing_stage)
-        .bind(indexed_hash)
-        .bind(last_error)
-        .bind(resource_id)
-        .execute(pool)
-        .await?;
-    } else {
-        sqlx::query(
-            "UPDATE resources SET \
-             sync_status = ?, processing_stage = ?, indexed_hash = ?, last_error = ? \
-             WHERE resource_id = ?"
-        )
-        .bind(sync_status)
-        .bind(processing_stage)
-        .bind(indexed_hash)
-        .bind(last_error)
-        .bind(resource_id)
-        .execute(pool)
-        .await?;
-    }
+    // 只有 sync_status == "synced" 时更新 last_indexed_at，否则保持原值
+    sqlx::query(
+        "UPDATE resources SET \
+         sync_status = ?, processing_stage = ?, indexed_hash = ?, last_error = ?, \
+         last_indexed_at = CASE WHEN ? = 'synced' THEN CURRENT_TIMESTAMP ELSE last_indexed_at END \
+         WHERE resource_id = ?"
+    )
+    .bind(sync_status)
+    .bind(processing_stage)
+    .bind(indexed_hash)
+    .bind(last_error)
+    .bind(sync_status)
+    .bind(resource_id)
+    .execute(pool)
+    .await?;
 
     Ok(())
 }
