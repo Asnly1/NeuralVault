@@ -28,6 +28,7 @@ pub async fn insert_task(pool: &DbPool, params: NewTask<'_>) -> Result<i64, sqlx
 }
 
 pub async fn get_task_by_id(pool: &DbPool, task_id: i64) -> Result<TaskRecord, sqlx::Error> {
+    // 第一个返回结果是数据库类型，第二个是查询结果要映射成的 Rust 类型
     // _ : 让编译器根据传入的 &SqlitePool 推测出连接 SQLite
     // TaskRecord: 把结果映射回 TaskRecord
     sqlx::query_as::<_, TaskRecord>(

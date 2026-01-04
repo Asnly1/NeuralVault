@@ -158,9 +158,10 @@ CREATE INDEX idx_chunks_embedding_hash ON context_chunks(embedding_hash);
 -- ==========================================
 CREATE TABLE chat_sessions (
     session_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_type TEXT DEFAULT 'task' CHECK (session_type IN ('global', 'task')),
-     --当session_type == 'global' 时，允许用户不基于task，在全局进行对话
+    session_type TEXT DEFAULT 'task' CHECK (session_type IN ('task', 'resource')),
+     -- 当 session_type == 'resource' 时，允许用户基于资源对话
     task_id INTEGER,
+    resource_id INTEGER,
 
     title TEXT, -- 由AI生成的标题
     summary TEXT, -- 由AI生成的总结
@@ -174,10 +175,12 @@ CREATE TABLE chat_sessions (
     user_id INTEGER NOT NULL DEFAULT 1, --预留user_id，但是先不用
 
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-    FOREIGN KEY(task_id) REFERENCES tasks(task_id) ON DELETE CASCADE
+    FOREIGN KEY(task_id) REFERENCES tasks(task_id) ON DELETE CASCADE,
+    FOREIGN KEY(resource_id) REFERENCES resources(resource_id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_session_task_time ON chat_sessions(task_id, created_at);
+CREATE INDEX idx_session_resource_time ON chat_sessions(resource_id, created_at);
 
 CREATE TABLE chat_messages (
     message_id INTEGER PRIMARY KEY AUTOINCREMENT,

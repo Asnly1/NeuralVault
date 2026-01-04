@@ -355,32 +355,108 @@ export interface SetDefaultModelRequest {
  * 聊天消息
  */
 export interface ChatMessagePayload {
+  message_id: number;
   role: "user" | "assistant" | "system";
   content: string;
+  attachments: { resource_id: number }[];
+  created_at?: string;
 }
 
 /**
  * 发送聊天请求
  */
 export interface SendChatRequest {
+  session_id: number;
   provider: string;
   model: string;
-  messages: ChatMessagePayload[];
-  context_resource_ids?: number[];
+  task_type: string;
+  content: string;
+  images?: number[];
+  files?: number[];
 }
 
 /**
  * 聊天响应
  */
-export interface ChatResponse {
+export interface ChatStreamAck {
+  ok: boolean;
+}
+
+export interface ChatSession {
+  session_id: number;
+  session_type: "task" | "resource";
+  task_id?: number | null;
+  resource_id?: number | null;
+  title?: string | null;
+  summary?: string | null;
+  chat_model?: string | null;
+  created_at?: string | null;
+  is_deleted: boolean;
+  deleted_at?: string | null;
+  user_id: number;
+}
+
+export interface CreateChatSessionRequest {
+  session_type: "task" | "resource";
+  task_id?: number;
+  resource_id?: number;
+  title?: string;
+  summary?: string;
+  chat_model?: string;
+}
+
+export interface CreateChatSessionResponse {
+  session_id: number;
+}
+
+export interface ListChatSessionsRequest {
+  session_type: "task" | "resource";
+  task_id?: number;
+  resource_id?: number;
+  include_deleted?: boolean;
+}
+
+export interface UpdateChatSessionRequest {
+  session_id: number;
+  title?: string;
+  summary?: string;
+  chat_model?: string;
+}
+
+export interface DeleteChatSessionRequest {
+  session_id: number;
+}
+
+export interface CreateChatMessageRequest {
+  session_id: number;
+  role: "user" | "assistant" | "system";
   content: string;
-  usage?: {
-    input_tokens?: number;
-    output_tokens?: number;
-    prompt_tokens?: number;
-    completion_tokens?: number;
-    total_tokens?: number;
-  };
+  ref_resource_id?: number;
+  ref_chunk_id?: number;
+  attachment_resource_ids?: number[];
+}
+
+export interface CreateChatMessageResponse {
+  message_id: number;
+}
+
+export interface UpdateChatMessageRequest {
+  message_id: number;
+  content: string;
+}
+
+export interface DeleteChatMessageRequest {
+  message_id: number;
+}
+
+export interface AddMessageAttachmentsRequest {
+  message_id: number;
+  resource_ids: number[];
+}
+
+export interface RemoveMessageAttachmentRequest {
+  message_id: number;
+  resource_id: number;
 }
 
 /**
@@ -399,4 +475,5 @@ export interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
   timestamp: Date;
+  attachments?: { resource_id: number }[];
 }

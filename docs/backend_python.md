@@ -53,6 +53,13 @@ src-python/
 |------|------|------|
 | POST | `/chat/completions` | 调用 LLM 生成回复 (支持流式) |
 
+### /providers
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| PUT | `/providers/{provider}` | Rust 同步 API Key/base_url |
+| DELETE | `/providers/{provider}` | Rust 删除 API Key |
+
 ### 其他
 
 | 方法 | 路径 | 说明 |
@@ -123,46 +130,35 @@ Error:
 {
   "provider": "openai",
   "model": "gpt-4o",
-  "api_key": "sk-xxx",
-  "base_url": "https://api.openai.com/v1",
+  "task_type": "chat",
   "messages": [
     {"role": "system", "content": "You are a helpful assistant."},
-    {"role": "user", "content": "Hello"}
+    {"role": "user", "content": "Hello", "images": ["/abs/path/img.png"], "files": ["/abs/path/doc.pdf"]}
   ],
-  "context_resource_ids": [1, 2],
-  "stream": false
+  "stream": true
 }
 ```
 
-> `context_resource_ids` 目前未参与实际调用逻辑，仅预留。
+> API Key 由 Rust 在启动/保存/删除时同步到 Python（PUT/DELETE `/providers/{provider}`）。
 
 ### 关键行为
 
 - **OpenAI**: 使用 Responses API；system 消息合并为 `instructions`。
-- **OpenAI 兼容**（Deepseek/Qwen/Grok）: 使用 Chat Completions。
+- **OpenAI 兼容**（Deepseek/Qwen）: 使用 Chat Completions（文本-only）。
 - **Gemini**: system 映射为 `system_instruction`，assistant 角色映射为 `model`。
 - **Anthropic**: system 单独传入 `system` 字段。
-
-### 非流式响应
-
-```json
-{
-  "content": "AI 回复内容",
-  "usage": {
-    "input_tokens": 10,
-    "output_tokens": 20
-  }
-}
-```
+- **Grok**: 使用 xAI SDK，支持图片/文件。
 
 ### 流式响应 (SSE)
 
-当 `stream=true` 时返回 `text/event-stream`，每条事件为：
+返回 `text/event-stream`，每条事件为：
 
 ```
-data: {"type":"delta","content":"片段内容"}
+data: {"type":"delta","delta":"片段内容"}
 
-data: {"type":"done","content":"完整内容"}
+data: {"type":"usage","usage":{"input_tokens":10,"output_tokens":20}}
+
+data: {"type":"done","done":true}
 ```
 
 发生错误：

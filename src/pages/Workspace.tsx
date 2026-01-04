@@ -413,6 +413,9 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
           isResizing={isResizingRight}
           onMouseDown={handleRightMouseDown}
           onNavigateToSettings={onNavigateToSettings}
+          sessionType={isResourceMode ? "resource" : "task"}
+          taskId={!isResourceMode ? selectedTask?.task_id : undefined}
+          resourceId={isResourceMode ? currentResource?.resource_id : undefined}
         />
       </div>
     </div>

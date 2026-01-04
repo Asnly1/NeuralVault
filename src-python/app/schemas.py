@@ -103,18 +103,22 @@ class IngestionResult(BaseModel):
 class ChatMessage(BaseModel):
     role: MessageRole
     content: str
+    images: Optional[List[str]] = None
+    files: Optional[List[str]] = None
 
 
 class ChatRequest(BaseModel):
     provider: str
     model: str
-    api_key: str
-    base_url: Optional[str] = None
+    task_type: str
     messages: list[ChatMessage]
-    context_resource_ids: Optional[list[int]] = None
-    stream: bool = False
+    stream: bool = True
 
 
 class ChatResponse(BaseModel):
     content: str
     usage: Optional[dict] = None
+
+class ProviderConfigRequest(BaseModel):
+    api_key: str
+    base_url: Optional[str] = None

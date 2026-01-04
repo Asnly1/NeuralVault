@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::db::{ResourceRecord, TaskPriority, TaskRecord, TaskStatus};
+use crate::db::{ResourceRecord, TaskPriority, TaskRecord, TaskStatus, ChatSessionType, ChatMessageRole};
 
 // ========== 捕获相关 ==========
 
@@ -113,11 +113,92 @@ pub struct ReadClipboardResponse {
     pub content: ClipboardContent,
 }
 
-// ========== AI 配置 ==========
+// ========== Chat Session / Message ==========
 
-#[derive(Debug, Serialize, Deserialize)]
-pub enum MessageRole {
-    User,
-    Assistant,
-    System,
+#[derive(Debug, Deserialize)]
+pub struct CreateChatSessionRequest {
+    pub session_type: ChatSessionType,
+    pub task_id: Option<i64>,
+    pub resource_id: Option<i64>,
+    pub title: Option<String>,
+    pub summary: Option<String>,
+    pub chat_model: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CreateChatSessionResponse {
+    pub session_id: i64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListChatSessionsRequest {
+    pub session_type: ChatSessionType,
+    pub task_id: Option<i64>,
+    pub resource_id: Option<i64>,
+    pub include_deleted: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateChatSessionRequest {
+    pub session_id: i64,
+    pub title: Option<String>,
+    pub summary: Option<String>,
+    pub chat_model: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DeleteChatSessionRequest {
+    pub session_id: i64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateChatMessageRequest {
+    pub session_id: i64,
+    pub role: ChatMessageRole,
+    pub content: String,
+    pub ref_resource_id: Option<i64>,
+    pub ref_chunk_id: Option<i64>,
+    pub attachment_resource_ids: Option<Vec<i64>>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CreateChatMessageResponse {
+    pub message_id: i64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateChatMessageRequest {
+    pub message_id: i64,
+    pub content: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DeleteChatMessageRequest {
+    pub message_id: i64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AddMessageAttachmentsRequest {
+    pub message_id: i64,
+    pub resource_ids: Vec<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RemoveMessageAttachmentRequest {
+    pub message_id: i64,
+    pub resource_id: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ChatMessageAttachmentPayload {
+    pub resource_id: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ChatMessagePayload {
+    pub message_id: i64,
+    pub role: ChatMessageRole,
+    pub content: String,
+    pub attachments: Vec<ChatMessageAttachmentPayload>,
+    pub created_at: Option<String>,
 }

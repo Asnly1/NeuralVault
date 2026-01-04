@@ -21,6 +21,9 @@ interface ChatPanelProps {
   isResizing: boolean;
   onMouseDown: (e: React.MouseEvent) => void;
   onNavigateToSettings?: () => void;
+  sessionType?: "task" | "resource";
+  taskId?: number;
+  resourceId?: number;
 }
 
 export function ChatPanel({
@@ -29,6 +32,9 @@ export function ChatPanel({
   isResizing,
   onMouseDown,
   onNavigateToSettings,
+  sessionType,
+  taskId,
+  resourceId,
 }: ChatPanelProps) {
   const { t } = useLanguage();
   const {
@@ -56,10 +62,17 @@ export function ChatPanel({
 
   const handleSend = async () => {
     if (!chatInput.trim() || !selectedModel || isChatLoading) return;
+    if (!sessionType || (sessionType === "task" && !taskId) || (sessionType === "resource" && !resourceId)) {
+      return;
+    }
     const content = chatInput;
     setChatInput("");
     try {
-      await sendMessage(content);
+      await sendMessage(content, {
+        session_type: sessionType,
+        task_id: taskId,
+        resource_id: resourceId,
+      });
     } catch (e) {
       console.error("Failed to send message:", e);
     }
@@ -221,7 +234,14 @@ export function ChatPanel({
             />
             <Button
               size="icon"
-              disabled={!chatInput.trim() || !selectedModel || isChatLoading}
+              disabled={
+                !chatInput.trim() ||
+                !selectedModel ||
+                isChatLoading ||
+                !sessionType ||
+                (sessionType === "task" && !taskId) ||
+                (sessionType === "resource" && !resourceId)
+              }
               onClick={handleSend}
             >
               {isChatLoading ? (

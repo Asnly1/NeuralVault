@@ -147,8 +147,9 @@ CREATE INDEX idx_chunks_embedding_hash ON context_chunks(embedding_hash);
 -- ==========================================
 CREATE TABLE chat_sessions (
     session_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_type TEXT DEFAULT 'task' CHECK (session_type IN ('global', 'task')),
+    session_type TEXT DEFAULT 'task' CHECK (session_type IN ('resource', 'task')),
     task_id INTEGER,
+    resource_id INTEGER,
 
     title TEXT,
     summary TEXT,
@@ -162,10 +163,12 @@ CREATE TABLE chat_sessions (
     user_id INTEGER NOT NULL DEFAULT 1,
 
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-    FOREIGN KEY(task_id) REFERENCES tasks(task_id) ON DELETE CASCADE
+    FOREIGN KEY(task_id) REFERENCES tasks(task_id) ON DELETE CASCADE,
+    FOREIGN KEY(resource_id) REFERENCES resources(resource_id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_session_task_time ON chat_sessions(task_id, created_at);
+CREATE INDEX idx_session_resource_time ON chat_sessions(resource_id, created_at);
 
 CREATE TABLE chat_messages (
     message_id INTEGER PRIMARY KEY AUTOINCREMENT,

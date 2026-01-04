@@ -21,6 +21,9 @@ pub use commands::{
     update_task_due_date_command, update_task_title_command, update_task_description_command,
     get_tasks_by_date, get_all_tasks, update_resource_content_command, update_resource_display_name_command,
     check_python_health, is_python_running, get_ai_config_status, save_api_key, remove_api_key, set_default_model, send_chat_message,
+    create_chat_session, get_chat_session, list_chat_sessions, update_chat_session_command, delete_chat_session_command,
+    create_chat_message, list_chat_messages, update_chat_message_command, delete_chat_message_command,
+    add_message_attachments, remove_message_attachment,
 };
 pub use sidecar::PythonSidecar;
 pub use window::{hide_hud, toggle_hud};
@@ -93,6 +96,29 @@ pub fn run() {
                             "status": "ready"
                         }));
 
+                        if let Some(state) = app_handle.try_state::<AppState>() {
+                            let config_service = state.ai_config.lock().await;
+                            let config = config_service.load();
+                            drop(config_service);
+                            if let Ok(config) = config {
+                                let client = python_for_health.client.clone();
+                                let base_url = python_for_health.get_base_url();
+                                for (provider, provider_config) in config.providers {
+                                    if provider_config.api_key.is_empty() || !provider_config.enabled {
+                                        continue;
+                                    }
+                                    let payload = serde_json::json!({
+                                        "api_key": provider_config.api_key,
+                                        "base_url": provider_config.base_url,
+                                    });
+                                    let url = format!("{}/providers/{}", base_url, provider);
+                                    if let Err(err) = client.put(&url).json(&payload).send().await {
+                                        eprintln!("[Tauri] Failed to sync provider {}: {}", provider, err);
+                                    }
+                                }
+                            }
+                        }
+
                         // 启动全局进度流连接
                         // 通过 HTTP StreamingResponse + NDJSON 接收 Python 的处理进度和结果，
                         // 进度消息通过 Tauri Events 转发给前端，
@@ -161,7 +187,18 @@ pub fn run() {
             save_api_key,
             remove_api_key,
             set_default_model,
-            send_chat_message
+            send_chat_message,
+            create_chat_session,
+            get_chat_session,
+            list_chat_sessions,
+            update_chat_session_command,
+            delete_chat_session_command,
+            create_chat_message,
+            list_chat_messages,
+            update_chat_message_command,
+            delete_chat_message_command,
+            add_message_attachments,
+            remove_message_attachment
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {

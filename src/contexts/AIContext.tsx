@@ -14,6 +14,7 @@ import {
   removeApiKey,
   setDefaultModel,
   sendChatMessage,
+  createChatSession,
 } from "@/api";
 import {
   AIProvider,
@@ -22,8 +23,8 @@ import {
   type AIConfigStatus,
   type ModelOption,
   type ChatMessage,
-  type ChatMessagePayload,
 } from "@/types";
+import { listen } from "@tauri-apps/api/event";
 
 interface AIContextType {
   // 配置状态
@@ -50,7 +51,16 @@ interface AIContextType {
   ) => Promise<void>;
   removeKey: (provider: AIProvider) => Promise<void>;
   saveDefaultModel: (provider: AIProvider, model: string) => Promise<void>;
-  sendMessage: (content: string, contextResourceIds?: number[]) => Promise<void>;
+  sendMessage: (
+    content: string,
+    context?: {
+      session_type: "task" | "resource";
+      task_id?: number;
+      resource_id?: number;
+      images?: number[];
+      files?: number[];
+    }
+  ) => Promise<void>;
   clearMessages: () => void;
   refreshConfig: () => Promise<void>;
 }
@@ -64,6 +74,7 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
   const [selectedModel, setSelectedModel] = useState<ModelOption | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isChatLoading, setIsChatLoading] = useState(false);
+  const [sessionMap, setSessionMap] = useState<Map<string, number>>(new Map());
 
   const refreshConfig = useCallback(async () => {
     try {
@@ -146,49 +157,134 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const ensureSession = useCallback(
+    async (context: {
+      session_type: "task" | "resource";
+      task_id?: number;
+      resource_id?: number;
+    }) => {
+      const key =
+        context.session_type === "task"
+          ? `task:${context.task_id ?? "none"}`
+          : `resource:${context.resource_id ?? "none"}`;
+      const existing = sessionMap.get(key);
+      if (existing) return existing;
+
+      const response = await createChatSession({
+        session_type: context.session_type,
+        task_id: context.task_id,
+        resource_id: context.resource_id,
+      });
+      setSessionMap((prev) => {
+        const next = new Map(prev);
+        next.set(key, response.session_id);
+        return next;
+      });
+      return response.session_id;
+    },
+    [sessionMap]
+  );
+
   const sendMessage = async (
     content: string,
-    contextResourceIds?: number[]
+    context?: {
+      session_type: "task" | "resource";
+      task_id?: number;
+      resource_id?: number;
+      images?: number[];
+      files?: number[];
+    }
   ) => {
+    const unlistenRef: { current: null | (() => void) } = { current: null };
     if (!selectedModel) {
       throw new Error("No model selected");
     }
+
+    if (!context) {
+      throw new Error("Chat session context is required");
+    }
+
+    const sessionId = await ensureSession({
+      session_type: context.session_type,
+      task_id: context.task_id,
+      resource_id: context.resource_id,
+    });
 
     const userMessage: ChatMessage = {
       role: "user",
       content,
       timestamp: new Date(),
+      attachments: [
+        ...(context.images || []).map((resourceId) => ({ resource_id: resourceId })),
+        ...(context.files || []).map((resourceId) => ({ resource_id: resourceId })),
+      ],
     };
     setMessages((prev) => [...prev, userMessage]);
     setIsChatLoading(true);
     setError(null);
 
     try {
-      // 构建消息历史
-      const messagePayloads: ChatMessagePayload[] = messages
-        .concat(userMessage)
-        .map((m) => ({
-          role: m.role,
-          content: m.content,
-        }));
-
-      const response = await sendChatMessage({
-        provider: selectedModel.provider,
-        model: selectedModel.model_id,
-        messages: messagePayloads,
-        context_resource_ids: contextResourceIds,
-      });
-
       const assistantMessage: ChatMessage = {
         role: "assistant",
-        content: response.content,
+        content: "",
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, assistantMessage]);
+
+      const setupListener = async () => {
+        unlistenRef.current = await listen<{
+          session_id: number;
+          type: string;
+          delta?: string;
+          usage?: unknown;
+          done?: boolean;
+          message?: unknown;
+        }>("chat-stream", (event) => {
+          if (event.payload.session_id !== sessionId) return;
+
+          if (event.payload.type === "delta" && event.payload.delta) {
+            setMessages((prev) => {
+              const next = [...prev];
+              const lastIndex = next.length - 1;
+              if (lastIndex >= 0 && next[lastIndex].role === "assistant") {
+                next[lastIndex] = {
+                  ...next[lastIndex],
+                  content: next[lastIndex].content + event.payload.delta,
+                };
+              }
+              return next;
+            });
+          }
+
+          if (event.payload.type === "done") {
+            setIsChatLoading(false);
+            if (unlistenRef.current) unlistenRef.current();
+          }
+
+          if (event.payload.type === "error") {
+            setError("Chat failed");
+            setIsChatLoading(false);
+            if (unlistenRef.current) unlistenRef.current();
+          }
+        });
+      };
+
+      await setupListener();
+
+      await sendChatMessage({
+        session_id: sessionId,
+        provider: selectedModel.provider,
+        model: selectedModel.model_id,
+        task_type: "chat",
+        content,
+        images: context.images,
+        files: context.files,
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Chat failed");
-      // 移除失败的用户消息
       setMessages((prev) => prev.slice(0, -1));
+      setIsChatLoading(false);
+      if (unlistenRef.current) unlistenRef.current();
       throw e;
     } finally {
       setIsChatLoading(false);

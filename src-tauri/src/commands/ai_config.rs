@@ -3,9 +3,20 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tauri::State;
+use tauri::{AppHandle, State, Emitter};
+use futures_util::StreamExt;
 
-use crate::{app_state::AppState, commands::MessageRole};
+use crate::{
+    app_state::AppState,
+    db::{
+        ChatMessageRole, NewChatMessage, NewMessageAttachment, ResourceFileType,
+        insert_chat_message, insert_message_attachments, list_chat_messages,
+        list_message_attachments_with_resource, update_chat_session,
+    },
+    services::ProviderConfig,
+    sidecar::PythonSidecar,
+    utils::resolve_file_path,
+};
 
 // ========== 请求/响应类型 ==========
 
@@ -36,24 +47,67 @@ pub struct AIConfigStatusResponse {
     pub default_model: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ChatMessagePayload {
-    pub role: MessageRole,
-    pub content: String,
-}
-
 #[derive(Debug, Deserialize)]
 pub struct SendChatRequest {
+    pub session_id: i64,
     pub provider: String,
     pub model: String,
-    pub messages: Vec<ChatMessagePayload>,
-    pub context_resource_ids: Option<Vec<i64>>,
+    pub task_type: String,
+    pub content: String,
+    pub images: Option<Vec<i64>>,
+    pub files: Option<Vec<i64>>,
 }
 
 #[derive(Debug, Serialize)]
-pub struct ChatResponse {
-    pub content: String,
-    pub usage: Option<serde_json::Value>,
+pub struct ChatStreamAck {
+    pub ok: bool,
+}
+
+async fn sync_provider_config(
+    python: &PythonSidecar,
+    provider: &str,
+    config: &ProviderConfig,
+) -> Result<(), String> {
+    let response = python
+        .client
+        .put(format!("{}/providers/{}", python.get_base_url(), provider))
+        .json(&serde_json::json!({
+            "api_key": config.api_key,
+            "base_url": config.base_url,
+        }))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to sync provider to Python: {}", e))?;
+
+    if response.status().is_success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Python provider sync failed: {}",
+            response.status()
+        ))
+    }
+}
+
+async fn remove_provider_config(
+    python: &PythonSidecar,
+    provider: &str,
+) -> Result<(), String> {
+    let response = python
+        .client
+        .delete(format!("{}/providers/{}", python.get_base_url(), provider))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to remove provider from Python: {}", e))?;
+
+    if response.status().is_success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Python provider remove failed: {}",
+            response.status()
+        ))
+    }
 }
 
 // ========== Commands ==========
@@ -95,14 +149,23 @@ pub async fn save_api_key(
     request: SetApiKeyRequest,
 ) -> Result<(), String> {
     let config_service = state.ai_config.lock().await;
-    config_service.set_api_key(&request.provider, &request.api_key, request.base_url)
+    config_service.set_api_key(&request.provider, &request.api_key, request.base_url.clone())?;
+    let provider_config = config_service
+        .get_provider_config(&request.provider)?
+        .ok_or_else(|| format!("Provider {} not configured", request.provider))?;
+    drop(config_service);
+
+    sync_provider_config(&state.python, &request.provider, &provider_config).await
 }
 
 /// 删除 API Key
 #[tauri::command]
 pub async fn remove_api_key(state: State<'_, AppState>, provider: String) -> Result<(), String> {
     let config_service = state.ai_config.lock().await;
-    config_service.remove_provider(&provider)
+    config_service.remove_provider(&provider)?;
+    drop(config_service);
+
+    remove_provider_config(&state.python, &provider).await
 }
 
 /// 设置默认模型
@@ -118,9 +181,10 @@ pub async fn set_default_model(
 /// 发送聊天消息（通过 Python 调用 LLM）
 #[tauri::command]
 pub async fn send_chat_message(
+    app: AppHandle,
     state: State<'_, AppState>,
     request: SendChatRequest,
-) -> Result<ChatResponse, String> {
+) -> Result<ChatStreamAck, String> {
     // 1. 从加密配置获取 API Key
     let config_service = state.ai_config.lock().await;
     let provider_config = config_service
@@ -130,25 +194,107 @@ pub async fn send_chat_message(
     if provider_config.api_key.is_empty() {
         return Err(format!("API key not set for {}", request.provider));
     }
+    if !provider_config.enabled {
+        return Err(format!("Provider {} is disabled", request.provider));
+    }
 
     // 释放锁，避免在 HTTP 请求期间持有锁
     drop(config_service);
 
-    // 2. 构建发给 Python 的请求
+    let mut attachment_ids: Vec<i64> = Vec::new();
+    if let Some(images) = request.images.clone() {
+        attachment_ids.extend(images);
+    }
+    if let Some(files) = request.files.clone() {
+        attachment_ids.extend(files);
+    }
+
+    let user_message_id = insert_chat_message(
+        &state.db,
+        NewChatMessage {
+            session_id: request.session_id,
+            role: ChatMessageRole::User,
+            content: &request.content,
+            ref_resource_id: None,
+            ref_chunk_id: None,
+        },
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    if !attachment_ids.is_empty() {
+        let attachments: Vec<NewMessageAttachment> = attachment_ids
+            .iter()
+            .map(|resource_id| NewMessageAttachment {
+                message_id: user_message_id,
+                resource_id: *resource_id,
+            })
+            .collect();
+        insert_message_attachments(&state.db, &attachments)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+
+    update_chat_session(
+        &state.db,
+        request.session_id,
+        None,
+        None,
+        Some(&request.model),
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    // 2. 构建历史消息与附件
+    let messages = list_chat_messages(&state.db, request.session_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    let attachments = list_message_attachments_with_resource(&state.db, request.session_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut attachment_map: HashMap<i64, (Vec<String>, Vec<String>)> = HashMap::new();
+    for attachment in attachments {
+        let file_path = attachment.file_path.ok_or_else(|| {
+            format!(
+                "resource {} missing file_path for attachment",
+                attachment.resource_id
+            )
+        })?;
+        let abs_path = resolve_file_path(&app, &file_path)?;
+        // 如果这个 message_id 已经有 entry → 直接拿出来用
+        // 如果没有 → 插入一个默认值，再拿出来用
+        // 默认值是 (Vec::new(), Vec::new())
+        let entry = attachment_map.entry(attachment.message_id).or_default();
+        match attachment.file_type {
+            ResourceFileType::Image => entry.0.push(abs_path),
+            _ => entry.1.push(abs_path),
+        }
+    }
+
+    let mut python_messages: Vec<serde_json::Value> = Vec::with_capacity(messages.len());
+    for message in messages {
+        let (images, files) = attachment_map.remove(&message.message_id).unwrap_or_default();
+        python_messages.push(serde_json::json!({
+            "role": message.role,
+            "content": message.content,
+            "images": images,
+            "files": files,
+        }));
+    }
+
+    // 3. 调用 Python /chat/completions
     let python_request = serde_json::json!({
         "provider": request.provider,
         "model": request.model,
-        "api_key": provider_config.api_key,
-        "base_url": provider_config.base_url,
-        "messages": request.messages,
-        "context_resource_ids": request.context_resource_ids,
+        "task_type": request.task_type,
+        "messages": python_messages,
     });
 
-    // 3. 调用 Python /chat/completions
     let python_base_url = state.python.get_base_url();
     let response = state
         .python
-        .client
+        .stream_client
         .post(&format!("{}/chat/completions", python_base_url))
         .json(&python_request)
         .send()
@@ -164,17 +310,104 @@ pub async fn send_chat_message(
         return Err(format!("Python API error ({}): {}", status, error_text));
     }
 
-    // 4. 解析响应
-    let result: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
+    let mut stream = response.bytes_stream();
+    let mut buffer: Vec<u8> = Vec::new();
+    let mut assistant_content = String::new();
+    let mut usage: Option<serde_json::Value> = None;
+    let mut done = false;
 
-    Ok(ChatResponse {
-        content: result["content"]
-            .as_str()
-            .unwrap_or("")
-            .to_string(),
-        usage: result.get("usage").cloned(),
-    })
+    while let Some(chunk_result) = stream.next().await {
+        let bytes = chunk_result
+            .map_err(|e| format!("Stream read error: {}", e))?;
+        buffer.extend_from_slice(&bytes);
+
+        while let Some(pos) = buffer.iter().position(|&b| b == b'\n') {
+            let line_bytes = &buffer[..pos];
+            let line = String::from_utf8_lossy(line_bytes).to_string();
+            buffer.drain(..pos + 1);
+
+            let trimmed = line.trim();
+            if trimmed.is_empty() || !trimmed.starts_with("data:") {
+                continue;
+            }
+
+            let data = trimmed.trim_start_matches("data:").trim();
+            if data == "[DONE]" {
+                continue;
+            }
+
+            let event: serde_json::Value = serde_json::from_str(data)
+                .map_err(|e| format!("Failed to parse SSE payload: {}", e))?;
+            let event_type = event
+                .get("type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+
+            match event_type {
+                "delta" => {
+                    if let Some(delta) = event.get("delta").and_then(|v| v.as_str()) {
+                        assistant_content.push_str(delta);
+                        let payload = serde_json::json!({
+                            "session_id": request.session_id,
+                            "type": "delta",
+                            "delta": delta,
+                        });
+                        let _ = app.emit("chat-stream", payload);
+                    }
+                }
+                "usage" => {
+                    if let Some(usage_value) = event.get("usage") {
+                        usage = Some(usage_value.clone());
+                        let payload = serde_json::json!({
+                            "session_id": request.session_id,
+                            "type": "usage",
+                            "usage": usage_value,
+                        });
+                        let _ = app.emit("chat-stream", payload);
+                    }
+                }
+                "done" => {
+                    done = true;
+                    break;
+                }
+                "error" => {
+                    let payload = serde_json::json!({
+                        "session_id": request.session_id,
+                        "type": "error",
+                        "message": event.get("message"),
+                    });
+                    let _ = app.emit("chat-stream", payload);
+                    return Err("Python stream error".to_string());
+                }
+                _ => {}
+            }
+        }
+        if done {
+            break;
+        }
+    }
+
+    let assistant_message_id = insert_chat_message(
+        &state.db,
+        NewChatMessage {
+            session_id: request.session_id,
+            role: ChatMessageRole::Assistant,
+            content: &assistant_content,
+            ref_resource_id: None,
+            ref_chunk_id: None,
+        },
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let done_payload = serde_json::json!({
+        "session_id": request.session_id,
+        "type": "done",
+        "done": true,
+        "message_id": assistant_message_id,
+        "usage": usage,
+    });
+    let _ = app.emit("chat-stream", done_payload);
+
+    Ok(ChatStreamAck { ok: true })
 }

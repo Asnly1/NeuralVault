@@ -374,9 +374,9 @@ app.manage(AppState { db, python }) - 注入状态
 | `SetDefaultModelRequest`| 设置默认模型       | provider, model                                          |
 | `AIProviderStatus`      | Provider 状态      | has_key, enabled, base_url                               |
 | `AIConfigStatusResponse`| AI 配置状态        | providers, default_provider, default_model               |
-| `ChatMessagePayload`    | 聊天消息           | role (User/Assistant/System), content                    |
-| `SendChatRequest`       | 发送聊天请求       | provider, model, messages, context_resource_ids          |
-| `ChatResponse`          | 聊天响应           | content, usage                                           |
+| `ChatMessagePayload`    | 聊天消息           | message_id, role, content, attachments                   |
+| `SendChatRequest`       | 发送聊天请求       | session_id, provider, model, task_type, content, images, files |
+| `ChatStreamAck`         | 发送聊天响应       | ok                                                       |
 
 ##### 命令列表
 
@@ -411,7 +411,18 @@ app.manage(AppState { db, python }) - 注入状态
 | `save_api_key`                    | `state, SetApiKeyRequest`     | `Result<()>`                    | 保存 API Key 到加密配置                  |
 | `remove_api_key`                  | `state, provider`             | `Result<()>`                    | 删除指定 Provider 的 API Key            |
 | `set_default_model`               | `state, SetDefaultModelRequest`| `Result<()>`                   | 设置默认模型                             |
-| `send_chat_message`               | `state, SendChatRequest`      | `Result<ChatResponse>`          | 发送聊天消息（通过 Python 调用 LLM）     |
+| `send_chat_message`               | `state, SendChatRequest`      | `Result<ChatStreamAck>`         | 发送聊天消息（通过 Python 调用 LLM）     |
+| `create_chat_session`             | `state, CreateChatSessionRequest` | `Result<CreateChatSessionResponse>` | 创建聊天会话                          |
+| `get_chat_session`                | `state, session_id`           | `Result<ChatSession>`           | 获取聊天会话详情                         |
+| `list_chat_sessions`              | `state, ListChatSessionsRequest` | `Result<Vec<ChatSession>>`    | 获取聊天会话列表                         |
+| `update_chat_session_command`     | `state, UpdateChatSessionRequest` | `Result<()>`                 | 更新聊天会话                             |
+| `delete_chat_session_command`     | `state, DeleteChatSessionRequest` | `Result<()>`                 | 删除聊天会话（软删除）                   |
+| `create_chat_message`             | `state, CreateChatMessageRequest` | `Result<CreateChatMessageResponse>` | 创建聊天消息                      |
+| `list_chat_messages`              | `state, session_id`           | `Result<Vec<ChatMessagePayload>>` | 获取聊天消息列表                     |
+| `update_chat_message_command`     | `state, UpdateChatMessageRequest` | `Result<()>`                 | 更新聊天消息内容                         |
+| `delete_chat_message_command`     | `state, DeleteChatMessageRequest` | `Result<()>`                 | 删除聊天消息                             |
+| `add_message_attachments`         | `state, AddMessageAttachmentsRequest` | `Result<()>`               | 添加消息附件                             |
+| `remove_message_attachment`       | `state, RemoveMessageAttachmentRequest` | `Result<()>`               | 移除消息附件                             |
 
 ##### 核心逻辑详解
 
@@ -487,26 +498,31 @@ app.manage(AppState { db, python }) - 注入状态
 **流程**：
 
 1. 从加密配置获取 API Key
-2. 构建请求发送给 Python `/chat/completions` 端点
-3. Python 根据 provider 类型调用对应的 SDK（OpenAI Responses / OpenAI Chat / Anthropic / Gemini）
-4. 返回 AI 响应内容
+2. 组装聊天历史（含附件）并发送给 Python `/chat/completions` 端点
+3. Python 根据 provider 类型调用对应的 SDK（OpenAI / Anthropic / Gemini / Grok）
+4. Rust 读取 Python SSE 流并通过 `chat-stream` 事件转发给前端
+5. Rust 累积 delta，写入 chat_messages / message_attachments
 
-**请求格式**（发送给 Python）：
+**请求格式**（Rust -> Python）：
 
 ```json
 {
   "provider": "openai",
   "model": "gpt-4o",
-  "api_key": "sk-xxx",
-  "base_url": "https://api.openai.com/v1",
+  "task_type": "chat",
   "messages": [
-    {"role": "user", "content": "Hello"}
-  ],
-  "context_resource_ids": [1, 2]
+    {"role": "user", "content": "Hello", "images": ["/abs/path/img.png"], "files": ["/abs/path/doc.pdf"]}
+  ]
 }
 ```
 
-> Rust 侧当前仅发送 JSON 请求，如需 SSE 流式需新增命令/前端支持。
+**流式事件**（Rust -> Frontend via Tauri Events）：
+
+```json
+{ "session_id": 1, "type": "delta", "delta": "Hello" }
+{ "session_id": 1, "type": "usage", "usage": { "input_tokens": 10, "output_tokens": 20 } }
+{ "session_id": 1, "type": "done", "done": true, "message_id": 123 }
+```
 
 **支持的 Provider**：
 
@@ -515,9 +531,9 @@ app.manage(AppState { db, python }) - 注入状态
 | openai | OpenAI | gpt-4o, gpt-4o-mini |
 | anthropic | Anthropic | claude-sonnet-4-20250514 |
 | gemini | google-genai | gemini-2.0-flash |
-| grok | OpenAI 兼容 | grok-beta |
-| deepseek | OpenAI 兼容 | deepseek-chat |
-| qwen | OpenAI 兼容 | qwen-plus |
+| grok | xAI SDK | grok-4 |
+| deepseek | OpenAI 兼容 (文本-only) | deepseek-chat |
+| qwen | OpenAI 兼容 (文本-only) | qwen-plus |
 
 **适配细节**：
 - OpenAI 使用 Responses API，system 消息合并为 `instructions`。
@@ -757,7 +773,7 @@ HUD 窗口管理实现。
 | `resources`          | 资源表                    | resource_id, uuid, file_hash, file_type, content, display_name, file_path, file_size_bytes, sync_status, processing_stage, classification_status, indexed_hash, processing_hash, last_indexed_at, last_error |
 | `task_resource_link` | 任务-资源关联表（多对多） | task_id, resource_id, visibility_scope, local_alias                                |
 | `context_chunks`     | 向量化分块表              | chunk_id, resource_id, chunk_text, chunk_index, page_number, qdrant_uuid, embedding_hash, embedding_model, embedding_at, token_count |
-| `chat_sessions`      | 聊天会话表                | session_id, session_type, task_id, title, summary, chat_model                       |
+| `chat_sessions`      | 聊天会话表                | session_id, session_type, task_id, resource_id, title, summary, chat_model          |
 | `chat_messages`      | 聊天消息表                | message_id, session_id, role, content, ref_resource_id, ref_chunk_id                |
 
 ##### 索引

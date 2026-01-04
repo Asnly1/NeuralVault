@@ -304,7 +304,20 @@ import type {
   SetApiKeyRequest,
   SetDefaultModelRequest,
   SendChatRequest,
-  ChatResponse,
+  ChatStreamAck,
+  CreateChatSessionRequest,
+  CreateChatSessionResponse,
+  ListChatSessionsRequest,
+  ChatSession,
+  UpdateChatSessionRequest,
+  DeleteChatSessionRequest,
+  CreateChatMessageRequest,
+  CreateChatMessageResponse,
+  ChatMessagePayload,
+  UpdateChatMessageRequest,
+  DeleteChatMessageRequest,
+  AddMessageAttachmentsRequest,
+  RemoveMessageAttachmentRequest,
 } from "../types";
 
 /**
@@ -346,7 +359,74 @@ export const setDefaultModel = async (
  */
 export const sendChatMessage = async (
   request: SendChatRequest
-): Promise<ChatResponse> => {
+): Promise<ChatStreamAck> => {
   return await invoke("send_chat_message", { request });
 };
 
+// ============================================
+// Chat Session / Message API
+// ============================================
+
+export const createChatSession = async (
+  request: CreateChatSessionRequest
+): Promise<CreateChatSessionResponse> => {
+  return await invoke("create_chat_session", { payload: request });
+};
+
+export const getChatSession = async (sessionId: number): Promise<ChatSession> => {
+  return await invoke("get_chat_session", { sessionId });
+};
+
+export const listChatSessions = async (
+  request: ListChatSessionsRequest
+): Promise<ChatSession[]> => {
+  return await invoke("list_chat_sessions", { payload: request });
+};
+
+export const updateChatSession = async (
+  request: UpdateChatSessionRequest
+): Promise<void> => {
+  return await invoke("update_chat_session_command", { payload: request });
+};
+
+export const deleteChatSession = async (
+  request: DeleteChatSessionRequest
+): Promise<void> => {
+  return await invoke("delete_chat_session_command", { payload: request });
+};
+
+export const createChatMessage = async (
+  request: CreateChatMessageRequest
+): Promise<CreateChatMessageResponse> => {
+  return await invoke("create_chat_message", { payload: request });
+};
+
+export const listChatMessages = async (
+  sessionId: number
+): Promise<ChatMessagePayload[]> => {
+  return await invoke("list_chat_messages", { sessionId });
+};
+
+export const updateChatMessage = async (
+  request: UpdateChatMessageRequest
+): Promise<void> => {
+  return await invoke("update_chat_message_command", { payload: request });
+};
+
+export const deleteChatMessage = async (
+  request: DeleteChatMessageRequest
+): Promise<void> => {
+  return await invoke("delete_chat_message_command", { payload: request });
+};
+
+export const addMessageAttachments = async (
+  request: AddMessageAttachmentsRequest
+): Promise<void> => {
+  return await invoke("add_message_attachments", { payload: request });
+};
+
+export const removeMessageAttachment = async (
+  request: RemoveMessageAttachmentRequest
+): Promise<void> => {
+  return await invoke("remove_message_attachment", { payload: request });
+};

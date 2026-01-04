@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core import events
-from app.api import ingest, chat, agent, search
+from app.api import ingest, chat, agent, search, providers
 
 
 @asynccontextmanager
@@ -42,6 +42,7 @@ app.include_router(ingest.router, prefix="/ingest", tags=["ingest"])
 app.include_router(chat.router, prefix="/chat", tags=["chat"])
 app.include_router(agent.router, prefix="/agent", tags=["agent"])
 app.include_router(search.router, prefix="/search", tags=["search"])
+app.include_router(providers.router, tags=["providers"])
 
 
 @app.get("/health")

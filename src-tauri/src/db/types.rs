@@ -205,3 +205,76 @@ pub struct IngestionResultData {
     pub indexed_hash: Option<String>,
     pub error: Option<String>,
 }
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Type, Serialize, Deserialize)]
+#[sqlx(rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+pub enum ChatSessionType {
+    Task,
+    Resource,
+}
+
+#[derive(Debug, FromRow, Serialize)]
+pub struct ChatSessionRecord {
+    pub session_id: i64,
+    pub session_type: ChatSessionType,
+    pub task_id: Option<i64>,
+    pub resource_id: Option<i64>,
+    pub title: Option<String>,
+    pub summary: Option<String>,
+    pub chat_model: Option<String>,
+    pub created_at: Option<String>,
+    pub is_deleted: bool,
+    pub deleted_at: Option<String>,
+    pub user_id: i64,
+}
+
+pub struct NewChatSession<'a> {
+    pub session_type: ChatSessionType,
+    pub task_id: Option<i64>,
+    pub resource_id: Option<i64>,
+    pub title: Option<&'a str>,
+    pub summary: Option<&'a str>,
+    pub chat_model: Option<&'a str>,
+    pub user_id: i64,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Type, Serialize, Deserialize)]
+#[sqlx(rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+pub enum ChatMessageRole {
+    User,
+    Assistant,
+    System,
+}
+
+#[derive(Debug, FromRow, Serialize)]
+pub struct ChatMessageRecord {
+    pub message_id: i64,
+    pub session_id: i64,
+    pub role: ChatMessageRole,
+    pub content: String,
+    pub ref_resource_id: Option<i64>,
+    pub ref_chunk_id: Option<i64>,
+    pub created_at: Option<String>,
+}
+
+pub struct NewChatMessage<'a> {
+    pub session_id: i64,
+    pub role: ChatMessageRole,
+    pub content: &'a str,
+    pub ref_resource_id: Option<i64>,
+    pub ref_chunk_id: Option<i64>,
+}
+
+#[derive(Debug, FromRow, Serialize)]
+pub struct MessageAttachmentRecord {
+    pub id: i64,
+    pub message_id: i64,
+    pub resource_id: i64,
+}
+
+pub struct NewMessageAttachment {
+    pub message_id: i64,
+    pub resource_id: i64,
+}

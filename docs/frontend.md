@@ -79,7 +79,9 @@ public/
 - API 类型：`CreateTaskRequest/Response`、`CaptureRequest/Response`、`SeedResponse`、`LinkResourceRequest/Response`、`TaskResourcesResponse`
 - 剪贴板类型：`ClipboardContent`、`ReadClipboardResponse`
 - 资源处理进度：`ProcessingStage`、`IngestProgress`
-- AI 类型：`AIProvider`、`AI_PROVIDER_INFO`、`AIProviderStatus`、`AIConfigStatus`、`SetApiKeyRequest`、`SetDefaultModelRequest`、`ChatMessagePayload`、`SendChatRequest`、`ChatResponse`、`ModelOption`、`ChatMessage`
+- AI 类型：`AIProvider`、`AI_PROVIDER_INFO`、`AIProviderStatus`、`AIConfigStatus`、`SetApiKeyRequest`、`SetDefaultModelRequest`、`ChatMessagePayload`、`SendChatRequest`、`ChatStreamAck`、`ChatSession`、`CreateChatSessionRequest/Response`、`ListChatSessionsRequest`、`UpdateChatSessionRequest`、`DeleteChatSessionRequest`、`CreateChatMessageRequest/Response`、`UpdateChatMessageRequest`、`DeleteChatMessageRequest`、`AddMessageAttachmentsRequest`、`RemoveMessageAttachmentRequest`、`ModelOption`、`ChatMessage`
+  - `ChatMessagePayload` 包含 `attachments: { resource_id }[]`，用于前端按资源类型渲染缩略图
+  - `SendChatRequest` 仅发送最新输入（content + images/files 的 resource_id）
 
 ---
 
@@ -95,6 +97,7 @@ public/
 - Clipboard：`readClipboard()`
 - File system：`getAssetsPath()`
 - AI Config：`getAIConfigStatus()`、`saveApiKey()`、`removeApiKey()`、`setDefaultModel()`、`sendChatMessage()`
+- Chat Session/Message：`createChatSession()`、`getChatSession()`、`listChatSessions()`、`updateChatSession()`、`deleteChatSession()`、`createChatMessage()`、`listChatMessages()`、`updateChatMessage()`、`deleteChatMessage()`、`addMessageAttachments()`、`removeMessageAttachment()`
 
 ---
 
@@ -105,7 +108,8 @@ public/
 AI 配置与聊天状态管理。
 
 - 状态：`config`、`loading`、`error`、`configuredProviders`、`selectedModel`、`messages`、`isChatLoading`
-- 方法：`saveKey()`、`removeKey()`、`saveDefaultModel()`、`sendMessage()`（可传 `contextResourceIds`）、`clearMessages()`、`refreshConfig()`
+- 方法：`saveKey()`、`removeKey()`、`saveDefaultModel()`、`sendMessage()`（需要 session context: task/resource + ids + attachments）、`clearMessages()`、`refreshConfig()`
+- 事件：监听 Tauri `chat-stream`，按 `session_id` 拼接 assistant delta
 
 #### `LanguageContext.tsx`
 
@@ -188,7 +192,7 @@ AI 配置与聊天状态管理。
 
 - `ContextPanel.tsx`：任务/资源详情与关联资源列表，文件模式下展示附带文本
 - `EditorPanel.tsx`：文本编辑（Tiptap）、PDF 预览、图片缩放/拖拽（`react-zoom-pan-pinch`），支持资源名称编辑与文本/文件视图切换
-- `ChatPanel.tsx`：AI 聊天（模型选择/消息历史/发送），无可用模型时引导进入设置页
+- `ChatPanel.tsx`：AI 聊天（模型选择/消息历史/发送），需要传入 session context（task/resource + id），无可用模型时引导进入设置页
 
 ---
 
