@@ -29,7 +29,7 @@ src-python/
 │   ├── services/
 │   │   ├── file_service.py    # 文件解析
 │   │   ├── vector_service.py  # 切分 + 向量化 + Qdrant
-│   │   ├── llm_service.py     # 预留
+│   │   ├── llm_service.py     # LLM Provider 路由 + 流式封装
 │   │   └── agent_service.py   # 预留
 │   └── workers/
 │       ├── queue_manager.py   # asyncio.Queue + 进度广播
@@ -133,21 +133,25 @@ Error:
   "task_type": "chat",
   "messages": [
     {"role": "system", "content": "You are a helpful assistant."},
-    {"role": "user", "content": "Hello", "images": ["/abs/path/img.png"], "files": ["/abs/path/doc.pdf"]}
+    {"role": "user", "content": "Hello", "images": ["/abs/path/img.png"], "files": ["/abs/path/doc.pdf"]},
+    {"role": "assistant", "content": "Hi! How can I help?"}
   ],
   "stream": true
 }
 ```
 
-> API Key 由 Rust 在启动/保存/删除时同步到 Python（PUT/DELETE `/providers/{provider}`）。
+> API Key 由 Rust 在启动/保存/删除时同步到 Python（PUT/DELETE `/providers/{provider}`）。Python 仅内存保存，用于复用客户端。
+>
+> `images/files` 必须是绝对路径；Rust 负责拼接完整对话历史并传给 Python。
 
 ### 关键行为
 
-- **OpenAI**: 使用 Responses API；system 消息合并为 `instructions`。
-- **OpenAI 兼容**（Deepseek/Qwen）: 使用 Chat Completions（文本-only）。
-- **Gemini**: system 映射为 `system_instruction`，assistant 角色映射为 `model`。
-- **Anthropic**: system 单独传入 `system` 字段。
-- **Grok**: 使用 xAI SDK，支持图片/文件。
+- **System Prompt**: `SYSTEM_PROMPTS[task_type]` + `role=system` 消息合并后作为系统提示。
+- **OpenAI**: 使用 Responses API；系统提示传 `instructions`；流式事件 `response.output_text.delta`，使用 `response.completed` 提取 usage。
+- **OpenAI 兼容**（Deepseek/Qwen）: 使用 Chat Completions（文本-only TODO: 图片/文件）。
+- **Gemini**: 系统提示使用 `system_instruction`，assistant 角色映射为 `model`。
+- **Anthropic**: 暂时文本-only（图片/文件会报错，TODO）。
+- **Grok**: 使用 xAI SDK `client.chat.create(..., input=[...], stream=True)`；系统提示使用 `developer` 角色；支持图片/文件。
 
 ### 流式响应 (SSE)
 
@@ -166,6 +170,8 @@ data: {"type":"done","done":true}
 ```
 data: {"type":"error","message":"错误信息"}
 ```
+
+> `usage` 通常在流末尾返回（不同 Provider 有差异）。
 
 ---
 
