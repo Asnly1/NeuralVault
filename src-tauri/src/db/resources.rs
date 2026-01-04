@@ -299,6 +299,23 @@ pub async fn update_resource_embedding_status(
     Ok(())
 }
 
+/// 更新资源处理阶段（不修改 sync_status）
+pub async fn update_resource_processing_stage(
+    pool: &DbPool,
+    resource_id: i64,
+    processing_stage: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE resources SET processing_stage = ? WHERE resource_id = ?"
+    )
+    .bind(processing_stage)
+    .bind(resource_id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
 /// 删除资源的所有 chunks
 ///
 /// 用于资源更新前清理旧数据

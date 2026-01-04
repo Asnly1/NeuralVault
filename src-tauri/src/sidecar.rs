@@ -13,8 +13,8 @@ use futures_util::StreamExt;
 
 use crate::db::{
     DbPool, IngestionResultData, ResourceRecord, ResourceSyncStatus,
-    insert_context_chunks, update_resource_embedding_status, delete_context_chunks,
-    list_pending_resources,
+    insert_context_chunks, update_resource_embedding_status, update_resource_processing_stage,
+    delete_context_chunks, list_pending_resources,
 };
 use crate::utils::{notify_python, resolve_file_path, IngestPayload, NotifyAction};
 
@@ -52,6 +52,7 @@ pub struct PythonSidecar {
     /// HTTP 客户端，用于与 Python 后端通信
     /// 复用同一个 Client 可以利用连接池，提高性能
     pub client: reqwest::Client,
+    pub stream_client: reqwest::Client,
     
     /// 动态分配的端口号
     /// 使用 Mutex 包装，因为端口在 start() 时才确定
@@ -69,6 +70,11 @@ impl PythonSidecar {
                 .pool_max_idle_per_host(5)         // 每个 host 最多保持 5 个空闲连接
                 .build()
                 .expect("Failed to create HTTP client"),
+            stream_client: reqwest::Client::builder()
+                .timeout(Duration::from_secs(300))  // 全局超时
+                .pool_max_idle_per_host(5)         // 每个 host 最多保持 5 个空闲连接
+                .build()
+                .expect("Failed to create stream HTTP client"),
             port: Mutex::new(0),  // 初始化为 0，在 start() 时分配实际端口
         }
     }
@@ -362,13 +368,13 @@ impl PythonSidecar {
     /// 该方法会在后台持续运行，连接断开后自动重连。
     pub fn start_progress_stream(&self, app_handle: AppHandle, db_pool: DbPool) {
         let url = format!("{}/ingest/stream", self.get_base_url());
-        let client = self.client.clone();
+        let stream_client = self.stream_client.clone();
 
         println!("[Sidecar] Starting progress stream to {}", url);
 
         tauri::async_runtime::spawn(async move {
             loop {
-                match Self::connect_and_read_stream(&client, &url, &app_handle, &db_pool).await {
+                match Self::connect_and_read_stream(&stream_client, &url, &app_handle, &db_pool).await {
                     Ok(_) => {
                         println!("[Sidecar] Progress stream ended normally");
                     }
@@ -386,12 +392,12 @@ impl PythonSidecar {
 
     /// 建立连接并读取 NDJSON 流
     async fn connect_and_read_stream(
-        client: &reqwest::Client,
+        stream_client: &reqwest::Client,
         url: &str,
         app_handle: &AppHandle,
         db_pool: &DbPool,
     ) -> Result<(), String> {
-        let response = client
+        let response = stream_client
             .get(url)
             .send()
             .await
@@ -441,14 +447,11 @@ impl PythonSidecar {
                                             msg.payload.get("resource_id").and_then(|v| v.as_i64()),
                                             msg.payload.get("status").and_then(|v| v.as_str())
                                         ) {
-                                            // 更新数据库的 processing_stage（保持 sync_status 为 pending）
-                                            if let Err(e) = update_resource_embedding_status(
+                                            // 仅更新处理阶段，避免覆盖结果写入的 sync_status
+                                            if let Err(e) = update_resource_processing_stage(
                                                 db_pool,
                                                 resource_id,
-                                                "pending",
                                                 status,
-                                                None,
-                                                None,
                                             ).await {
                                                 eprintln!("[Sidecar] Failed to update processing stage: {}", e);
                                             }

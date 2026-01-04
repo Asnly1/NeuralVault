@@ -10,7 +10,7 @@ from app.workers.queue_manager import ingestion_queue, progress_broadcaster
 router = APIRouter()
 
 
-@router.post("/", response_model=IngestResponse)
+@router.post("", response_model=IngestResponse)
 async def ingestion(request: IngestRequest):
     """
     接收 Rust 发来的数据变更通知

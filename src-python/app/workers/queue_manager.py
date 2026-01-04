@@ -5,9 +5,9 @@
 import asyncio
 import json
 from typing import Optional, Callable, Awaitable, AsyncGenerator
-
 from app.schemas import ProcessingStage, IngestProgress, IngestionResult, IngestionJob, ProgressCallback
 from app.core.logging import get_logger
+from app.core.config import settings
 
 logger = get_logger("IngestionQueue")
 
@@ -46,10 +46,17 @@ class ProgressBroadcaster:
 
         try:
             while True:
-                # 等待进度消息
-                progress = await queue.get()
-                # 返回 NDJSON 格式（每行一个 JSON 对象）
-                yield json.dumps(progress, ensure_ascii=False) + "\n"
+                try:
+                    # 等待进度消息
+                    progress = await asyncio.wait_for(
+                        queue.get(),
+                        timeout=settings.stream_heartbeat_interval
+                    )
+                    # 返回 NDJSON 格式（每行一个 JSON 对象）
+                    yield json.dumps(progress, ensure_ascii=False) + "\n"
+                except asyncio.TimeoutError:
+                    # 防止长时间无消息导致连接被动关闭
+                    yield json.dumps({"type": "heartbeat"}) + "\n"
         finally:
             async with self._lock:
                 if queue in self._subscribers:

@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     # 心跳配置
     heartbeat_interval: int = 5  # 秒
     heartbeat_timeout: int = 15  # 秒
+    stream_heartbeat_interval: int = 15  # 秒
     
     # 告诉 Pydantic：这个 Settings 类在“加载和校验配置”时要遵循哪些规则
     model_config = SettingsConfigDict(
