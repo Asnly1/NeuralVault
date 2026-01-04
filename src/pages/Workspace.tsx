@@ -51,10 +51,10 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
   const { t } = useLanguage();
 
   // 检测模式：资源模式（直接从资源进入）或任务模式（从任务进入）
-  const isResourceMode = !selectedTask && propSelectedResource;
+  const isResourceMode = !selectedTask && !!propSelectedResource;
 
   // 当前实际显示的资源
-  const currentResource = isResourceMode ? propSelectedResource : selectedResource;
+  const currentResource = isResourceMode ? (selectedResource ?? propSelectedResource) : selectedResource;
 
 
   // Load assets path on mount
@@ -116,7 +116,7 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
 
   // 统一加载资源内容到编辑器
   useEffect(() => {
-    const resourceToLoad = isResourceMode ? propSelectedResource : selectedResource;
+    const resourceToLoad = currentResource;
 
     if (resourceToLoad) {
       setEditorContent(resourceToLoad.content || "");
@@ -136,7 +136,7 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
       setIsEditingName(false);
       setViewMode('file');
     }
-  }, [isResourceMode, propSelectedResource, selectedResource]);
+  }, [currentResource]);
 
   const handleResourceClick = useCallback((resource: Resource) => {
     setSelectedResource(resource);
@@ -151,7 +151,7 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
 
   // 保存资源内容和显示名称
   const handleSave = useCallback(async () => {
-    const resourceToSave = isResourceMode ? propSelectedResource : selectedResource;
+    const resourceToSave = selectedResource ?? (isResourceMode ? propSelectedResource : null);
     if (!resourceToSave || isSaving) return;
 
     const hasContentChange = isModified;
@@ -176,7 +176,15 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
       setSaveSuccess(true);
 
       if (hasNameChange) {
-        resourceToSave.display_name = editedDisplayName;
+        const updatedResource = { ...resourceToSave, display_name: editedDisplayName };
+        setSelectedResource(updatedResource);
+        if (!isResourceMode) {
+          setLinkedResources((prev) =>
+            prev.map((resource) =>
+              resource.resource_id === updatedResource.resource_id ? updatedResource : resource
+            )
+          );
+        }
       }
 
       setTimeout(() => {
@@ -324,8 +332,8 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
               <span className="text-muted-foreground">{t("workspace", "resourceBreadcrumb")}</span>
               <span className="text-muted-foreground">/</span>
               <span className="font-medium">
-                {resourceTypeIcons[propSelectedResource!.file_type]}{" "}
-                {propSelectedResource!.display_name || "未命名资源"}
+                {resourceTypeIcons[currentResource!.file_type]}{" "}
+                {currentResource!.display_name || "未命名资源"}
               </span>
             </>
           ) : (
@@ -371,9 +379,9 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
       <div className="flex flex-1 min-h-0">
         {/* Left: Context Panel */}
         <ContextPanel
-          isResourceMode={!!isResourceMode}
+          isResourceMode={isResourceMode}
           selectedTask={selectedTask}
-          propSelectedResource={propSelectedResource}
+          resourceInView={currentResource}
           selectedResource={selectedResource}
           linkedResources={linkedResources}
           loadingResources={loadingResources}

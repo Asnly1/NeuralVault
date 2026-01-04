@@ -217,9 +217,6 @@ class LLMService:
 
         for message in messages:
             content_items: list[dict] = []
-            if message.content:
-                content_items.append({"type": "input_text", "text": message.content})
-
             for image_path in message.images or []:
                 file_id = await self._openai_upload_file(client, image_path)
                 content_items.append({"type": "input_image", "file_id": file_id})
@@ -228,8 +225,11 @@ class LLMService:
                 file_id = await self._openai_upload_file(client, file_path)
                 content_items.append({"type": "input_file", "file_id": file_id})
 
+            if message.content:
+                content_items.append({"type": "input_text", "text": message.content})
+
             if not content_items:
-                content_items.append({"type": "input_text", "text": ""})
+                continue
 
             input_items.append(
                 {

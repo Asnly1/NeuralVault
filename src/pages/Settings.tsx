@@ -12,7 +12,6 @@ import {
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -20,7 +19,6 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import {
   Palette,
-  Globe,
   Key,
   Keyboard,
   Eye,
@@ -104,7 +102,7 @@ function APIKeyCard({
     <div className="flex items-center justify-between p-4 border rounded-lg">
       <div className="flex items-center gap-3">
         <img
-          src={`/src/assets/${providerInfo.icon}`}
+          src={`/assets/${providerInfo.icon}`}
           alt={providerInfo.name}
           className="w-8 h-8"
         />
@@ -199,7 +197,6 @@ export function SettingsPage({ theme, onThemeChange }: SettingsPageProps) {
         <h1 className="text-2xl font-bold tracking-tight">
           {t("settings", "title")}
         </h1>
-        <p className="text-muted-foreground">{t("settings", "subtitle")}</p>
       </header>
 
       <Separator />
@@ -213,7 +210,6 @@ export function SettingsPage({ theme, onThemeChange }: SettingsPageProps) {
               <Palette className="h-5 w-5" />
               {t("settings", "appearance")}
             </CardTitle>
-            <CardDescription>{t("settings", "themeDesc")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="flex items-center justify-between">
@@ -221,9 +217,6 @@ export function SettingsPage({ theme, onThemeChange }: SettingsPageProps) {
                 <label className="text-sm font-medium">
                   {t("settings", "themeMode")}
                 </label>
-                <p className="text-xs text-muted-foreground">
-                  {t("settings", "themeDesc")}
-                </p>
               </div>
               <Select
                 value={theme}
@@ -235,11 +228,9 @@ export function SettingsPage({ theme, onThemeChange }: SettingsPageProps) {
                   <SelectValue placeholder="Theme" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="light">☀️ {t("settings", "light")}</SelectItem>
-                  <SelectItem value="dark">🌙 {t("settings", "dark")}</SelectItem>
-                  <SelectItem value="system">
-                    💻 {t("settings", "system")}
-                  </SelectItem>
+                  <SelectItem value="light">{t("settings", "light")}</SelectItem>
+                  <SelectItem value="dark">{t("settings", "dark")}</SelectItem>
+                  <SelectItem value="system">{t("settings", "system")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -250,12 +241,8 @@ export function SettingsPage({ theme, onThemeChange }: SettingsPageProps) {
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <label className="text-sm font-medium flex items-center gap-2">
-                  <Globe className="h-4 w-4" />
                   {t("settings", "language")}
                 </label>
-                <p className="text-xs text-muted-foreground">
-                  {t("settings", "languageDesc")}
-                </p>
               </div>
               <Select
                 value={language}
@@ -265,8 +252,8 @@ export function SettingsPage({ theme, onThemeChange }: SettingsPageProps) {
                   <SelectValue placeholder="Language" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="zh">🇨🇳 中文 (Chinese)</SelectItem>
-                  <SelectItem value="en">🇺🇸 English</SelectItem>
+                  <SelectItem value="zh">中文</SelectItem>
+                  <SelectItem value="en">English</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -280,7 +267,6 @@ export function SettingsPage({ theme, onThemeChange }: SettingsPageProps) {
               <Key className="h-5 w-5" />
               {t("settings", "apiConfig")}
             </CardTitle>
-            <CardDescription>{t("settings", "apiDesc")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {loading ? (
@@ -310,10 +296,9 @@ export function SettingsPage({ theme, onThemeChange }: SettingsPageProps) {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <img src="/src/assets/ollama.svg" alt="Ollama" className="h-5 w-5" />
+              <img src="/assets/ollama.svg" alt="Ollama" className="h-5 w-5" />
               {t("settings", "localModel")}
             </CardTitle>
-            <CardDescription>{t("settings", "localDesc")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
@@ -321,15 +306,12 @@ export function SettingsPage({ theme, onThemeChange }: SettingsPageProps) {
                 <label className="text-sm font-medium">
                   {t("settings", "enableLocal")}
                 </label>
-                <p className="text-xs text-muted-foreground">
-                  {t("settings", "useOllama")}
-                </p>
               </div>
               <Switch checked={enableLocal} onCheckedChange={setEnableLocal} />
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Ollama URL</label>
+              <label className="text-sm font-medium">Local URL</label>
               <Input
                 type="text"
                 placeholder="http://127.0.0.1:11434"
@@ -348,7 +330,6 @@ export function SettingsPage({ theme, onThemeChange }: SettingsPageProps) {
               <Keyboard className="h-5 w-5" />
               {t("settings", "shortcuts")}
             </CardTitle>
-            <CardDescription>{t("settings", "shortcutsDesc")}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-between">

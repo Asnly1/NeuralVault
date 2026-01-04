@@ -61,9 +61,8 @@ export function QuickCapture({
   const isHUD = variant === "hud";
 
   // 默认 placeholder
-  const defaultPlaceholder = isHUD
-    ? t("dashboard", "quickCapture")
-    : t("dashboard", "quickCapture");
+  const defaultPlaceholder = t("dashboard", "quickCapture");
+  const resolvedPlaceholder = placeholder || defaultPlaceholder;
 
   // 自动调整 textarea 高度
   useEffect(() => {
@@ -195,6 +194,10 @@ export function QuickCapture({
   };
 
   // 处理剪贴板内容
+  const appendContent = (text: string) => {
+    setContent((prev) => prev + text);
+  };
+
   const handleClipboardContent = (clipboardContent: ClipboardContent) => {
     switch (clipboardContent.type) {
       case "Image":
@@ -227,12 +230,12 @@ export function QuickCapture({
         // HTML 内容：优先使用纯文本，否则使用 HTML
         const textContent =
           clipboardContent.data.plain_text || clipboardContent.data.content;
-        setContent((prev) => prev + textContent);
+        appendContent(textContent);
         break;
 
       case "Text":
         // 纯文本：追加到输入框
-        setContent((prev) => prev + clipboardContent.data.content);
+        appendContent(clipboardContent.data.content);
         break;
 
       case "Empty":
@@ -349,7 +352,7 @@ export function QuickCapture({
 
               <Textarea
                 ref={textareaRef}
-                placeholder={placeholder || defaultPlaceholder}
+                placeholder={resolvedPlaceholder}
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 onKeyDown={handleKeyDown}

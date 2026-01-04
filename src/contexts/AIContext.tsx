@@ -123,38 +123,26 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
     apiKey: string,
     baseUrl?: string
   ) => {
-    try {
-      await saveApiKey({
-        provider,
-        api_key: apiKey,
-        base_url: baseUrl,
-      });
-      await refreshConfig();
-    } catch (e) {
-      throw e;
-    }
+    await saveApiKey({
+      provider,
+      api_key: apiKey,
+      base_url: baseUrl,
+    });
+    await refreshConfig();
   };
 
   const removeKey = async (provider: AIProvider) => {
-    try {
-      await removeApiKey(provider);
-      // 如果删除的是当前选中的 provider，清除选择
-      if (selectedModel?.provider === provider) {
-        setSelectedModel(null);
-      }
-      await refreshConfig();
-    } catch (e) {
-      throw e;
+    await removeApiKey(provider);
+    // 如果删除的是当前选中的 provider，清除选择
+    if (selectedModel?.provider === provider) {
+      setSelectedModel(null);
     }
+    await refreshConfig();
   };
 
   const saveDefaultModel = async (provider: AIProvider, model: string) => {
-    try {
-      await setDefaultModel({ provider, model });
-      await refreshConfig();
-    } catch (e) {
-      throw e;
-    }
+    await setDefaultModel({ provider, model });
+    await refreshConfig();
   };
 
   const ensureSession = useCallback(

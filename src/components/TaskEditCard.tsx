@@ -128,10 +128,10 @@ export function TaskEditCard({
 
         // 截止日期
         const originalDueDate = task.due_date
-          ? task.due_date.toISOString().split("T")[0]
+          ? format(task.due_date, "yyyy-MM-dd")
           : "";
         const newDueDate = formData.due_date
-          ? formData.due_date.toISOString().split("T")[0]
+          ? format(formData.due_date, "yyyy-MM-dd")
           : "";
         if (newDueDate !== originalDueDate) {
           const dueDateValue = formData.due_date

@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import "./App.css";
 
 import { Task, Resource, PageType } from "./types";
+import { getFileTypeFromPath } from "./lib/utils";
 import {
   fetchDashboardData,
   quickCapture,
@@ -14,27 +15,6 @@ import {
 import { useIngestProgress } from "./hooks/useIngestProgress";
 import { Sidebar } from "./components";
 import { DashboardPage, WorkspacePage, CalendarPage, SettingsPage } from "./pages";
-
-// 根据文件扩展名推断文件类型
-function getFileTypeFromPath(filePath: string): string {
-  const ext = filePath.split(".").pop()?.toLowerCase() || "";
-
-  if (["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"].includes(ext)) {
-    return "image";
-  }
-  if (ext === "pdf") {
-    return "pdf";
-  }
-  if (ext === "epub") {
-    return "epub";
-  }
-  if (
-    ["txt", "md", "json", "csv", "xml", "html", "css", "js", "ts"].includes(ext)
-  ) {
-    return "text";
-  }
-  return "other";
-}
 
 function App() {
   const [currentPage, setCurrentPage] = useState<PageType>("dashboard");
@@ -107,7 +87,7 @@ function App() {
     }
   }, [theme]);
 
-  const reloadData = useCallback(async () => {
+  const reloadData = useCallback(async (fallbackMessage = "加载数据失败") => {
     setLoading(true);
     setError(null);
     try {
@@ -122,7 +102,7 @@ function App() {
       if (err instanceof z.ZodError) {
         setError("数据格式校验失败，请联系开发者");
       } else {
-        setError("加载数据失败");
+        setError(fallbackMessage);
       }
     } finally {
       setLoading(false);
@@ -228,36 +208,8 @@ function App() {
   }, []);
 
   useEffect(() => {
-    let ignore = false;
-
-    const initLoad = async () => {
-      setLoading(true);
-      try {
-        const data = await fetchDashboardData();
-        if (!ignore) {
-          setTasks(data.tasks);
-          setResources(data.resources);
-          // Also fetch all tasks for calendar
-          const all = await fetchAllTasks();
-          setAllTasks(all);
-        }
-      } catch (err) {
-        if (!ignore) {
-          console.error(err);
-          setError("初始化数据失败");
-        }
-      } finally {
-        if (!ignore) {
-          setLoading(false);
-        }
-      }
-    };
-
-    initLoad();
-    return () => {
-      ignore = true;
-    };
-  }, []);
+    reloadData("初始化数据失败");
+  }, [reloadData]);
 
   return (
     <div className="flex h-screen bg-background text-foreground">

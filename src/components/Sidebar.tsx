@@ -38,7 +38,7 @@ export function Sidebar({
   const { t } = useLanguage();
   const [isResizing, setIsResizing] = useState(false);
   const [tempWidth, setTempWidth] = useState<number | null>(null);
-  const sidebarRef = useRef<HTMLElement>(null);
+  const tempWidthRef = useRef<number | null>(null);
 
   // Icon mapping for each page type
   const iconMap: Record<PageType, React.ReactNode> = {
@@ -53,6 +53,7 @@ export function Sidebar({
     e.preventDefault();
     setIsResizing(true);
     setTempWidth(width); // Initialize temp width
+    tempWidthRef.current = width;
   };
 
   // Handle resize
@@ -64,16 +65,18 @@ export function Sidebar({
       if (newWidth >= MIN_WIDTH && newWidth <= MAX_WIDTH) {
         // Only update local state during drag for smooth performance
         setTempWidth(newWidth);
+        tempWidthRef.current = newWidth;
       }
     };
 
     const handleMouseUp = () => {
       // Save to parent state and localStorage only when drag ends
-      if (tempWidth !== null) {
-        onWidthChange(tempWidth);
+      if (tempWidthRef.current !== null) {
+        onWidthChange(tempWidthRef.current);
       }
       setIsResizing(false);
       setTempWidth(null);
+      tempWidthRef.current = null;
     };
 
     if (isResizing) {
@@ -112,7 +115,6 @@ export function Sidebar({
 
   return (
     <aside 
-      ref={sidebarRef}
       style={{ width: `${currentWidth}px` }}
       className={cn(
         "bg-sidebar border-r border-border flex flex-col h-full shrink-0 relative",

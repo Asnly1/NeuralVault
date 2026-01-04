@@ -6,7 +6,7 @@
 src/
 ├── api/
 │   └── index.ts          # Tauri invoke 封装与类型校验
-├── assets/               # 静态资源（AI Provider logo 等）
+├── assets/               # 素材源文件（运行时从 public/assets 提供）
 ├── components/
 │   ├── index.ts          # 统一导出
 │   ├── Sidebar.tsx       # 侧边栏导航
@@ -61,6 +61,7 @@ src/
 ├── main.tsx
 └── vite-env.d.ts
 public/
+├── assets/               # 运行时静态资源（AI Provider logo 等）
 └── pdf.worker.min.mjs    # PDF.js worker
 ```
 
@@ -129,6 +130,15 @@ AI 配置与聊天状态管理。
 
 ---
 
+### `lib/utils.ts`
+
+通用工具函数。
+
+- `cn`：合并 className（`clsx` + `tailwind-merge`）
+- `getFileTypeFromPath`：统一推断文件类型（App/HUD 的 Quick Capture 复用）
+
+---
+
 ### `translations.ts`
 
 中英文文案集合，覆盖 `sidebar/settings/dashboard/workspace/common` 等分类。
@@ -187,6 +197,7 @@ AI 配置与聊天状态管理。
 - `react-pdf-highlighter-extended` + `pdfjs-dist`（worker: `public/pdf.worker.min.mjs`）
 - 文本高亮与区域高亮（Alt/Option）
 - 高亮列表与清空操作
+- 切换 PDF 时清空高亮
 
 #### `components/workspace/`
 
@@ -223,10 +234,11 @@ AI 配置与聊天状态管理。
 
 #### `Settings.tsx`
 
+- 页面简化：移除副标题与卡片说明文案，仅保留标题与字段
 - 主题模式：Light / Dark / System
 - 语言切换：中文 / English（`LanguageContext`）
 - API Key 管理：读取 `AI_PROVIDER_INFO` 渲染卡片
-- 本地模型（Ollama）开关 + URL（当前为 UI 状态）
+- 本地模型（Ollama）开关 + Local URL（当前为 UI 状态）
 - 快捷键展示（Alt + Space）
 
 #### `HUD.tsx`
@@ -304,3 +316,4 @@ main.tsx
 3. Local Model（Ollama）当前为前端状态，如需启用请对接后端命令。
 4. AI Chat 当前为非流式响应，如需流式可扩展 `sendChatMessage` 的后端返回与前端渲染。
 5. 新增资源类型时同步更新 `resourceTypeValues` 与 `EditorPanel` 的渲染逻辑。
+6. 新增/替换 AI Provider 图标时确保放入 `public/assets`（如仅放在 `src/assets`，需同步到 `public/assets`）。

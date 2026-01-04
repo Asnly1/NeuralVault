@@ -128,6 +128,10 @@ export function PDFViewer({ url, displayName: _displayName }: PDFViewerProps) {
     undefined
   );
 
+  useEffect(() => {
+    setHighlights([]);
+  }, [url]);
+
   // 配置 PDF worker
   useEffect(() => {
     configurePdfWorker().then(() => setWorkerReady(true));

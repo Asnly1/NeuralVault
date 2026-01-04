@@ -10,7 +10,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 interface ContextPanelProps {
   isResourceMode: boolean;
   selectedTask: Task | null;
-  propSelectedResource: Resource | null;
+  resourceInView: Resource | null;
   selectedResource: Resource | null;
   linkedResources: Resource[];
   loadingResources: boolean;
@@ -29,7 +29,7 @@ interface ContextPanelProps {
 export function ContextPanel({
   isResourceMode,
   selectedTask,
-  propSelectedResource,
+  resourceInView,
   selectedResource,
   linkedResources,
   loadingResources,
@@ -67,28 +67,28 @@ export function ContextPanel({
               <Card>
                 <CardContent className="p-3 space-y-3">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-2xl shrink-0">{resourceTypeIcons[propSelectedResource!.file_type]}</span>
+                    <span className="text-2xl shrink-0">{resourceTypeIcons[resourceInView!.file_type]}</span>
                     <h4 className="font-medium truncate">
-                      {propSelectedResource!.display_name || "未命名资源"}
+                      {resourceInView!.display_name || "未命名资源"}
                     </h4>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Badge variant="outline">{propSelectedResource!.file_type}</Badge>
-                    {propSelectedResource!.classification_status && (
+                    <Badge variant="outline">{resourceInView!.file_type}</Badge>
+                    {resourceInView!.classification_status && (
                       <Badge variant="secondary">
-                        {propSelectedResource!.classification_status}
+                        {resourceInView!.classification_status}
                       </Badge>
                     )}
                   </div>
-                  {propSelectedResource!.created_at && (
+                  {resourceInView!.created_at && (
                     <p className="text-xs text-muted-foreground">
                       创建时间:{" "}
-                      {propSelectedResource!.created_at.toLocaleDateString("zh-CN")}
+                      {resourceInView!.created_at.toLocaleDateString("zh-CN")}
                     </p>
                   )}
-                  {propSelectedResource!.file_path && (
-                    <p className="text-xs text-muted-foreground break-all" title={propSelectedResource!.file_path}>
-                      路径: {propSelectedResource!.file_path}
+                  {resourceInView!.file_path && (
+                    <p className="text-xs text-muted-foreground break-all" title={resourceInView!.file_path}>
+                      路径: {resourceInView!.file_path}
                     </p>
                   )}
                 </CardContent>

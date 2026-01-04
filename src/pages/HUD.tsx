@@ -2,21 +2,7 @@ import { useEffect, useCallback } from "react";
 import { listen, emit } from "@tauri-apps/api/event";
 import { quickCapture } from "../api";
 import { QuickCapture } from "../components";
-
-// 根据文件扩展名推断文件类型
-function getFileTypeFromPath(filePath: string): string {
-  const ext = filePath.split(".").pop()?.toLowerCase() || "";
-
-  if (["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"].includes(ext)) {
-    return "image";
-  }
-  if (ext === "pdf") return "pdf";
-  if (ext === "epub") return "epub";
-  if (["txt", "md"].includes(ext)) {
-    return "text";
-  }
-  return "other";
-}
+import { getFileTypeFromPath } from "../lib/utils";
 
 export function HUDPage() {
   // 处理捕获
