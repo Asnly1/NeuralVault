@@ -179,6 +179,9 @@ CREATE TABLE chat_messages (
 
     ref_resource_id INTEGER,
     ref_chunk_id INTEGER,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    total_tokens INTEGER,
 
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 

@@ -188,6 +188,13 @@ export function ChatPanel({
                   )}
                 >
                   {msg.content}
+                  {msg.role === "assistant" && msg.usage && (
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      {t("workspace", "tokenUsage")}{" "}
+                      {msg.usage.input_tokens}/{msg.usage.output_tokens}/
+                      {msg.usage.total_tokens}
+                    </div>
+                  )}
                 </div>
               </div>
             ))

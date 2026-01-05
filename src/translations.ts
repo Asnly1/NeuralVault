@@ -80,6 +80,7 @@ export const translations = {
       configureApiFirst: "请先在设置中配置 API Key 以使用 AI 功能。",
       goToSettings: "前往设置",
       selectModelFirst: "请先选择一个模型",
+      tokenUsage: "Token 用量:",
     },
     common: {
       untitled: "无标题",
@@ -172,6 +173,7 @@ export const translations = {
       configureApiFirst: "Please configure an API Key in settings to use AI features.",
       goToSettings: "Go to Settings",
       selectModelFirst: "Please select a model first",
+      tokenUsage: "Tokens:",
     },
     common: {
       untitled: "Untitled",

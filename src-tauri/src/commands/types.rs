@@ -195,10 +195,18 @@ pub struct ChatMessageAttachmentPayload {
 }
 
 #[derive(Debug, Serialize)]
+pub struct ChatUsagePayload {
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub total_tokens: i64,
+}
+
+#[derive(Debug, Serialize)]
 pub struct ChatMessagePayload {
     pub message_id: i64,
     pub role: ChatMessageRole,
     pub content: String,
     pub attachments: Vec<ChatMessageAttachmentPayload>,
+    pub usage: Option<ChatUsagePayload>,
     pub created_at: Option<String>,
 }

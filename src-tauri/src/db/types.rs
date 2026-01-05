@@ -256,6 +256,9 @@ pub struct ChatMessageRecord {
     pub content: String,
     pub ref_resource_id: Option<i64>,
     pub ref_chunk_id: Option<i64>,
+    pub input_tokens: Option<i64>,
+    pub output_tokens: Option<i64>,
+    pub total_tokens: Option<i64>,
     pub created_at: Option<String>,
 }
 
@@ -265,6 +268,9 @@ pub struct NewChatMessage<'a> {
     pub content: &'a str,
     pub ref_resource_id: Option<i64>,
     pub ref_chunk_id: Option<i64>,
+    pub input_tokens: Option<i64>,
+    pub output_tokens: Option<i64>,
+    pub total_tokens: Option<i64>,
 }
 
 #[derive(Debug, FromRow, Serialize)]

@@ -16,9 +16,9 @@ use crate::{
 
 use super::{
     AddMessageAttachmentsRequest, ChatMessageAttachmentPayload, ChatMessagePayload,
-    CreateChatMessageRequest, CreateChatMessageResponse, CreateChatSessionRequest,
-    CreateChatSessionResponse, DeleteChatMessageRequest, DeleteChatSessionRequest,
-    ListChatSessionsRequest, RemoveMessageAttachmentRequest,
+    ChatUsagePayload, CreateChatMessageRequest, CreateChatMessageResponse,
+    CreateChatSessionRequest, CreateChatSessionResponse, DeleteChatMessageRequest,
+    DeleteChatSessionRequest, ListChatSessionsRequest, RemoveMessageAttachmentRequest,
     UpdateChatMessageRequest, UpdateChatSessionRequest,
 };
 
@@ -132,6 +132,9 @@ pub async fn create_chat_message(
             content: &payload.content,
             ref_resource_id: payload.ref_resource_id,
             ref_chunk_id: payload.ref_chunk_id,
+            input_tokens: None,
+            output_tokens: None,
+            total_tokens: None,
         },
     )
     .await
@@ -183,6 +186,16 @@ pub async fn list_chat_messages(
             role: message.role,
             content: message.content,
             attachments: attachment_map.remove(&message.message_id).unwrap_or_default(),
+            usage: match (message.input_tokens, message.output_tokens, message.total_tokens) {
+                (Some(input_tokens), Some(output_tokens), Some(total_tokens)) => {
+                    Some(ChatUsagePayload {
+                        input_tokens,
+                        output_tokens,
+                        total_tokens,
+                    })
+                }
+                _ => None,
+            },
             created_at: message.created_at,
         })
         .collect();

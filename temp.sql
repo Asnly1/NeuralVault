@@ -48,6 +48,9 @@ CREATE TABLE chat_messages (
 
     role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
     content TEXT NOT NULL,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    total_tokens INTEGER,
     
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 

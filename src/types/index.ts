@@ -258,10 +258,7 @@ export const AI_PROVIDER_INFO: Record<AIProvider, ProviderInfo> = {
     icon: "openai.svg",
     defaultBaseUrl: "https://api.openai.com/v1",
     models: [
-      { id: "gpt-4o", name: "GPT-4o" },
-      { id: "gpt-4o-mini", name: "GPT-4o Mini" },
-      { id: "gpt-4-turbo", name: "GPT-4 Turbo" },
-      { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo" },
+      { id: "gpt-5.2-2025-12-11", name: "GPT-5.2" }
     ],
   },
   anthropic: {
@@ -269,10 +266,9 @@ export const AI_PROVIDER_INFO: Record<AIProvider, ProviderInfo> = {
     icon: "claude-color.svg",
     defaultBaseUrl: null,
     models: [
-      { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4" },
-      { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet" },
-      { id: "claude-3-opus-20240229", name: "Claude 3 Opus" },
-      { id: "claude-3-haiku-20240307", name: "Claude 3 Haiku" },
+      { id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5" },
+      { id: "claude-sonnet-4-5-20250929", name: "Claude Sonnet 4.5" },
+      { id: "claude-opus-4-5-20251101", name: "Claude Opus 4.5" },
     ],
   },
   gemini: {
@@ -280,21 +276,23 @@ export const AI_PROVIDER_INFO: Record<AIProvider, ProviderInfo> = {
     icon: "gemini-color.svg",
     defaultBaseUrl: null,
     models: [
-      { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash" },
-      { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro" },
-      { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash" },
+      { id: "gemini-3-flash-preview", name: "Gemini 3 Flash" },
+      { id: "gemini-3-pro-preview", name: "Gemini 3 Pro" },
     ],
   },
   grok: {
     name: "Grok",
     icon: "grok.svg",
-    defaultBaseUrl: "https://api.x.ai/v1",
-    models: [{ id: "grok-beta", name: "Grok Beta" }],
+    defaultBaseUrl: null,
+    models: [
+      { id: "grok-4-1-fast-reasoning", name: "Grok 4.1 Reasoning" },
+      { id: "grok-4-1-fast-non-reasoning", name: "Grok 4.1 Non-Reasoning" },
+    ],
   },
   deepseek: {
     name: "Deepseek",
     icon: "deepseek-color.svg",
-    defaultBaseUrl: "https://api.deepseek.com/v1",
+    defaultBaseUrl: "https://api.deepseek.com",
     models: [
       { id: "deepseek-chat", name: "Deepseek Chat" },
       { id: "deepseek-reasoner", name: "Deepseek Reasoner" },
@@ -305,9 +303,8 @@ export const AI_PROVIDER_INFO: Record<AIProvider, ProviderInfo> = {
     icon: "qwen-color.svg",
     defaultBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     models: [
-      { id: "qwen-turbo", name: "Qwen Turbo" },
-      { id: "qwen-plus", name: "Qwen Plus" },
-      { id: "qwen-max", name: "Qwen Max" },
+      { id: "qwen3-max-preview", name: "Qwen 3 Max" },
+      { id: "qwen-plus", name: "Qwen 3 Plus" },
     ],
   },
 };
@@ -359,6 +356,7 @@ export interface ChatMessagePayload {
   role: "user" | "assistant" | "system";
   content: string;
   attachments: { resource_id: number }[];
+  usage?: ChatUsage;
   created_at?: string;
 }
 
@@ -373,6 +371,12 @@ export interface SendChatRequest {
   content: string;
   images?: number[];
   files?: number[];
+}
+
+export interface ChatUsage {
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
 }
 
 /**
@@ -476,4 +480,5 @@ export interface ChatMessage {
   content: string;
   timestamp: Date;
   attachments?: { resource_id: number }[];
+  usage?: ChatUsage;
 }

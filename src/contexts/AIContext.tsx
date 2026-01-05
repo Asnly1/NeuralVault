@@ -23,6 +23,7 @@ import {
   type AIConfigStatus,
   type ModelOption,
   type ChatMessage,
+  type ChatUsage,
 } from "@/types";
 import { listen } from "@tauri-apps/api/event";
 
@@ -219,12 +220,25 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
       };
       setMessages((prev) => [...prev, assistantMessage]);
 
+      const applyUsage = (usage: ChatUsage) => {
+        setMessages((prev) => {
+          const next = [...prev];
+          for (let i = next.length - 1; i >= 0; i -= 1) {
+            if (next[i].role === "assistant") {
+              next[i] = { ...next[i], usage };
+              break;
+            }
+          }
+          return next;
+        });
+      };
+
       const setupListener = async () => {
         unlistenRef.current = await listen<{
           session_id: number;
           type: string;
           delta?: string;
-          usage?: unknown;
+          usage?: ChatUsage;
           done?: boolean;
           message?: unknown;
         }>("chat-stream", (event) => {
@@ -244,7 +258,14 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
             });
           }
 
+          if (event.payload.type === "usage" && event.payload.usage) {
+            applyUsage(event.payload.usage);
+          }
+
           if (event.payload.type === "done") {
+            if (event.payload.usage) {
+              applyUsage(event.payload.usage);
+            }
             setIsChatLoading(false);
             if (unlistenRef.current) unlistenRef.current();
           }

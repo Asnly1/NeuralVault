@@ -502,7 +502,7 @@ app.manage(AppState { db, python }) - 注入状态
 2. 组装聊天历史（含附件）并发送给 Python `/chat/completions` 端点
 3. Python 根据 provider 类型调用对应的 SDK（OpenAI / Anthropic / Gemini / Grok）
 4. Rust 读取 Python SSE 流并通过 `chat-stream` 事件转发给前端
-5. Rust 累积 delta，写入 chat_messages / message_attachments
+5. Rust 使用 `done_text` 写入 chat_messages，同时保存 `usage` 到 chat_messages
 
 **请求格式**（Rust -> Python）：
 
@@ -521,9 +521,11 @@ app.manage(AppState { db, python }) - 注入状态
 
 ```json
 { "session_id": 1, "type": "delta", "delta": "Hello" }
-{ "session_id": 1, "type": "usage", "usage": { "input_tokens": 10, "output_tokens": 20 } }
+{ "session_id": 1, "type": "usage", "usage": { "input_tokens": 10, "output_tokens": 20, "total_tokens": 30 } }
 { "session_id": 1, "type": "done", "done": true, "message_id": 123 }
 ```
+
+> `done_text` 仅用于 Rust 写库，不会转发给前端。
 
 **支持的 Provider**：
 

@@ -217,6 +217,9 @@ pub async fn send_chat_message(
             content: &request.content,
             ref_resource_id: None,
             ref_chunk_id: None,
+            input_tokens: None,
+            output_tokens: None,
+            total_tokens: None,
         },
     )
     .await
@@ -312,8 +315,9 @@ pub async fn send_chat_message(
 
     let mut stream = response.bytes_stream();
     let mut buffer: Vec<u8> = Vec::new();
-    let mut assistant_content = String::new();
+    let mut assistant_content: Option<String> = None;
     let mut usage: Option<serde_json::Value> = None;
+    let mut usage_tokens: Option<(i64, i64, i64)> = None;
     let mut done = false;
 
     while let Some(chunk_result) = stream.next().await {
@@ -346,7 +350,6 @@ pub async fn send_chat_message(
             match event_type {
                 "delta" => {
                     if let Some(delta) = event.get("delta").and_then(|v| v.as_str()) {
-                        assistant_content.push_str(delta);
                         let payload = serde_json::json!({
                             "session_id": request.session_id,
                             "type": "delta",
@@ -355,9 +358,28 @@ pub async fn send_chat_message(
                         let _ = app.emit("chat-stream", payload);
                     }
                 }
+                "done_text" => {
+                    if let Some(done_text) = event.get("done_text").and_then(|v| v.as_str()) {
+                        assistant_content = Some(done_text.to_string());
+                    }
+                }
                 "usage" => {
                     if let Some(usage_value) = event.get("usage") {
                         usage = Some(usage_value.clone());
+                        let input_tokens = usage_value
+                            .get("input_tokens")
+                            .and_then(|v| v.as_i64());
+                        let output_tokens = usage_value
+                            .get("output_tokens")
+                            .and_then(|v| v.as_i64());
+                        let total_tokens = usage_value
+                            .get("total_tokens")
+                            .and_then(|v| v.as_i64());
+                        if let (Some(input), Some(output), Some(total)) =
+                            (input_tokens, output_tokens, total_tokens)
+                        {
+                            usage_tokens = Some((input, output, total));
+                        }
                         let payload = serde_json::json!({
                             "session_id": request.session_id,
                             "type": "usage",
@@ -387,14 +409,22 @@ pub async fn send_chat_message(
         }
     }
 
+    let (input_tokens, output_tokens, total_tokens) = match usage_tokens {
+        Some((input, output, total)) => (Some(input), Some(output), Some(total)),
+        None => (None, None, None),
+    };
+
     let assistant_message_id = insert_chat_message(
         &state.db,
         NewChatMessage {
             session_id: request.session_id,
             role: ChatMessageRole::Assistant,
-            content: &assistant_content,
+            content: assistant_content.as_deref().unwrap_or(""),
             ref_resource_id: None,
             ref_chunk_id: None,
+            input_tokens,
+            output_tokens,
+            total_tokens,
         },
     )
     .await

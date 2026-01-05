@@ -229,9 +229,9 @@ class LLMService:
                 if delta:
                     yield {"type": "delta", "delta": delta}
             elif event_type == "response.output_text.done":
-                done_text = event.get("text", None)
-                if done_text:
-                    yield {"type": "done_text", "done_text": done_text}
+                full_text = event.get("text", None)
+                if full_text:
+                    yield {"type": "done_text", "done_text": full_text}
             elif event_type == "response.completed":
                 response = event.get("response", None)
                 usage = {
@@ -273,19 +273,24 @@ class LLMService:
             stream_options={"include_usage": True},
         )
 
+        full_text = ""
+        usage = None
         async for chunk in stream:
             if chunk.choices:
                 delta = chunk.choices[0].delta.content
                 if delta:
+                    full_text += delta
                     yield {"type": "delta", "delta": delta}
             if chunk.usage:
                 usage = {
                     "input_tokens": chunk.usage.prompt_tokens,
                     "output_tokens": chunk.usage.completion_tokens,
                     "total_tokens": chunk.usage.total_tokens,
-                    }
-                if usage:
-                    yield {"type": "usage", "usage": usage}
+                }
+                
+        yield {"type": "done_text", "done_text": full_text}
+        if usage:
+            yield {"type": "usage", "usage": usage}
 
     async def _stream_anthropic(
         self,
@@ -375,19 +380,21 @@ class LLMService:
 
         stream = await client.aio.models.generate_content_stream(**kwargs)
         full_text = ""
+        usage = None
         async for chunk in stream:
             if chunk.candidates[0].content.text:
                 delta = chunk.candidates[0].content.text
                 full_text += delta
                 yield {"type": "delta", "delta": delta}
-            else:
-                yield {"type": "done_text", "done_text": full_text}
+            if chunk.usage_metadata:
                 usage = {
                     "input_tokens": chunk.usage_metadata.prompt_token_count,
                     "output_tokens": chunk.usage_metadata.candidates_token_count,
                     "total_tokens": chunk.usage_metadata.total_token_count,
                 }
-                yield {"type": "usage", "usage": usage}
+        yield {"type": "done_text", "done_text": full_text}
+        if usage:
+            yield {"type": "usage", "usage": usage}
 
     async def _stream_grok(
         self,

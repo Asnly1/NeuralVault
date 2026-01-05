@@ -123,14 +123,17 @@ pub async fn insert_chat_message(
     params: NewChatMessage<'_>,
 ) -> Result<i64, sqlx::Error> {
     let result = sqlx::query(
-        "INSERT INTO chat_messages (session_id, role, content, ref_resource_id, ref_chunk_id) \
-         VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO chat_messages (session_id, role, content, ref_resource_id, ref_chunk_id, input_tokens, output_tokens, total_tokens) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(params.session_id)
     .bind(params.role)
     .bind(params.content)
     .bind(params.ref_resource_id)
     .bind(params.ref_chunk_id)
+    .bind(params.input_tokens)
+    .bind(params.output_tokens)
+    .bind(params.total_tokens)
     .execute(pool)
     .await?;
 
@@ -142,7 +145,7 @@ pub async fn list_chat_messages(
     session_id: i64,
 ) -> Result<Vec<ChatMessageRecord>, sqlx::Error> {
     sqlx::query_as::<_, ChatMessageRecord>(
-        "SELECT message_id, session_id, role, content, ref_resource_id, ref_chunk_id, created_at \
+        "SELECT message_id, session_id, role, content, ref_resource_id, ref_chunk_id, input_tokens, output_tokens, total_tokens, created_at \
          FROM chat_messages WHERE session_id = ? ORDER BY created_at ASC, message_id ASC",
     )
     .bind(session_id)

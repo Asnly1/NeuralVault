@@ -160,7 +160,9 @@ Error:
 ```
 data: {"type":"delta","delta":"片段内容"}
 
-data: {"type":"usage","usage":{"input_tokens":10,"output_tokens":20}}
+data: {"type":"done_text","done_text":"完整回复"}
+
+data: {"type":"usage","usage":{"input_tokens":10,"output_tokens":20,"total_tokens":30}}
 
 data: {"type":"done","done":true}
 ```
@@ -171,7 +173,9 @@ data: {"type":"done","done":true}
 data: {"type":"error","message":"错误信息"}
 ```
 
-> `usage` 通常在流末尾返回（不同 Provider 有差异）。
+> `done_text` 用于 Rust 端写入数据库，避免在 Rust 侧累积 delta。
+>
+> `usage` 通常在流末尾返回（不同 Provider 有差异），字段固定为 `input_tokens` / `output_tokens` / `total_tokens`。
 
 ---
 

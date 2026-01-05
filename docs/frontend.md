@@ -80,8 +80,8 @@ public/
 - API 类型：`CreateTaskRequest/Response`、`CaptureRequest/Response`、`SeedResponse`、`LinkResourceRequest/Response`、`TaskResourcesResponse`
 - 剪贴板类型：`ClipboardContent`、`ReadClipboardResponse`
 - 资源处理进度：`ProcessingStage`、`IngestProgress`
-- AI 类型：`AIProvider`、`AI_PROVIDER_INFO`、`AIProviderStatus`、`AIConfigStatus`、`SetApiKeyRequest`、`SetDefaultModelRequest`、`ChatMessagePayload`、`SendChatRequest`、`ChatStreamAck`、`ChatSession`、`CreateChatSessionRequest/Response`、`ListChatSessionsRequest`、`UpdateChatSessionRequest`、`DeleteChatSessionRequest`、`CreateChatMessageRequest/Response`、`UpdateChatMessageRequest`、`DeleteChatMessageRequest`、`AddMessageAttachmentsRequest`、`RemoveMessageAttachmentRequest`、`ModelOption`、`ChatMessage`
-  - `ChatMessagePayload` 包含 `attachments: { resource_id }[]`，用于前端按资源类型渲染缩略图
+- AI 类型：`AIProvider`、`AI_PROVIDER_INFO`、`AIProviderStatus`、`AIConfigStatus`、`SetApiKeyRequest`、`SetDefaultModelRequest`、`ChatMessagePayload`、`SendChatRequest`、`ChatUsage`、`ChatStreamAck`、`ChatSession`、`CreateChatSessionRequest/Response`、`ListChatSessionsRequest`、`UpdateChatSessionRequest`、`DeleteChatSessionRequest`、`CreateChatMessageRequest/Response`、`UpdateChatMessageRequest`、`DeleteChatMessageRequest`、`AddMessageAttachmentsRequest`、`RemoveMessageAttachmentRequest`、`ModelOption`、`ChatMessage`
+  - `ChatMessagePayload` 包含 `attachments: { resource_id }[]` 和 `usage`（token 统计），用于前端按资源类型渲染缩略图
   - `SendChatRequest` 仅发送最新输入（content + images/files 的 resource_id）
 
 ---
