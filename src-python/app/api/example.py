@@ -36,6 +36,7 @@ file_openai = create_openai(PDF_PATH)
 # 上传文件 + 图片 + 文本
 res1 = client.responses.create(
     model="gpt-5",
+    include=["reasoning.encrypted_content"],
     input=[
         {
             "role": "developer",
@@ -58,7 +59,12 @@ res1 = client.responses.create(
                 },
             ],
         },
-    ]
+    ],
+    reasoning={
+        "effort": "medium"
+    },
+    stream=False,
+    store=False
 )
 
 # 非流式结果

@@ -9,10 +9,6 @@ POST: /chat/completions
           "task_type": "chat",
           "messages": [
             {
-              "role": "system",
-              "content": "你是一个有用的助手。"
-            },
-            {
               "role": "user",
               "content": "帮我分析一下这个文档",
               "files": ["/abs/path/to/history_file.pdf"]
@@ -33,7 +29,8 @@ POST: /chat/completions
     Response (SSE):
         data: {"type":"delta","delta":"这"}
         data: {"type":"delta","delta":"是"}
-        data: {"type":"usage","usage":{"input_tokens":50,"output_tokens":4}}
+        data: {"type":"done_text","done_text":"这是"}
+        data: {"type":"usage","usage":{"input_tokens":50,"output_tokens":4,"total_tokens":54}}
         data: {"type":"done","done":true}
 """
 from typing import AsyncIterator
