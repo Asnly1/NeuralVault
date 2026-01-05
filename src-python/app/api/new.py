@@ -16,15 +16,29 @@ PDF_PATH = "/Users/hovsco/Desktop/test_pdf.pdf"
 # ============================================================
 # Google Example
 # ============================================================
-client = genai.Client(api_key=Google_API_KEY)
+from xai_sdk import AsyncClient as GrokClient
+from xai_sdk.chat import system as grok_system, user as grok_user, file as grok_file
+import asyncio
 
-response = client.models.generate_content_stream(
-    model="gemini-3-flash-preview",
-    contents=["Hello! Please introduce yourself in 100 words."]
-)
+async def main():
+    client = GrokClient(api_key=Grok_API_KEY)
 
-# 流式结果
-with open("response_stream.jsonl", "w", encoding="utf-8") as f:
-    for chunk in response:
-        data = chunk.model_dump(mode="json")
-        f.write(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+    res2 = client.chat.create(model="grok-4-fast", store_messages=False)
+    res2.append(grok_system("You are Grok, a chatbot inspired by the Hitchhiker's Guide to the Galaxy."))
+    res2.append(grok_user("Hello. Please describe yourself."))
+
+    full_text = ""
+    async for response, chunk in res2.stream():
+        if chunk.content:
+            print(f"type: delta, delta: {chunk.content}")
+            full_text += chunk.content
+            
+    print(f"type: done_text, done_text: {full_text}")
+    usage = {
+        "input_tokens": response.usage.prompt_tokens,
+        "output_tokens": response.usage.completion_tokens,
+        "total_tokens": response.usage.total_tokens,
+    }
+    print(f"type: usage, usage: {usage}")
+
+asyncio.run(main())

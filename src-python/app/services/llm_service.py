@@ -420,9 +420,8 @@ class LLMService:
 
                 chat.append(grok_user(message.content))
         
-        response = chat.sample()
         full_text = ""
-        for response, chunk in chat.stream():
+        async for response, chunk in chat.stream():
             if chunk.content:
                 yield {"type": "delta", "delta": chunk.content}
                 full_text += chunk.content
