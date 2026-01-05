@@ -112,6 +112,16 @@ AI 配置与聊天状态管理。
 - 方法：`saveKey()`、`removeKey()`、`saveDefaultModel()`、`sendMessage()`（需要 session context: task/resource + ids + attachments）、`clearMessages()`、`refreshConfig()`
 - 事件：监听 Tauri `chat-stream`，按 `session_id` 拼接 assistant delta
 
+#### Chat 消息端到端流程 (ChatPanel -> Rust -> Python -> Rust -> 前端)
+
+1. 前端 `ChatPanel` 点击发送或回车触发 `useAI().sendMessage`，校验 `sessionType`/`taskId`/`resourceId` 并清空输入 (`src/components/workspace/ChatPanel.tsx`)。
+2. `AIContext` 通过 `createChatSession` 确保会话存在，追加用户消息、设置 loading，并注册 `chat-stream` 事件监听 (`src/contexts/AIContext.tsx`, `src/api/index.ts`)。
+3. 前端调用 Tauri 命令 `send_chat_message`，携带 `session_id`、`provider`/`model`、`content`，以及附件的 `resource_id` (`src/api/index.ts`)。
+4. Rust `send_chat_message` 写入用户消息与附件到数据库，组装完整历史，解析附件资源为绝对路径，构造 Python 请求 `messages` (含 `images`/`files`) (`src-tauri/src/commands/ai_config.rs`)。
+5. Rust 使用 streaming client 调用 Python `/chat/completions`，Python 通过 `llm_service.stream_chat` 返回 SSE 流 (`src-python/app/api/chat.py`, `src-python/app/services/llm_service.py`)。
+6. Python SSE 事件包含 `delta`/`done_text`/`usage`/`done`/`error`；Rust 逐行解析 `data: ...`，转发 `delta`/`usage`/`error` 到前端，`done_text` 仅用于写库，收到 `done` 后写入 assistant 消息并发出最终 `done` (`src-tauri/src/commands/ai_config.rs`)。
+7. 前端监听 `chat-stream`：`delta` 拼接到最后一条 assistant 消息，`usage` 更新 token 统计，`done`/`error` 停止 loading 并取消监听，界面即时更新 (`src/contexts/AIContext.tsx`)。
+
 #### `LanguageContext.tsx`
 
 多语言支持，依赖 `translations.ts`。

@@ -601,8 +601,8 @@ image_anthropic = create_anthropic_image(IMAGE_PATH)
 pdf_anthropic = create_anthropic_pdf(PDF_PATH)
 
 print("打印anthropic文件id")
-print(image_anthropic) # file_011CWnvc9qXCyjq7oNCh5h8w
-print(pdf_anthropic) # file_011CWnvcDvq9GfTEn3MgXrUP
+print(image_anthropic)
+print(pdf_anthropic)
 
 # 暂不支持文件/图片
 message = client.messages.create(
