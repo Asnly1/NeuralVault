@@ -131,6 +131,7 @@ Error:
   "provider": "openai",
   "model": "gpt-4o",
   "task_type": "chat",
+  "thinking_effort": "low",
   "messages": [
     {"role": "system", "content": "You are a helpful assistant."},
     {"role": "user", "content": "Hello", "images": ["/abs/path/img.png"], "files": ["/abs/path/doc.pdf"]},
@@ -143,6 +144,8 @@ Error:
 > API Key 由 Rust 在启动/保存/删除时同步到 Python（PUT/DELETE `/providers/{provider}`）。Python 仅内存保存，用于复用客户端。
 >
 > `images/files` 必须是绝对路径；Rust 负责拼接完整对话历史并传给 Python。
+>
+> `thinking_effort` 可选，仅支持 `none` / `low` / `high`，映射为 OpenAI Responses API 的 `reasoning.effort`。
 
 ### 关键行为
 
@@ -153,6 +156,8 @@ Error:
 - **Anthropic**: 暂时文本-only（图片/文件会报错，TODO）。
 - **Grok**: 使用 xAI SDK `client.chat.create(..., input=[...], stream=True)`；系统提示使用 `developer` 角色；支持图片/文件。
 
+> 当前前端仅开放 OpenAI，其他 Provider 仍保留实现但不在 UI 中选择。
+
 ### 流式响应 (SSE)
 
 返回 `text/event-stream`，每条事件为：
@@ -162,9 +167,7 @@ data: {"type":"delta","delta":"片段内容"}
 
 data: {"type":"done_text","done_text":"完整回复"}
 
-data: {"type":"usage","usage":{"input_tokens":10,"output_tokens":20,"total_tokens":30}}
-
-data: {"type":"done","done":true}
+data: {"type":"usage","usage":{"input_tokens":10,"output_tokens":20,"reasoning_tokens":5,"total_tokens":35}}
 ```
 
 发生错误：
@@ -175,7 +178,7 @@ data: {"type":"error","message":"错误信息"}
 
 > `done_text` 用于 Rust 端写入数据库，避免在 Rust 侧累积 delta。
 >
-> `usage` 通常在流末尾返回（不同 Provider 有差异），字段固定为 `input_tokens` / `output_tokens` / `total_tokens`。
+> `usage` 通常在流末尾返回（不同 Provider 有差异），字段为 `input_tokens` / `output_tokens` / `reasoning_tokens` / `total_tokens`，其中 `total_tokens` 已包含 `reasoning_tokens`；收到 `usage` 后即可视为流结束。
 
 ---
 

@@ -332,7 +332,7 @@ pub async fn send_chat_message(
     let mut stream = response.bytes_stream();
     let mut buffer: Vec<u8> = Vec::new();
     let mut assistant_content: Option<String> = None;
-    let mut usage: Option<serde_json::Value> = None;
+    let mut assistant_accum = String::new();
     let mut usage_tokens: Option<(i64, i64, i64, i64)> = None;
     let mut done = false;
 
@@ -346,13 +346,8 @@ pub async fn send_chat_message(
             let line = String::from_utf8_lossy(line_bytes).to_string();
             buffer.drain(..pos + 1);
 
-            let trimmed = line.trim();
-            if trimmed.is_empty() || !trimmed.starts_with("data:") {
-                continue;
-            }
-
-            let data = trimmed.trim_start_matches("data:").trim();
-            if data == "[DONE]" {
+            let data = line.trim();
+            if data.is_empty() {
                 continue;
             }
 
@@ -366,6 +361,7 @@ pub async fn send_chat_message(
             match event_type {
                 "delta" => {
                     if let Some(delta) = event.get("delta").and_then(|v| v.as_str()) {
+                        assistant_accum.push_str(delta);
                         let payload = serde_json::json!({
                             "session_id": request.session_id,
                             "type": "delta",
@@ -381,7 +377,6 @@ pub async fn send_chat_message(
                 }
                 "usage" => {
                     if let Some(usage_value) = event.get("usage") {
-                        usage = Some(usage_value.clone());
                         let input_tokens = usage_value
                             .get("input_tokens")
                             .and_then(|v| v.as_i64());
@@ -406,11 +401,9 @@ pub async fn send_chat_message(
                             "usage": usage_value,
                         });
                         let _ = app.emit("chat-stream", payload);
+                        done = true;
+                        break;
                     }
-                }
-                "done" => {
-                    done = true;
-                    break;
                 }
                 "error" => {
                     let payload = serde_json::json!({
@@ -429,6 +422,16 @@ pub async fn send_chat_message(
         }
     }
 
+    let final_assistant = match assistant_content {
+        Some(text) => Some(text),
+        None => {
+            if assistant_accum.is_empty() {
+                None
+            } else {
+                Some(assistant_accum)
+            }
+        }
+    };
     let (input_tokens, output_tokens, reasoning_tokens, total_tokens) = match usage_tokens {
         Some((input, output, reasoning, total)) => {
             (Some(input), Some(output), Some(reasoning), Some(total))
@@ -439,7 +442,7 @@ pub async fn send_chat_message(
     update_chat_message_assistant(
         &state.db,
         user_message_id,
-        assistant_content.as_deref(),
+        final_assistant.as_deref(),
         input_tokens,
         output_tokens,
         reasoning_tokens,
@@ -447,15 +450,6 @@ pub async fn send_chat_message(
     )
     .await
     .map_err(|e| e.to_string())?;
-
-    let done_payload = serde_json::json!({
-        "session_id": request.session_id,
-        "type": "done",
-        "done": true,
-        "message_id": user_message_id,
-        "usage": usage,
-    });
-    let _ = app.emit("chat-stream", done_payload);
 
     Ok(ChatStreamAck { ok: true })
 }

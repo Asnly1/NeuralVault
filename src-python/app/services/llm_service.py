@@ -249,6 +249,10 @@ class LLMService:
                     "total_tokens": response.usage.total_tokens + reasoning_tokens,
                 }
                 yield {"type": "usage", "usage": usage}
+            elif event_type == "response.failed":
+                raise RuntimeError(event.response.error.message)
+            elif event_type == "error":
+                raise RuntimeError(event.message)
             else:
                 continue
 

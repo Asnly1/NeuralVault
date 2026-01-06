@@ -7,6 +7,7 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  useRef,
 } from "react";
 import {
   getAIConfigStatus,
@@ -15,6 +16,8 @@ import {
   setDefaultModel,
   sendChatMessage,
   createChatSession,
+  listChatSessions,
+  listChatMessages,
 } from "@/api";
 import {
   AIProvider,
@@ -23,6 +26,7 @@ import {
   type ModelOption,
   type ChatMessage,
   type ChatUsage,
+  type ChatMessagePayload,
   type ThinkingEffort,
 } from "@/types";
 import { listen } from "@tauri-apps/api/event";
@@ -64,6 +68,11 @@ interface AIContextType {
     }
   ) => Promise<void>;
   clearMessages: () => void;
+  loadSessionMessages: (context: {
+    session_type: "task" | "resource";
+    task_id?: number;
+    resource_id?: number;
+  }) => Promise<void>;
   refreshConfig: () => Promise<void>;
 }
 
@@ -78,6 +87,7 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [sessionMap, setSessionMap] = useState<Map<string, number>>(new Map());
+  const loadTokenRef = useRef(0);
 
   const refreshConfig = useCallback(async () => {
     try {
@@ -179,6 +189,79 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
     [sessionMap]
   );
 
+  const toChatMessages = useCallback((turns: ChatMessagePayload[]): ChatMessage[] => {
+    const output: ChatMessage[] = [];
+    for (const turn of turns) {
+      const timestamp = turn.created_at ? new Date(turn.created_at) : new Date();
+      if (turn.user_content) {
+        output.push({
+          role: "user",
+          content: turn.user_content,
+          timestamp,
+          attachments: turn.attachments,
+        });
+      }
+      if (turn.assistant_content) {
+        output.push({
+          role: "assistant",
+          content: turn.assistant_content,
+          timestamp,
+          usage: turn.usage,
+        });
+      }
+    }
+    return output;
+  }, []);
+
+  const loadSessionMessages = useCallback(
+    async (context: {
+      session_type: "task" | "resource";
+      task_id?: number;
+      resource_id?: number;
+    }) => {
+      const loadToken = ++loadTokenRef.current;
+      try {
+        const key =
+          context.session_type === "task"
+            ? `task:${context.task_id ?? "none"}`
+            : `resource:${context.resource_id ?? "none"}`;
+        const cached = sessionMap.get(key);
+        let sessionId = cached;
+
+        if (!sessionId) {
+          const sessions = await listChatSessions({
+            session_type: context.session_type,
+            task_id: context.task_id,
+            resource_id: context.resource_id,
+            include_deleted: false,
+          });
+          if (!sessions.length) {
+            if (loadToken === loadTokenRef.current) {
+              setMessages([]);
+            }
+            return;
+          }
+          sessionId = sessions[0].session_id;
+          setSessionMap((prev) => {
+            const next = new Map(prev);
+            next.set(key, sessionId!);
+            return next;
+          });
+        }
+
+        const turns = await listChatMessages(sessionId);
+        if (loadToken !== loadTokenRef.current) return;
+        setMessages(toChatMessages(turns));
+      } catch (e) {
+        if (loadToken === loadTokenRef.current) {
+          setMessages([]);
+        }
+        console.error("Failed to load chat history:", e);
+      }
+    },
+    [sessionMap, toChatMessages]
+  );
+
   const sendMessage = async (
     content: string,
     context?: {
@@ -198,6 +281,8 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
     if (!context) {
       throw new Error("Chat session context is required");
     }
+
+    loadTokenRef.current += 1;
 
     const sessionId = await ensureSession({
       session_type: context.session_type,
@@ -245,7 +330,6 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
           type: string;
           delta?: string;
           usage?: ChatUsage;
-          done?: boolean;
           message?: unknown;
         }>("chat-stream", (event) => {
           if (event.payload.session_id !== sessionId) return;
@@ -266,12 +350,6 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
 
           if (event.payload.type === "usage" && event.payload.usage) {
             applyUsage(event.payload.usage);
-          }
-
-          if (event.payload.type === "done") {
-            if (event.payload.usage) {
-              applyUsage(event.payload.usage);
-            }
             setIsChatLoading(false);
             if (unlistenRef.current) unlistenRef.current();
           }
@@ -325,6 +403,7 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
         saveDefaultModel,
         sendMessage,
         clearMessages,
+        loadSessionMessages,
         refreshConfig,
       }}
     >

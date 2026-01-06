@@ -375,8 +375,8 @@ app.manage(AppState { db, python }) - 注入状态
 | `SetDefaultModelRequest`| 设置默认模型       | provider, model                                          |
 | `AIProviderStatus`      | Provider 状态      | has_key, enabled, base_url                               |
 | `AIConfigStatusResponse`| AI 配置状态        | providers, default_provider, default_model               |
-| `ChatMessagePayload`    | 聊天消息           | message_id, role, content, attachments                   |
-| `SendChatRequest`       | 发送聊天请求       | session_id, provider, model, task_type, content, images, files |
+| `ChatMessagePayload`    | 聊天消息（按轮次） | message_id, user_content, assistant_content, attachments, usage |
+| `SendChatRequest`       | 发送聊天请求       | session_id, provider, model, task_type, content, images, files, thinking_effort |
 | `ChatStreamAck`         | 发送聊天响应       | ok                                                       |
 
 ##### 命令列表
@@ -499,10 +499,10 @@ app.manage(AppState { db, python }) - 注入状态
 **流程**：
 
 1. 从加密配置获取 API Key
-2. 组装聊天历史（含附件）并发送给 Python `/chat/completions` 端点
-3. Python 根据 provider 类型调用对应的 SDK（OpenAI / Anthropic / Gemini / Grok）
+2. 写入本轮 `user_content` 与附件，组装历史（按轮次拆分 user/assistant）并发送给 Python `/chat/completions`
+3. Python 调用 OpenAI Responses API（当前前端仅开放 OpenAI）
 4. Rust 读取 Python SSE 流并通过 `chat-stream` 事件转发给前端
-5. Rust 使用 `done_text` 写入 chat_messages，同时保存 `usage` 到 chat_messages
+5. Rust 使用 `done_text`（或累积的 delta 兜底）更新同一条 chat_messages 的 `assistant_content`，同时保存 `usage`（含 `reasoning_tokens`）
 
 **请求格式**（Rust -> Python）：
 
@@ -511,23 +511,27 @@ app.manage(AppState { db, python }) - 注入状态
   "provider": "openai",
   "model": "gpt-4o",
   "task_type": "chat",
+  "thinking_effort": "low",
   "messages": [
     {"role": "user", "content": "Hello", "images": ["/abs/path/img.png"], "files": ["/abs/path/doc.pdf"]}
   ]
 }
 ```
 
+> `thinking_effort` 可选，仅支持 `none` / `low` / `high`，映射为 OpenAI Responses API 的 `reasoning.effort`。
+
 **流式事件**（Rust -> Frontend via Tauri Events）：
 
 ```json
 { "session_id": 1, "type": "delta", "delta": "Hello" }
-{ "session_id": 1, "type": "usage", "usage": { "input_tokens": 10, "output_tokens": 20, "total_tokens": 30 } }
-{ "session_id": 1, "type": "done", "done": true, "message_id": 123 }
+{ "session_id": 1, "type": "usage", "usage": { "input_tokens": 10, "output_tokens": 20, "reasoning_tokens": 5, "total_tokens": 35 } }
 ```
 
 > `done_text` 仅用于 Rust 写库，不会转发给前端。
+>
+> `total_tokens` 已包含 `reasoning_tokens`；收到 `usage` 后即可视为流结束。
 
-**支持的 Provider**：
+**支持的 Provider**（实现保留，但当前前端仅开放 OpenAI）：
 
 | Provider | SDK | 模型示例 |
 | --- | --- | --- |
@@ -778,7 +782,7 @@ HUD 窗口管理实现。
 | `task_resource_link` | 任务-资源关联表（多对多） | task_id, resource_id, visibility_scope, local_alias                                |
 | `context_chunks`     | 向量化分块表              | chunk_id, resource_id, chunk_text, chunk_index, page_number, qdrant_uuid, embedding_hash, embedding_model, embedding_at, token_count |
 | `chat_sessions`      | 聊天会话表                | session_id, session_type, task_id, resource_id, title, summary, chat_model          |
-| `chat_messages`      | 聊天消息表                | message_id, session_id, role, content, ref_resource_id, ref_chunk_id                |
+| `chat_messages`      | 聊天消息表（按轮次）       | message_id, session_id, user_content, assistant_content, ref_resource_id, ref_chunk_id, reasoning_tokens |
 
 ##### 索引
 

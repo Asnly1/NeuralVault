@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +44,8 @@ export function ChatPanel({
     messages,
     isChatLoading,
     sendMessage,
+    loadSessionMessages,
+    clearMessages,
     error,
   } = useAI();
   const [chatInput, setChatInput] = useState("");
@@ -86,6 +88,32 @@ export function ChatPanel({
       handleSend();
     }
   };
+
+  useEffect(() => {
+    if (!sessionType) {
+      clearMessages();
+      return;
+    }
+    if (sessionType === "task" && !taskId) {
+      clearMessages();
+      return;
+    }
+    if (sessionType === "resource" && !resourceId) {
+      clearMessages();
+      return;
+    }
+    void loadSessionMessages({
+      session_type: sessionType,
+      task_id: taskId,
+      resource_id: resourceId,
+    });
+  }, [
+    sessionType,
+    taskId,
+    resourceId,
+    loadSessionMessages,
+    clearMessages,
+  ]);
 
   return (
     <aside

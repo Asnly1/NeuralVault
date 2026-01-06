@@ -30,8 +30,7 @@ POST: /chat/completions
         data: {"type":"delta","delta":"这"}
         data: {"type":"delta","delta":"是"}
         data: {"type":"done_text","done_text":"这是"}
-        data: {"type":"usage","usage":{"input_tokens":50,"output_tokens":4,"total_tokens":54}}
-        data: {"type":"done","done":true}
+        data: {"type":"usage","usage":{"input_tokens":50,"output_tokens":4,"reasoning_tokens":2,"total_tokens":56}}
 """
 from typing import AsyncIterator
 import json
@@ -67,6 +66,5 @@ async def _stream_chat_completions(request: ChatRequest) -> AsyncIterator[str]:
             thinking_effort=request.thinking_effort,
         ):
             yield _sse_event(event)
-        yield _sse_event({"type": "done", "done": True})
     except Exception as exc:
         yield _sse_event({"type": "error", "message": str(exc)})
