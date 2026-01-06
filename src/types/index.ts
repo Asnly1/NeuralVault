@@ -240,6 +240,9 @@ export const aiProviderValues = [
 
 export type AIProvider = (typeof aiProviderValues)[number];
 
+export const thinkingEffortValues = ["none", "low", "high"] as const;
+export type ThinkingEffort = (typeof thinkingEffortValues)[number];
+
 export interface ModelInfo {
   id: string;
   name: string;
@@ -256,7 +259,7 @@ export const AI_PROVIDER_INFO: Record<AIProvider, ProviderInfo> = {
   openai: {
     name: "ChatGPT",
     icon: "openai.svg",
-    defaultBaseUrl: "https://api.openai.com/v1",
+    defaultBaseUrl: null,
     models: [
       { id: "gpt-5.2-2025-12-11", name: "GPT-5.2" }
     ],
@@ -353,8 +356,8 @@ export interface SetDefaultModelRequest {
  */
 export interface ChatMessagePayload {
   message_id: number;
-  role: "user" | "assistant" | "system";
-  content: string;
+  user_content: string;
+  assistant_content?: string | null;
   attachments: { resource_id: number }[];
   usage?: ChatUsage;
   created_at?: string;
@@ -371,11 +374,13 @@ export interface SendChatRequest {
   content: string;
   images?: number[];
   files?: number[];
+  thinking_effort?: ThinkingEffort;
 }
 
 export interface ChatUsage {
   input_tokens: number;
   output_tokens: number;
+  reasoning_tokens: number;
   total_tokens: number;
 }
 
@@ -433,8 +438,8 @@ export interface DeleteChatSessionRequest {
 
 export interface CreateChatMessageRequest {
   session_id: number;
-  role: "user" | "assistant" | "system";
-  content: string;
+  user_content: string;
+  assistant_content?: string;
   ref_resource_id?: number;
   ref_chunk_id?: number;
   attachment_resource_ids?: number[];
@@ -446,7 +451,8 @@ export interface CreateChatMessageResponse {
 
 export interface UpdateChatMessageRequest {
   message_id: number;
-  content: string;
+  user_content?: string;
+  assistant_content?: string;
 }
 
 export interface DeleteChatMessageRequest {

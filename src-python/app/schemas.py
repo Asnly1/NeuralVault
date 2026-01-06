@@ -113,6 +113,7 @@ class ChatRequest(BaseModel):
     task_type: str
     messages: list[ChatMessage]
     stream: bool = True
+    thinking_effort: Optional[str] = None
 
 
 class ChatResponse(BaseModel):

@@ -173,14 +173,14 @@ CREATE INDEX idx_session_resource_time ON chat_sessions(resource_id, created_at)
 CREATE TABLE chat_messages (
     message_id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id INTEGER NOT NULL,
-
-    role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
-    content TEXT NOT NULL,
+    user_content TEXT NOT NULL,
+    assistant_content TEXT,
 
     ref_resource_id INTEGER,
     ref_chunk_id INTEGER,
     input_tokens INTEGER,
     output_tokens INTEGER,
+    reasoning_tokens INTEGER,
     total_tokens INTEGER,
 
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

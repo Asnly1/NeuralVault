@@ -123,16 +123,17 @@ pub async fn insert_chat_message(
     params: NewChatMessage<'_>,
 ) -> Result<i64, sqlx::Error> {
     let result = sqlx::query(
-        "INSERT INTO chat_messages (session_id, role, content, ref_resource_id, ref_chunk_id, input_tokens, output_tokens, total_tokens) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO chat_messages (session_id, user_content, assistant_content, ref_resource_id, ref_chunk_id, input_tokens, output_tokens, reasoning_tokens, total_tokens) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(params.session_id)
-    .bind(params.role)
-    .bind(params.content)
+    .bind(params.user_content)
+    .bind(params.assistant_content)
     .bind(params.ref_resource_id)
     .bind(params.ref_chunk_id)
     .bind(params.input_tokens)
     .bind(params.output_tokens)
+    .bind(params.reasoning_tokens)
     .bind(params.total_tokens)
     .execute(pool)
     .await?;
@@ -145,7 +146,7 @@ pub async fn list_chat_messages(
     session_id: i64,
 ) -> Result<Vec<ChatMessageRecord>, sqlx::Error> {
     sqlx::query_as::<_, ChatMessageRecord>(
-        "SELECT message_id, session_id, role, content, ref_resource_id, ref_chunk_id, input_tokens, output_tokens, total_tokens, created_at \
+        "SELECT message_id, session_id, user_content, assistant_content, ref_resource_id, ref_chunk_id, input_tokens, output_tokens, reasoning_tokens, total_tokens, created_at \
          FROM chat_messages WHERE session_id = ? ORDER BY created_at ASC, message_id ASC",
     )
     .bind(session_id)
@@ -153,16 +154,52 @@ pub async fn list_chat_messages(
     .await
 }
 
-pub async fn update_chat_message_content(
+pub async fn update_chat_message_contents(
     pool: &DbPool,
     message_id: i64,
-    content: &str,
+    user_content: Option<&str>,
+    assistant_content: Option<&str>,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query("UPDATE chat_messages SET content = ? WHERE message_id = ?")
-        .bind(content)
+    sqlx::query(
+        "UPDATE chat_messages \
+         SET user_content = COALESCE(?, user_content), assistant_content = COALESCE(?, assistant_content) \
+         WHERE message_id = ?",
+    )
+        .bind(user_content)
+        .bind(assistant_content)
         .bind(message_id)
         .execute(pool)
         .await?;
+
+    Ok(())
+}
+
+pub async fn update_chat_message_assistant(
+    pool: &DbPool,
+    message_id: i64,
+    assistant_content: Option<&str>,
+    input_tokens: Option<i64>,
+    output_tokens: Option<i64>,
+    reasoning_tokens: Option<i64>,
+    total_tokens: Option<i64>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE chat_messages \
+         SET assistant_content = COALESCE(?, assistant_content), \
+             input_tokens = ?, \
+             output_tokens = ?, \
+             reasoning_tokens = ?, \
+             total_tokens = ? \
+         WHERE message_id = ?",
+    )
+    .bind(assistant_content)
+    .bind(input_tokens)
+    .bind(output_tokens)
+    .bind(reasoning_tokens)
+    .bind(total_tokens)
+    .bind(message_id)
+    .execute(pool)
+    .await?;
 
     Ok(())
 }

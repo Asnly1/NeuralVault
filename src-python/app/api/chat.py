@@ -64,6 +64,7 @@ async def _stream_chat_completions(request: ChatRequest) -> AsyncIterator[str]:
             model=request.model,
             task_type=request.task_type,
             messages=request.messages,
+            thinking_effort=request.thinking_effort,
         ):
             yield _sse_event(event)
         yield _sse_event({"type": "done", "done": True})

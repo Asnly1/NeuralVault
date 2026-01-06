@@ -7,7 +7,7 @@ use crate::{
     db::{
         insert_chat_session, get_chat_session_by_id, list_chat_sessions_by_task,
         list_chat_sessions_by_resource, update_chat_session, soft_delete_chat_session,
-        insert_chat_message, list_chat_messages as list_chat_messages_db, update_chat_message_content, delete_chat_message,
+        insert_chat_message, list_chat_messages as list_chat_messages_db, update_chat_message_contents, delete_chat_message,
         insert_message_attachments, list_message_attachments_with_resource,
         delete_message_attachment, ChatSessionType, NewChatMessage,
         NewChatSession, NewMessageAttachment,
@@ -128,12 +128,13 @@ pub async fn create_chat_message(
         &state.db,
         NewChatMessage {
             session_id: payload.session_id,
-            role: payload.role,
-            content: &payload.content,
+            user_content: &payload.user_content,
+            assistant_content: payload.assistant_content.as_deref(),
             ref_resource_id: payload.ref_resource_id,
             ref_chunk_id: payload.ref_chunk_id,
             input_tokens: None,
             output_tokens: None,
+            reasoning_tokens: None,
             total_tokens: None,
         },
     )
@@ -183,14 +184,20 @@ pub async fn list_chat_messages(
         .into_iter()
         .map(|message| ChatMessagePayload {
             message_id: message.message_id,
-            role: message.role,
-            content: message.content,
+            user_content: message.user_content,
+            assistant_content: message.assistant_content,
             attachments: attachment_map.remove(&message.message_id).unwrap_or_default(),
-            usage: match (message.input_tokens, message.output_tokens, message.total_tokens) {
-                (Some(input_tokens), Some(output_tokens), Some(total_tokens)) => {
+            usage: match (
+                message.input_tokens,
+                message.output_tokens,
+                message.reasoning_tokens,
+                message.total_tokens,
+            ) {
+                (Some(input_tokens), Some(output_tokens), Some(reasoning_tokens), Some(total_tokens)) => {
                     Some(ChatUsagePayload {
                         input_tokens,
                         output_tokens,
+                        reasoning_tokens,
                         total_tokens,
                     })
                 }
@@ -208,9 +215,14 @@ pub async fn update_chat_message_command(
     state: State<'_, AppState>,
     payload: UpdateChatMessageRequest,
 ) -> Result<(), String> {
-    update_chat_message_content(&state.db, payload.message_id, &payload.content)
-        .await
-        .map_err(|e| e.to_string())
+    update_chat_message_contents(
+        &state.db,
+        payload.message_id,
+        payload.user_content.as_deref(),
+        payload.assistant_content.as_deref(),
+    )
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

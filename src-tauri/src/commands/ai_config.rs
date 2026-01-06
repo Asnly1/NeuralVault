@@ -9,9 +9,10 @@ use futures_util::StreamExt;
 use crate::{
     app_state::AppState,
     db::{
-        ChatMessageRole, NewChatMessage, NewMessageAttachment, ResourceFileType,
+        NewChatMessage, NewMessageAttachment, ResourceFileType,
         insert_chat_message, insert_message_attachments, list_chat_messages,
         list_message_attachments_with_resource, update_chat_session,
+        update_chat_message_assistant,
     },
     services::ProviderConfig,
     sidecar::PythonSidecar,
@@ -56,6 +57,7 @@ pub struct SendChatRequest {
     pub content: String,
     pub images: Option<Vec<i64>>,
     pub files: Option<Vec<i64>>,
+    pub thinking_effort: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -213,12 +215,13 @@ pub async fn send_chat_message(
         &state.db,
         NewChatMessage {
             session_id: request.session_id,
-            role: ChatMessageRole::User,
-            content: &request.content,
+            user_content: &request.content,
+            assistant_content: None,
             ref_resource_id: None,
             ref_chunk_id: None,
             input_tokens: None,
             output_tokens: None,
+            reasoning_tokens: None,
             total_tokens: None,
         },
     )
@@ -275,15 +278,27 @@ pub async fn send_chat_message(
         }
     }
 
-    let mut python_messages: Vec<serde_json::Value> = Vec::with_capacity(messages.len());
+    let mut python_messages: Vec<serde_json::Value> = Vec::with_capacity(messages.len() * 2);
     for message in messages {
         let (images, files) = attachment_map.remove(&message.message_id).unwrap_or_default();
-        python_messages.push(serde_json::json!({
-            "role": message.role,
-            "content": message.content,
-            "images": images,
-            "files": files,
-        }));
+        if !message.user_content.is_empty() {
+            python_messages.push(serde_json::json!({
+                "role": "user",
+                "content": message.user_content,
+                "images": images,
+                "files": files,
+            }));
+        }
+        if let Some(assistant_content) = message.assistant_content.as_deref() {
+            if !assistant_content.is_empty() {
+                python_messages.push(serde_json::json!({
+                    "role": "assistant",
+                    "content": assistant_content,
+                    "images": [],
+                    "files": [],
+                }));
+            }
+        }
     }
 
     // 3. 调用 Python /chat/completions
@@ -292,6 +307,7 @@ pub async fn send_chat_message(
         "model": request.model,
         "task_type": request.task_type,
         "messages": python_messages,
+        "thinking_effort": request.thinking_effort,
     });
 
     let python_base_url = state.python.get_base_url();
@@ -317,7 +333,7 @@ pub async fn send_chat_message(
     let mut buffer: Vec<u8> = Vec::new();
     let mut assistant_content: Option<String> = None;
     let mut usage: Option<serde_json::Value> = None;
-    let mut usage_tokens: Option<(i64, i64, i64)> = None;
+    let mut usage_tokens: Option<(i64, i64, i64, i64)> = None;
     let mut done = false;
 
     while let Some(chunk_result) = stream.next().await {
@@ -372,13 +388,17 @@ pub async fn send_chat_message(
                         let output_tokens = usage_value
                             .get("output_tokens")
                             .and_then(|v| v.as_i64());
+                        let reasoning_tokens = usage_value
+                            .get("reasoning_tokens")
+                            .and_then(|v| v.as_i64())
+                            .unwrap_or(0);
                         let total_tokens = usage_value
                             .get("total_tokens")
                             .and_then(|v| v.as_i64());
                         if let (Some(input), Some(output), Some(total)) =
                             (input_tokens, output_tokens, total_tokens)
                         {
-                            usage_tokens = Some((input, output, total));
+                            usage_tokens = Some((input, output, reasoning_tokens, total));
                         }
                         let payload = serde_json::json!({
                             "session_id": request.session_id,
@@ -409,23 +429,21 @@ pub async fn send_chat_message(
         }
     }
 
-    let (input_tokens, output_tokens, total_tokens) = match usage_tokens {
-        Some((input, output, total)) => (Some(input), Some(output), Some(total)),
-        None => (None, None, None),
+    let (input_tokens, output_tokens, reasoning_tokens, total_tokens) = match usage_tokens {
+        Some((input, output, reasoning, total)) => {
+            (Some(input), Some(output), Some(reasoning), Some(total))
+        }
+        None => (None, None, None, None),
     };
 
-    let assistant_message_id = insert_chat_message(
+    update_chat_message_assistant(
         &state.db,
-        NewChatMessage {
-            session_id: request.session_id,
-            role: ChatMessageRole::Assistant,
-            content: assistant_content.as_deref().unwrap_or(""),
-            ref_resource_id: None,
-            ref_chunk_id: None,
-            input_tokens,
-            output_tokens,
-            total_tokens,
-        },
+        user_message_id,
+        assistant_content.as_deref(),
+        input_tokens,
+        output_tokens,
+        reasoning_tokens,
+        total_tokens,
     )
     .await
     .map_err(|e| e.to_string())?;
@@ -434,7 +452,7 @@ pub async fn send_chat_message(
         "session_id": request.session_id,
         "type": "done",
         "done": true,
-        "message_id": assistant_message_id,
+        "message_id": user_message_id,
         "usage": usage,
     });
     let _ = app.emit("chat-stream", done_payload);

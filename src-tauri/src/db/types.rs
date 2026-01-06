@@ -239,37 +239,30 @@ pub struct NewChatSession<'a> {
     pub user_id: i64,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Type, Serialize, Deserialize)]
-#[sqlx(rename_all = "lowercase")]
-#[serde(rename_all = "lowercase")]
-pub enum ChatMessageRole {
-    User,
-    Assistant,
-    System,
-}
-
 #[derive(Debug, FromRow, Serialize)]
 pub struct ChatMessageRecord {
     pub message_id: i64,
     pub session_id: i64,
-    pub role: ChatMessageRole,
-    pub content: String,
+    pub user_content: String,
+    pub assistant_content: Option<String>,
     pub ref_resource_id: Option<i64>,
     pub ref_chunk_id: Option<i64>,
     pub input_tokens: Option<i64>,
     pub output_tokens: Option<i64>,
+    pub reasoning_tokens: Option<i64>,
     pub total_tokens: Option<i64>,
     pub created_at: Option<String>,
 }
 
 pub struct NewChatMessage<'a> {
     pub session_id: i64,
-    pub role: ChatMessageRole,
-    pub content: &'a str,
+    pub user_content: &'a str,
+    pub assistant_content: Option<&'a str>,
     pub ref_resource_id: Option<i64>,
     pub ref_chunk_id: Option<i64>,
     pub input_tokens: Option<i64>,
     pub output_tokens: Option<i64>,
+    pub reasoning_tokens: Option<i64>,
     pub total_tokens: Option<i64>,
 }
 

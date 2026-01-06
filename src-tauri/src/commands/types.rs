@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::db::{ResourceRecord, TaskPriority, TaskRecord, TaskStatus, ChatSessionType, ChatMessageRole};
+use crate::db::{ResourceRecord, TaskPriority, TaskRecord, TaskStatus, ChatSessionType};
 
 // ========== 捕获相关 ==========
 
@@ -154,8 +154,8 @@ pub struct DeleteChatSessionRequest {
 #[derive(Debug, Deserialize)]
 pub struct CreateChatMessageRequest {
     pub session_id: i64,
-    pub role: ChatMessageRole,
-    pub content: String,
+    pub user_content: String,
+    pub assistant_content: Option<String>,
     pub ref_resource_id: Option<i64>,
     pub ref_chunk_id: Option<i64>,
     pub attachment_resource_ids: Option<Vec<i64>>,
@@ -169,7 +169,8 @@ pub struct CreateChatMessageResponse {
 #[derive(Debug, Deserialize)]
 pub struct UpdateChatMessageRequest {
     pub message_id: i64,
-    pub content: String,
+    pub user_content: Option<String>,
+    pub assistant_content: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -198,14 +199,15 @@ pub struct ChatMessageAttachmentPayload {
 pub struct ChatUsagePayload {
     pub input_tokens: i64,
     pub output_tokens: i64,
+    pub reasoning_tokens: i64,
     pub total_tokens: i64,
 }
 
 #[derive(Debug, Serialize)]
 pub struct ChatMessagePayload {
     pub message_id: i64,
-    pub role: ChatMessageRole,
-    pub content: String,
+    pub user_content: String,
+    pub assistant_content: Option<String>,
     pub attachments: Vec<ChatMessageAttachmentPayload>,
     pub usage: Option<ChatUsagePayload>,
     pub created_at: Option<String>,

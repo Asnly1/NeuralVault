@@ -31,7 +31,6 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAI } from "@/contexts/AIContext";
 import {
   AIProvider,
-  aiProviderValues,
   AI_PROVIDER_INFO,
 } from "@/types";
 
@@ -189,6 +188,7 @@ export function SettingsPage({ theme, onThemeChange }: SettingsPageProps) {
   const shortcut = "Alt + Space";
   const { language, setLanguage, t } = useLanguage();
   const { config, saveKey, removeKey, loading } = useAI();
+  const visibleProviders: AIProvider[] = ["openai"];
 
   return (
     <div className="flex flex-col h-full p-6 space-y-6">
@@ -274,7 +274,7 @@ export function SettingsPage({ theme, onThemeChange }: SettingsPageProps) {
                 {t("common", "loading")}...
               </p>
             ) : (
-              aiProviderValues.map((provider) => {
+              visibleProviders.map((provider) => {
                 const AIProviderStatus = config?.providers[provider];
                 return (
                   <APIKeyCard

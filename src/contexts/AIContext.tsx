@@ -18,12 +18,12 @@ import {
 } from "@/api";
 import {
   AIProvider,
-  aiProviderValues,
   AI_PROVIDER_INFO,
   type AIConfigStatus,
   type ModelOption,
   type ChatMessage,
   type ChatUsage,
+  type ThinkingEffort,
 } from "@/types";
 import { listen } from "@tauri-apps/api/event";
 
@@ -60,6 +60,7 @@ interface AIContextType {
       resource_id?: number;
       images?: number[];
       files?: number[];
+      thinking_effort?: ThinkingEffort;
     }
   ) => Promise<void>;
   clearMessages: () => void;
@@ -67,6 +68,7 @@ interface AIContextType {
 }
 
 const AIContext = createContext<AIContextType | undefined>(undefined);
+const enabledProviders: AIProvider[] = ["openai"];
 
 export function AIContextProvider({ children }: { children: React.ReactNode }) {
   const [config, setConfig] = useState<AIConfigStatus | null>(null);
@@ -87,6 +89,9 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
       // 恢复默认模型选择
       if (status.default_provider && status.default_model) {
         const provider = status.default_provider as AIProvider;
+        if (!enabledProviders.includes(provider)) {
+          return;
+        }
         const providerInfo = AI_PROVIDER_INFO[provider];
         if (providerInfo) {
           const modelInfo = providerInfo.models.find(
@@ -114,7 +119,7 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
 
   // 获取已配置的 providers
   const configuredProviders: AIProvider[] = config
-    ? (aiProviderValues.filter(
+    ? (enabledProviders.filter(
         (p) => config.providers[p]?.has_key && config.providers[p]?.enabled
       ) as AIProvider[])
     : [];
@@ -182,6 +187,7 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
       resource_id?: number;
       images?: number[];
       files?: number[];
+      thinking_effort?: ThinkingEffort;
     }
   ) => {
     const unlistenRef: { current: null | (() => void) } = { current: null };
@@ -288,6 +294,7 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
         content,
         images: context.images,
         files: context.files,
+        thinking_effort: context.thinking_effort,
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Chat failed");

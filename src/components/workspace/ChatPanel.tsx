@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAI } from "@/contexts/AIContext";
-import { AI_PROVIDER_INFO, type ModelOption } from "@/types";
+import { AI_PROVIDER_INFO, type ModelOption, type ThinkingEffort } from "@/types";
 import { Send, Loader2, Settings } from "lucide-react";
 
 interface ChatPanelProps {
@@ -47,6 +47,7 @@ export function ChatPanel({
     error,
   } = useAI();
   const [chatInput, setChatInput] = useState("");
+  const [thinkingEffort, setThinkingEffort] = useState<ThinkingEffort>("low");
 
   const currentWidth = tempWidth !== null ? tempWidth : width;
 
@@ -72,6 +73,7 @@ export function ChatPanel({
         session_type: sessionType,
         task_id: taskId,
         resource_id: resourceId,
+        thinking_effort: thinkingEffort,
       });
     } catch (e) {
       console.error("Failed to send message:", e);
@@ -108,40 +110,55 @@ export function ChatPanel({
       <div className="px-4 py-3 border-b shrink-0">
         <div className="flex items-center justify-between gap-2">
           <h3 className="font-semibold">{t("workspace", "aiAssistant")}</h3>
-          <Select
-            value={
-              selectedModel
-                ? `${selectedModel.provider}:${selectedModel.model_id}`
-                : ""
-            }
-            onValueChange={(value) => {
-              const [provider, model_id] = value.split(":");
-              const model = availableModels.find(
-                (m) => m.provider === provider && m.model_id === model_id
-              );
-              if (model) setSelectedModel(model);
-            }}
-          >
-            <SelectTrigger className="w-[160px] h-8 text-xs">
-              <SelectValue placeholder={t("workspace", "selectModel")} />
-            </SelectTrigger>
-            <SelectContent>
-              {availableModels.length === 0 ? (
-                <SelectItem value="none" disabled>
-                  {t("workspace", "noModelsConfigured")}
-                </SelectItem>
-              ) : (
-                availableModels.map((model) => (
-                  <SelectItem
-                    key={`${model.provider}:${model.model_id}`}
-                    value={`${model.provider}:${model.model_id}`}
-                  >
-                    {model.display_name}
+          <div className="flex items-center gap-2">
+            <Select
+              value={
+                selectedModel
+                  ? `${selectedModel.provider}:${selectedModel.model_id}`
+                  : ""
+              }
+              onValueChange={(value) => {
+                const [provider, model_id] = value.split(":");
+                const model = availableModels.find(
+                  (m) => m.provider === provider && m.model_id === model_id
+                );
+                if (model) setSelectedModel(model);
+              }}
+            >
+              <SelectTrigger className="w-[160px] h-8 text-xs">
+                <SelectValue placeholder={t("workspace", "selectModel")} />
+              </SelectTrigger>
+              <SelectContent>
+                {availableModels.length === 0 ? (
+                  <SelectItem value="none" disabled>
+                    {t("workspace", "noModelsConfigured")}
                   </SelectItem>
-                ))
-              )}
-            </SelectContent>
-          </Select>
+                ) : (
+                  availableModels.map((model) => (
+                    <SelectItem
+                      key={`${model.provider}:${model.model_id}`}
+                      value={`${model.provider}:${model.model_id}`}
+                    >
+                      {model.display_name}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+            <Select
+              value={thinkingEffort}
+              onValueChange={(value) => setThinkingEffort(value as ThinkingEffort)}
+            >
+              <SelectTrigger className="w-[110px] h-8 text-xs">
+                <SelectValue placeholder={t("workspace", "thinkingEffort")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">{t("workspace", "effortNone")}</SelectItem>
+                <SelectItem value="low">{t("workspace", "effortLow")}</SelectItem>
+                <SelectItem value="high">{t("workspace", "effortHigh")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <p className="text-xs text-muted-foreground mt-1">
           {t("workspace", "context")}

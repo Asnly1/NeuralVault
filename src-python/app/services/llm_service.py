@@ -73,6 +73,7 @@ class LLMService:
         model: str,
         task_type: str,
         messages: list[ChatMessage],
+        thinking_effort: Optional[str] = None,
     ) -> AsyncIterator[dict]:
         provider = provider.lower()
         system_prompt = SYSTEM_PROMPTS.get(task_type)
@@ -94,6 +95,7 @@ class LLMService:
                 model,
                 system_prompt,
                 messages,
+                thinking_effort,
             ):
                 yield event
             return
@@ -185,6 +187,7 @@ class LLMService:
         model: str,
         system_prompt: Optional[str],
         messages: list[ChatMessage],
+        thinking_effort: Optional[str],
     ) -> AsyncIterator[dict]:
         client = await self._get_openai_client(provider)
         input_items: list[dict] = []
@@ -220,29 +223,34 @@ class LLMService:
             "input": input_items if input_items else "",
             "stream": True,
         }
+        if thinking_effort:
+            payload["reasoning"] = {"effort": thinking_effort}
 
         stream = await client.responses.create(**payload)
         async for event in stream:
-            event_type = event.get("type")
+            event_type = event.type
             if event_type == "response.output_text.delta":
-                delta = event.get("delta", None)
-                if delta:
-                    yield {"type": "delta", "delta": delta}
+                delta = event.delta
+                yield {"type": "delta", "delta": delta}
             elif event_type == "response.output_text.done":
-                full_text = event.get("text", None)
-                if full_text:
-                    yield {"type": "done_text", "done_text": full_text}
+                full_text = event.text
+                yield {"type": "done_text", "done_text": full_text}
             elif event_type == "response.completed":
-                response = event.get("response", None)
+                response = event.response
+                reasoning_tokens = getattr(
+                    response.usage.output_tokens_details,
+                    "reasoning_tokens",
+                    0,
+                )
                 usage = {
                     "input_tokens": response.usage.input_tokens,
                     "output_tokens": response.usage.output_tokens,
-                    "total_tokens": response.usage.total_tokens,
+                    "reasoning_tokens": reasoning_tokens,
+                    "total_tokens": response.usage.total_tokens + reasoning_tokens,
                 }
-                if usage:
-                    yield {"type": "usage", "usage": usage}
+                yield {"type": "usage", "usage": usage}
             else:
-                raise ValueError(f"Unknown event type: {event_type}")
+                continue
 
     async def _stream_openai_compatible(
         self,
