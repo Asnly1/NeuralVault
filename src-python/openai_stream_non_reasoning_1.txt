@@ -1,0 +1,19 @@
+The image is a small UI snippet with two Chinese items and radio-style circles:
+
+- “任务队列” (Task queue)
+- “错误提示” (Error prompt / Error message)
+
+The “file” content you pasted is Python code using `client.chat.completions.create(..., stream=True, stream_options={"include_usage": True})` and an error trace showing:
+
+- `IndexError: list index out of range` at `chunk.choices[0]`
+
+It’s explaining that some streamed chunks can have `choices == []` (especially when `include_usage` is enabled), so you must check `if not chunk.choices: continue` before accessing `choices[0]`, and then check `delta.content` before printing.The image is a small UI snippet with two Chinese items and radio-style circles:
+
+- “任务队列” (Task queue)
+- “错误提示” (Error prompt / Error message)
+
+The “file” content you pasted is Python code using `client.chat.completions.create(..., stream=True, stream_options={"include_usage": True})` and an error trace showing:
+
+- `IndexError: list index out of range` at `chunk.choices[0]`
+
+It’s explaining that some streamed chunks can have `choices == []` (especially when `include_usage` is enabled), so you must check `if not chunk.choices: continue` before accessing `choices[0]`, and then check `delta.content` before printing.{"input_tokens": 1062, "output_tokens": 155, "reasoning_tokens": 0, "total_tokens": 1217}

@@ -1,0 +1,4 @@
+- **Image:** A UI snippet with two radio-button options in Chinese: **“任务队列”** (task queue) and **“错误提示”** (error prompt/message).
+
+- **File/text content shown:** A Python script using `client.chat.completions.create(..., stream=True, stream_options={"include_usage": True})` and iterating over streaming chunks. It crashes with **`IndexError: list index out of range`** at `chunk.choices[0]` because some chunks have **`choices == []`** (empty list). The fix is to **check `chunk.choices` is non-empty before indexing** (and then check `delta.content`).
+{"input_tokens": 1062, "output_tokens": 249, "reasoning_tokens": 102, "total_tokens": 1413}

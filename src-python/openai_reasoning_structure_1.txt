@@ -1,0 +1,30 @@
+{
+  "steps": [
+    {
+      "explanation": "Start with the equation:",
+      "output": "8x + 7 = -23"
+    },
+    {
+      "explanation": "Subtract 7 from both sides to get the term with x by itself:",
+      "output": "8x + 7 - 7 = -23 - 7\n8x = -30"
+    },
+    {
+      "explanation": "Divide both sides by 8 to solve for x:",
+      "output": "x = -30/8"
+    },
+    {
+      "explanation": "Simplify the fraction (divide numerator and denominator by 2):",
+      "output": "x = -15/4"
+    },
+    {
+      "explanation": "Optional: convert to a decimal if you want:",
+      "output": "x = -3.75"
+    },
+    {
+      "explanation": "Check by substituting back into the original equation:",
+      "output": "8(-15/4) + 7 = 8·(-3.75) + 7 = -30 + 7 = -23 ✓"
+    }
+  ],
+  "final_answer": "x = -15/4 (which is -3.75)"
+}
+{"input_tokens": 96, "output_tokens": 215, "reasoning_tokens": 0, "total_tokens": 311}

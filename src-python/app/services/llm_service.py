@@ -417,27 +417,34 @@ class LLMService:
                 continue
 
             if message.role == MessageRole.user:
+                file_parts = []
                 for image_path in message.images or []:
                     file_obj = await self._grok_upload_file(client, image_path)
-                    chat.append(grok_file(file_obj))
+                    file_parts.append(grok_file(file_obj.id))
 
                 for file_path in message.files or []:
                     file_obj = await self._grok_upload_file(client, file_path)
-                    chat.append(grok_file(file_obj))
+                    file_parts.append(grok_file(file_obj.id))
 
-                chat.append(grok_user(message.content))
+                if file_parts:
+                    chat.append(grok_user(message.content, *file_parts))
+                else:
+                    chat.append(grok_user(message.content))
         
         full_text = ""
+        final_response = None
         async for response, chunk in chat.stream():
+            final_response = response
             if chunk.content:
                 yield {"type": "delta", "delta": chunk.content}
                 full_text += chunk.content
         
         yield {"type": "done_text", "done_text": full_text}
         usage = {
-            "input_tokens": response.usage.prompt_tokens,
-            "output_tokens": response.usage.completion_tokens,
-            "total_tokens": response.usage.total_tokens,
+            "input_tokens": final_response.usage.prompt_tokens,
+            "output_tokens": final_response.usage.completion_tokens,
+            "resoning_tokens": final_response.usage.reasoning_tokens,
+            "total_tokens": final_response.usage.total_tokens,
         }
         yield {"type": "usage", "usage": usage}
 

@@ -1,0 +1,20 @@
+**
+Pill
+ars
+ of
+ Creation
+ in
+ the
+ Eagle
+ Nebula
+ (
+M
+16
+),
+ Hubble
+ Space
+ Telescope
+ image
+.**
+**Pillars of Creation in the Eagle Nebula (M16), Hubble Space Telescope image.**
+{"input_tokens": 442, "output_tokens": 18, "resoning_tokens": 195, "total_tokens": 655}

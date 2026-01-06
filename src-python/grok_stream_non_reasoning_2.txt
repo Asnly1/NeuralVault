@@ -1,0 +1,99 @@
+**
+Image
+ (
+test
+_image
+.png
+):**
+ Tool
+ unavailable
+—
+cannot
+ access
+/d
+esc
+ribe
+.
+
+
+**
+PDF
+ (
+test
+_pdf
+.pdf
+):**
+ 
+3
+-page
+ doc
+ on
+ Python
+ streaming
+ API
+ error
+ fix
+ (
+Open
+AI
+/Q
+wen
+).
+ Page
+ 
+1
+:
+ Code
+ snippet
+ w
+/
+ Index
+Error
+ on
+ empty
+ `
+choices
+[
+0
+]
+`.
+ Pages
+ 
+2
+-
+3
+:
+ Defensive
+ coding
+ tips
+ (
+check
+ `
+choices
+`
+ len
+,
+ `
+usage
+`,
+ `
+delta
+.content
+`
+);
+ Chat
+GPT
+ convo
+ dated
+ 
+202
+6
+/
+1
+/
+4
+.
+**Image (test_image.png):** Tool unavailable—cannot access/describe.
+
+**PDF (test_pdf.pdf):** 3-page doc on Python streaming API error fix (OpenAI/Qwen). Page 1: Code snippet w/ IndexError on empty `choices[0]`. Pages 2-3: Defensive coding tips (check `choices` len, `usage`, `delta.content`); ChatGPT convo dated 2026/1/4.
+{"input_tokens": 2948, "output_tokens": 193, "resoning_tokens": 0, "total_tokens": 3141}

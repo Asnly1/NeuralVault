@@ -1,0 +1,13 @@
+The user is asking me to describe myself. I should provide a concise description of what I am, my capabilities, and my purpose. Given the instruction to keep a concise tone, I'll keep it brief but informative.I'm Claude, an AI assistant made by Anthropic. I can help with a wide range of tasks like:
+
+- Answering questions and explaining concepts
+- Writing and editing
+- Analyzing information
+- Problem-solving and brainstorming
+- Coding assistance
+- Creative projects
+
+I aim to be helpful, harmless, and honest. I can't browse the internet, access external links, or learn from our conversation—each chat is independent. I also have limitations on some topics and try to acknowledge when I'm uncertain.
+
+Is there something specific you'd like help with?
+{'input_tokens': 54, 'output_tokens': 182, 'reasoning_tokens': 0, 'total_tokens': 236}

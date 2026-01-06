@@ -1,0 +1,110 @@
+**
+Image
+ (
+test
+_image
+.png
+):**
+ Checkbox
+ form
+ with
+ two
+ unchecked
+ Chinese
+ options
+:
+ "
+住
+务
+队列
+ (
+Resident
+ Service
+ Team
+)"
+ and
+ "
+错误
+提示
+ (
+Error
+ Prompt
+)",
+ on
+ white
+ background
+ with
+ dashed
+ lines
+.
+
+
+**
+PDF
+ (
+test
+_pdf
+.pdf
+):**
+ 
+3
+ pages
+ on
+ Python
+ streaming
+ API
+ error
+ fix
+ (
+Index
+Error
+:
+ chunk
+.choices
+[
+0
+]).
+ Shows
+ buggy
+ code
+ for
+ Q
+wen
+ model
+,
+ Chinese
+ explanation
+,
+ and
+ defensive
+ coding
+ suggestions
+ (
+e
+.g
+.,
+ check
+ if
+ choices
+ empty
+ before
+ access
+).
+ From
+ Chat
+GPT
+ convo
+,
+ dated
+ 
+202
+6
+/
+1
+/
+4
+.
+**Image (test_image.png):** Checkbox form with two unchecked Chinese options: "住务队列 (Resident Service Team)" and "错误提示 (Error Prompt)", on white background with dashed lines.
+
+**PDF (test_pdf.pdf):** 3 pages on Python streaming API error fix (IndexError: chunk.choices[0]). Shows buggy code for Qwen model, Chinese explanation, and defensive coding suggestions (e.g., check if choices empty before access). From ChatGPT convo, dated 2026/1/4.
+{"input_tokens": 3053, "output_tokens": 193, "resoning_tokens": 585, "total_tokens": 3831}

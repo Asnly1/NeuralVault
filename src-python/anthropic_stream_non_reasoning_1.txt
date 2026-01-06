@@ -1,0 +1,47 @@
+The image shows two Chinese UI elements:
+1. **任务队列** (Task Queue)
+2. **错误提示** (Error Prompt)
+
+The document is a **code debugging discussion** about handling streaming API responses. 
+
+**Key Issue:** IndexError when accessing `chunk.choices[0]` - the list `choices` can be empty (`[]`), causing the error before the `is not None` check executes.
+
+**Solution:** Check if `choices` exists and has length > 0 **before** accessing index [0]:
+
+```python
+for chunk in response:
+    if chunk.usage:
+        print(chunk.usage.completion_tokens, ...)
+    
+    if not chunk.choices:  # Check empty list first
+        continue
+        
+    content = chunk.choices[0].delta.content
+    if content:
+        print(content, end="", flush=True)
+```
+
+The core fix: validate list length before index access.The image shows two Chinese UI elements:
+1. **任务队列** (Task Queue)
+2. **错误提示** (Error Prompt)
+
+The document is a **code debugging discussion** about handling streaming API responses. 
+
+**Key Issue:** IndexError when accessing `chunk.choices[0]` - the list `choices` can be empty (`[]`), causing the error before the `is not None` check executes.
+
+**Solution:** Check if `choices` exists and has length > 0 **before** accessing index [0]:
+
+```python
+for chunk in response:
+    if chunk.usage:
+        print(chunk.usage.completion_tokens, ...)
+    
+    if not chunk.choices:  # Check empty list first
+        continue
+        
+    content = chunk.choices[0].delta.content
+    if content:
+        print(content, end="", flush=True)
+```
+
+The core fix: validate list length before index access.{'input_tokens': 6069, 'output_tokens': 220, 'reasoning_tokens': 0, 'total_tokens': 6289}

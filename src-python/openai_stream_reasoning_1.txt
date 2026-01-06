@@ -1,0 +1,17 @@
+**Image:** A UI snippet with two unselected radio options in Chinese:
+- “任务队列” (Task queue)
+- “错误提示” (Error prompt / Error message)
+
+**File/content shown:** A Python streaming chat-completions example (`qwen-plus`) that iterates over `response` chunks. It crashes with:
+- `IndexError: list index out of range` at `chunk.choices[0]`
+
+Reason: some streamed chunks have `chunk.choices == []` (empty list), especially when `include_usage=True`, so checking `chunk.choices[0] is not None` can’t prevent out-of-range access. You must first check `if not chunk.choices: continue` before using `[0]`.
+**Image:** A UI snippet with two unselected radio options in Chinese:
+- “任务队列” (Task queue)
+- “错误提示” (Error prompt / Error message)
+
+**File/content shown:** A Python streaming chat-completions example (`qwen-plus`) that iterates over `response` chunks. It crashes with:
+- `IndexError: list index out of range` at `chunk.choices[0]`
+
+Reason: some streamed chunks have `chunk.choices == []` (empty list), especially when `include_usage=True`, so checking `chunk.choices[0] is not None` can’t prevent out-of-range access. You must first check `if not chunk.choices: continue` before using `[0]`.
+{"input_tokens": 1062, "output_tokens": 219, "reasoning_tokens": 61, "total_tokens": 1342}
