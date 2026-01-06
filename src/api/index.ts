@@ -12,6 +12,7 @@ import {
   TaskResourcesResponse,
   ReadClipboardResponse,
   resourceSchema,
+  Resource,
   Task,
   taskSchema,
 } from "../types";
@@ -204,6 +205,14 @@ export const fetchTaskResources = async (
 };
 
 /**
+ * 获取所有资源（未删除）
+ */
+export const fetchAllResources = async (): Promise<Resource[]> => {
+  const raw = await invoke("get_all_resources");
+  return z.array(resourceSchema).parse(raw);
+};
+
+/**
  * 删除资源（软删除）
  * @param resourceId - 资源 ID
  */
@@ -318,6 +327,7 @@ import type {
   DeleteChatMessageRequest,
   AddMessageAttachmentsRequest,
   RemoveMessageAttachmentRequest,
+  SetSessionContextResourcesRequest,
 } from "../types";
 
 /**
@@ -429,4 +439,10 @@ export const removeMessageAttachment = async (
   request: RemoveMessageAttachmentRequest
 ): Promise<void> => {
   return await invoke("remove_message_attachment", { payload: request });
+};
+
+export const setSessionContextResources = async (
+  request: SetSessionContextResourcesRequest
+): Promise<void> => {
+  return await invoke("set_session_context_resources_command", { payload: request });
 };

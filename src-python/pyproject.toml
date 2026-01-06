@@ -8,7 +8,6 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "aiosqlite>=0.22.0",
     "anthropic>=0.75.0",
     "fastapi>=0.125.0",
     "fastembed>=0.7.4",

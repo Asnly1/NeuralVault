@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Task, Resource, resourceTypeIcons } from "../types";
-import { fetchTaskResources, getAssetsPath, unlinkResource, updateResourceContent, updateResourceDisplayName } from "../api";
+import { fetchAllResources, fetchTaskResources, getAssetsPath, updateResourceContent, updateResourceDisplayName } from "../api";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { ContextPanel, EditorPanel, ChatPanel } from "../components/workspace";
 
@@ -20,13 +20,18 @@ const RIGHT_MIN = 200;
 const RIGHT_MAX = 500;
 
 export function WorkspacePage({ selectedTask, selectedResource: propSelectedResource, onBack, onNavigateToSettings }: WorkspacePageProps) {
-  const [linkedResources, setLinkedResources] = useState<Resource[]>([]);
+  const [contextResources, setContextResources] = useState<Resource[]>([]);
+  const [allResources, setAllResources] = useState<Resource[]>([]);
   const [loadingResources, setLoadingResources] = useState(false);
-  const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
+  const [selectedResource, setSelectedResource] = useState<Resource | null>(
+    () => propSelectedResource ?? null
+  );
+  const [sessionAnchorResourceId, setSessionAnchorResourceId] = useState<number | null>(
+    () => propSelectedResource?.resource_id ?? null
+  );
   const [editorContent, setEditorContent] = useState("");
   const [isModified, setIsModified] = useState(false);
   const [assetsPath, setAssetsPath] = useState<string>("");
-  const [hoveredResourceId, setHoveredResourceId] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -49,12 +54,23 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
   const [tempRightWidth, setTempRightWidth] = useState<number | null>(null);
 
   const { t } = useLanguage();
+  const contextResourceIds = useMemo(
+    () => contextResources.map((resource) => resource.resource_id),
+    [contextResources]
+  );
+  const availableContextResources = useMemo(
+    () =>
+      allResources.filter(
+        (resource) => !contextResourceIds.includes(resource.resource_id)
+      ),
+    [allResources, contextResourceIds]
+  );
 
   // 检测模式：资源模式（直接从资源进入）或任务模式（从任务进入）
   const isResourceMode = !selectedTask && !!propSelectedResource;
 
   // 当前实际显示的资源
-  const currentResource = isResourceMode ? (selectedResource ?? propSelectedResource) : selectedResource;
+  const currentResource = selectedResource;
 
 
   // Load assets path on mount
@@ -62,11 +78,27 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
     getAssetsPath().then(setAssetsPath).catch(console.error);
   }, []);
 
+  useEffect(() => {
+    let ignore = false;
+    fetchAllResources()
+      .then((data) => {
+        if (!ignore) setAllResources(data);
+      })
+      .catch((err) => {
+        console.error("加载资源列表失败:", err);
+        if (!ignore) setAllResources([]);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
   // 资源模式：直接使用propSelectedResource
   useEffect(() => {
     if (isResourceMode && propSelectedResource) {
       setSelectedResource(propSelectedResource);
-      setLinkedResources([]);
+      setContextResources([propSelectedResource]);
+      setSessionAnchorResourceId(propSelectedResource.resource_id);
     }
   }, [isResourceMode, propSelectedResource]);
 
@@ -74,8 +106,9 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
   useEffect(() => {
     if (!selectedTask) {
       if (!isResourceMode) {
-        setLinkedResources([]);
+        setContextResources([]);
         setSelectedResource(null);
+        setSessionAnchorResourceId(null);
       }
       return;
     }
@@ -87,7 +120,7 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
       try {
         const data = await fetchTaskResources(selectedTask.task_id);
         if (!ignore) {
-          setLinkedResources(data.resources);
+          setContextResources(data.resources);
           if (
             selectedResource &&
             !data.resources.find((r) => r.resource_id === selectedResource.resource_id)
@@ -98,7 +131,7 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
       } catch (err) {
         console.error("加载关联资源失败:", err);
         if (!ignore) {
-          setLinkedResources([]);
+          setContextResources([]);
         }
       } finally {
         if (!ignore) {
@@ -142,6 +175,15 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
     setSelectedResource(resource);
   }, []);
 
+  const handleAddToContext = useCallback((resource: Resource) => {
+    setContextResources((prev) => {
+      if (prev.some((item) => item.resource_id === resource.resource_id)) {
+        return prev;
+      }
+      return [...prev, resource];
+    });
+  }, []);
+
   const handleEditorChange = useCallback((content: string) => {
     setEditorContent(content);
     setIsModified(true);
@@ -151,7 +193,7 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
 
   // 保存资源内容和显示名称
   const handleSave = useCallback(async () => {
-    const resourceToSave = selectedResource ?? (isResourceMode ? propSelectedResource : null);
+    const resourceToSave = currentResource;
     if (!resourceToSave || isSaving) return;
 
     const hasContentChange = isModified;
@@ -178,13 +220,16 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
       if (hasNameChange) {
         const updatedResource = { ...resourceToSave, display_name: editedDisplayName };
         setSelectedResource(updatedResource);
-        if (!isResourceMode) {
-          setLinkedResources((prev) =>
-            prev.map((resource) =>
-              resource.resource_id === updatedResource.resource_id ? updatedResource : resource
-            )
-          );
-        }
+        setContextResources((prev) =>
+          prev.map((resource) =>
+            resource.resource_id === updatedResource.resource_id ? updatedResource : resource
+          )
+        );
+        setAllResources((prev) =>
+          prev.map((resource) =>
+            resource.resource_id === updatedResource.resource_id ? updatedResource : resource
+          )
+        );
       }
 
       setTimeout(() => {
@@ -196,33 +241,17 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
     } finally {
       setIsSaving(false);
     }
-  }, [isResourceMode, propSelectedResource, selectedResource, isModified, isSaving, editorContent, editedDisplayName]);
+  }, [currentResource, isModified, isSaving, editorContent, editedDisplayName]);
 
-  // 处理删除资源（取消关联）
-  const handleDeleteResource = useCallback(
-    async (resourceId: number, e: React.MouseEvent) => {
-      e.stopPropagation();
-
-      if (!selectedTask) return;
-      if (!confirm("确定要从此任务中移除该资源吗？")) {
-        return;
+  const handleRemoveFromContext = useCallback((resourceId: number) => {
+    setContextResources((prev) => {
+      const next = prev.filter((resource) => resource.resource_id !== resourceId);
+      if (selectedResource?.resource_id === resourceId) {
+        setSelectedResource(next[0] ?? null);
       }
-
-      try {
-        await unlinkResource(selectedTask.task_id, resourceId);
-
-        if (selectedResource?.resource_id === resourceId) {
-          setSelectedResource(null);
-        }
-
-        const data = await fetchTaskResources(selectedTask.task_id);
-        setLinkedResources(data.resources);
-      } catch (err) {
-        console.error("删除资源失败:", err);
-      }
-    },
-    [selectedTask, selectedResource]
-  );
+      return next;
+    });
+  }, [selectedResource]);
 
   // Handle left panel resize
   const handleLeftMouseDown = (e: React.MouseEvent) => {
@@ -331,22 +360,26 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
             <>
               <span className="text-muted-foreground">{t("workspace", "resourceBreadcrumb")}</span>
               <span className="text-muted-foreground">/</span>
-              <span className="font-medium">
-                {resourceTypeIcons[currentResource!.file_type]}{" "}
-                {currentResource!.display_name || "未命名资源"}
-              </span>
+              {currentResource ? (
+                <span className="font-medium">
+                  {resourceTypeIcons[currentResource.file_type]}{" "}
+                  {currentResource.display_name || "未命名资源"}
+                </span>
+              ) : (
+                <span className="font-medium text-muted-foreground">未选择资源</span>
+              )}
             </>
           ) : (
             <>
               <span className="text-muted-foreground">{t("dashboard", "tasks")}</span>
               <span className="text-muted-foreground">/</span>
               <span className="font-medium">{selectedTask!.title || t("common", "untitled")}</span>
-              {selectedResource && (
+              {currentResource && (
                 <>
                   <span className="text-muted-foreground">/</span>
                   <span className="text-muted-foreground">
-                    {resourceTypeIcons[selectedResource.file_type]}{" "}
-                    {selectedResource.display_name || "未命名文件"}
+                    {resourceTypeIcons[currentResource.file_type]}{" "}
+                    {currentResource.display_name || "未命名文件"}
                   </span>
                 </>
               )}
@@ -381,12 +414,10 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
         <ContextPanel
           isResourceMode={isResourceMode}
           selectedTask={selectedTask}
-          resourceInView={currentResource}
-          selectedResource={selectedResource}
-          linkedResources={linkedResources}
+          currentResource={currentResource}
+          contextResources={contextResources}
+          availableResources={availableContextResources}
           loadingResources={loadingResources}
-          hoveredResourceId={hoveredResourceId}
-          setHoveredResourceId={setHoveredResourceId}
           editorContent={editorContent}
           viewMode={viewMode}
           width={leftPanelWidth}
@@ -394,7 +425,8 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
           isResizing={isResizingLeft}
           onMouseDown={handleLeftMouseDown}
           onResourceClick={handleResourceClick}
-          onDeleteResource={handleDeleteResource}
+          onAddToContext={handleAddToContext}
+          onRemoveFromContext={handleRemoveFromContext}
         />
 
         {/* Center: Editor Area */}
@@ -421,9 +453,9 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
           isResizing={isResizingRight}
           onMouseDown={handleRightMouseDown}
           onNavigateToSettings={onNavigateToSettings}
-          sessionType={isResourceMode ? "resource" : "task"}
           taskId={!isResourceMode ? selectedTask?.task_id : undefined}
-          resourceId={isResourceMode ? currentResource?.resource_id : undefined}
+          resourceId={isResourceMode ? (sessionAnchorResourceId ?? currentResource?.resource_id) : undefined}
+          contextResourceIds={contextResourceIds}
         />
       </div>
     </div>

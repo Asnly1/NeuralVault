@@ -147,15 +147,14 @@ CREATE INDEX idx_chunks_embedding_hash ON context_chunks(embedding_hash);
 -- ==========================================
 CREATE TABLE chat_sessions (
     session_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_type TEXT DEFAULT 'task' CHECK (session_type IN ('resource', 'task')),
-    task_id INTEGER,
-    resource_id INTEGER,
+    task_id INTEGER, -- 任务可以为空或者对应单一任务
 
     title TEXT,
     summary TEXT,
     chat_model TEXT,
 
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
     is_deleted BOOLEAN DEFAULT 0,
     deleted_at DATETIME,
@@ -163,21 +162,28 @@ CREATE TABLE chat_sessions (
     user_id INTEGER NOT NULL DEFAULT 1,
 
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-    FOREIGN KEY(task_id) REFERENCES tasks(task_id) ON DELETE CASCADE,
-    FOREIGN KEY(resource_id) REFERENCES resources(resource_id) ON DELETE CASCADE
+    FOREIGN KEY (task_id) REFERENCES tasks(task_id) ON DELETE SET NULL
 );
 
-CREATE INDEX idx_session_task_time ON chat_sessions(task_id, created_at);
-CREATE INDEX idx_session_resource_time ON chat_sessions(resource_id, created_at);
+CREATE INDEX idx_session_task_created_at ON chat_sessions(task_id, created_at);
+CREATE INDEX idx_session_task_updated_at ON chat_sessions(task_id, updated_at);
+
+CREATE TABLE session_context_resources (
+    session_id INTEGER NOT NULL,
+    resource_id INTEGER NOT NULL,
+
+    PRIMARY KEY (session_id, resource_id),
+    FOREIGN KEY (session_id) REFERENCES chat_sessions(session_id) ON DELETE CASCADE,
+    FOREIGN KEY (resource_id) REFERENCES resources(resource_id) ON DELETE CASCADE
+);
 
 CREATE TABLE chat_messages (
     message_id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id INTEGER NOT NULL,
+
     user_content TEXT NOT NULL,
     assistant_content TEXT,
 
-    ref_resource_id INTEGER,
-    ref_chunk_id INTEGER,
     input_tokens INTEGER,
     output_tokens INTEGER,
     reasoning_tokens INTEGER,
@@ -185,9 +191,7 @@ CREATE TABLE chat_messages (
 
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
-    FOREIGN KEY(session_id) REFERENCES chat_sessions(session_id) ON DELETE CASCADE,
-    FOREIGN KEY(ref_resource_id) REFERENCES resources(resource_id) ON DELETE SET NULL,
-    FOREIGN KEY(ref_chunk_id) REFERENCES context_chunks(chunk_id) ON DELETE SET NULL
+    FOREIGN KEY(session_id) REFERENCES chat_sessions(session_id) ON DELETE CASCADE
 );
 
 CREATE TABLE message_attachments (
@@ -197,4 +201,16 @@ CREATE TABLE message_attachments (
 
     FOREIGN KEY(message_id) REFERENCES chat_messages(message_id) ON DELETE CASCADE,
     FOREIGN KEY(resource_id) REFERENCES resources(resource_id) ON DELETE CASCADE
+);
+
+CREATE TABLE message_citations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id INTEGER NOT NULL,       -- 关联到 AI 的那条回复
+    resource_id INTEGER NOT NULL,      -- 引用的资源
+    chunk_id INTEGER,                  -- 引用的具体切片
+    score REAL,                        -- 可选：存相似度分数
+
+    FOREIGN KEY(message_id) REFERENCES chat_messages(message_id) ON DELETE CASCADE,
+    FOREIGN KEY(resource_id) REFERENCES resources(resource_id) ON DELETE CASCADE,
+    FOREIGN KEY(chunk_id) REFERENCES context_chunks(chunk_id) ON DELETE SET NULL
 );

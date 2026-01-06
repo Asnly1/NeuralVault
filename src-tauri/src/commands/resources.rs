@@ -6,7 +6,7 @@ use uuid::Uuid;
 use crate::{
     app_state::AppState,
     db::{
-        link_resource_to_task, list_resources_for_task,
+        link_resource_to_task, list_all_resources, list_resources_for_task,
         unlink_resource_from_task, LinkResourceParams, NewResource, ResourceClassificationStatus,
         ResourceFileType, ResourceProcessingStage, ResourceSyncStatus, SourceMeta, VisibilityScope,
     },
@@ -325,6 +325,16 @@ pub async fn get_task_resources(
         .map_err(|e| e.to_string())?;
 
     Ok(TaskResourcesResponse { resources })
+}
+
+/// 获取所有资源（未删除）
+#[tauri::command]
+pub async fn get_all_resources(
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::db::ResourceRecord>, String> {
+    list_all_resources(&state.db)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// 获取 assets 目录的完整路径

@@ -61,6 +61,20 @@ pub async fn list_unclassified_resources(
     .await
 }
 
+pub async fn list_all_resources(
+    pool: &DbPool,
+) -> Result<Vec<ResourceRecord>, sqlx::Error> {
+    sqlx::query_as::<_, ResourceRecord>(
+        "SELECT resource_id, uuid, source_meta, file_hash, file_type, content, display_name, \
+                file_path, file_size_bytes, indexed_hash, processing_hash, sync_status, last_indexed_at, last_error, processing_stage, classification_status, created_at, is_deleted, deleted_at, user_id \
+         FROM resources \
+         WHERE is_deleted = 0 \
+         ORDER BY created_at DESC",
+    )
+    .fetch_all(pool)
+    .await
+}
+
 pub async fn link_resource_to_task(
     pool: &DbPool,
     params: LinkResourceParams<'_>,

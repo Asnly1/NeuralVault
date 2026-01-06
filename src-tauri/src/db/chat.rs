@@ -13,17 +13,24 @@ pub struct MessageAttachmentWithResource {
     pub file_path: Option<String>,
 }
 
+#[derive(Debug, FromRow)]
+pub struct SessionContextResourceRecord {
+    pub resource_id: i64,
+    pub file_type: ResourceFileType,
+    pub file_path: Option<String>,
+    pub content: Option<String>,
+    pub display_name: Option<String>,
+}
+
 pub async fn insert_chat_session(
     pool: &DbPool,
     params: NewChatSession<'_>,
 ) -> Result<i64, sqlx::Error> {
     let result = sqlx::query(
-        "INSERT INTO chat_sessions (session_type, task_id, resource_id, title, summary, chat_model, user_id) \
-         VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO chat_sessions (task_id, title, summary, chat_model, user_id) \
+         VALUES (?, ?, ?, ?, ?)",
     )
-    .bind(params.session_type)
     .bind(params.task_id)
-    .bind(params.resource_id)
     .bind(params.title)
     .bind(params.summary)
     .bind(params.chat_model)
@@ -39,7 +46,7 @@ pub async fn get_chat_session_by_id(
     session_id: i64,
 ) -> Result<ChatSessionRecord, sqlx::Error> {
     sqlx::query_as::<_, ChatSessionRecord>(
-        "SELECT session_id, session_type, task_id, resource_id, title, summary, chat_model, created_at, is_deleted, deleted_at, user_id \
+        "SELECT session_id, task_id, title, summary, chat_model, created_at, updated_at, is_deleted, deleted_at, user_id \
          FROM chat_sessions WHERE session_id = ?",
     )
     .bind(session_id)
@@ -53,10 +60,10 @@ pub async fn list_chat_sessions_by_task(
     include_deleted: bool,
 ) -> Result<Vec<ChatSessionRecord>, sqlx::Error> {
     let sql = if include_deleted {
-        "SELECT session_id, session_type, task_id, resource_id, title, summary, chat_model, created_at, is_deleted, deleted_at, user_id \
+        "SELECT session_id, task_id, title, summary, chat_model, created_at, updated_at, is_deleted, deleted_at, user_id \
          FROM chat_sessions WHERE task_id = ? ORDER BY created_at DESC"
     } else {
-        "SELECT session_id, session_type, task_id, resource_id, title, summary, chat_model, created_at, is_deleted, deleted_at, user_id \
+        "SELECT session_id, task_id, title, summary, chat_model, created_at, updated_at, is_deleted, deleted_at, user_id \
          FROM chat_sessions WHERE task_id = ? AND is_deleted = 0 ORDER BY created_at DESC"
     };
 
@@ -72,11 +79,15 @@ pub async fn list_chat_sessions_by_resource(
     include_deleted: bool,
 ) -> Result<Vec<ChatSessionRecord>, sqlx::Error> {
     let sql = if include_deleted {
-        "SELECT session_id, session_type, task_id, resource_id, title, summary, chat_model, created_at, is_deleted, deleted_at, user_id \
-         FROM chat_sessions WHERE resource_id = ? ORDER BY created_at DESC"
+        "SELECT s.session_id, s.task_id, s.title, s.summary, s.chat_model, s.created_at, s.updated_at, s.is_deleted, s.deleted_at, s.user_id \
+         FROM chat_sessions s \
+         INNER JOIN session_context_resources scr ON scr.session_id = s.session_id \
+         WHERE scr.resource_id = ? ORDER BY s.created_at DESC"
     } else {
-        "SELECT session_id, session_type, task_id, resource_id, title, summary, chat_model, created_at, is_deleted, deleted_at, user_id \
-         FROM chat_sessions WHERE resource_id = ? AND is_deleted = 0 ORDER BY created_at DESC"
+        "SELECT s.session_id, s.task_id, s.title, s.summary, s.chat_model, s.created_at, s.updated_at, s.is_deleted, s.deleted_at, s.user_id \
+         FROM chat_sessions s \
+         INNER JOIN session_context_resources scr ON scr.session_id = s.session_id \
+         WHERE scr.resource_id = ? AND s.is_deleted = 0 ORDER BY s.created_at DESC"
     };
 
     sqlx::query_as::<_, ChatSessionRecord>(sql)
@@ -94,7 +105,9 @@ pub async fn update_chat_session(
 ) -> Result<(), sqlx::Error> {
     // COALESCE(A, B, C): 返回第一个不是NULL的参数
     sqlx::query(
-        "UPDATE chat_sessions SET title = COALESCE(?, title), summary = COALESCE(?, summary), chat_model = COALESCE(?, chat_model) \
+        "UPDATE chat_sessions \
+         SET title = COALESCE(?, title), summary = COALESCE(?, summary), chat_model = COALESCE(?, chat_model), \
+             updated_at = CURRENT_TIMESTAMP \
          WHERE session_id = ?",
     )
     .bind(title)
@@ -123,14 +136,12 @@ pub async fn insert_chat_message(
     params: NewChatMessage<'_>,
 ) -> Result<i64, sqlx::Error> {
     let result = sqlx::query(
-        "INSERT INTO chat_messages (session_id, user_content, assistant_content, ref_resource_id, ref_chunk_id, input_tokens, output_tokens, reasoning_tokens, total_tokens) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO chat_messages (session_id, user_content, assistant_content, input_tokens, output_tokens, reasoning_tokens, total_tokens) \
+         VALUES (?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(params.session_id)
     .bind(params.user_content)
     .bind(params.assistant_content)
-    .bind(params.ref_resource_id)
-    .bind(params.ref_chunk_id)
     .bind(params.input_tokens)
     .bind(params.output_tokens)
     .bind(params.reasoning_tokens)
@@ -146,7 +157,7 @@ pub async fn list_chat_messages(
     session_id: i64,
 ) -> Result<Vec<ChatMessageRecord>, sqlx::Error> {
     sqlx::query_as::<_, ChatMessageRecord>(
-        "SELECT message_id, session_id, user_content, assistant_content, ref_resource_id, ref_chunk_id, input_tokens, output_tokens, reasoning_tokens, total_tokens, created_at \
+        "SELECT message_id, session_id, user_content, assistant_content, input_tokens, output_tokens, reasoning_tokens, total_tokens, created_at \
          FROM chat_messages WHERE session_id = ? ORDER BY created_at ASC, message_id ASC",
     )
     .bind(session_id)
@@ -273,4 +284,46 @@ pub async fn delete_message_attachment(
     .await?;
 
     Ok(())
+}
+
+pub async fn set_session_context_resources(
+    pool: &DbPool,
+    session_id: i64,
+    resource_ids: &[i64],
+) -> Result<(), sqlx::Error> {
+    let mut tx = pool.begin().await?;
+
+    sqlx::query("DELETE FROM session_context_resources WHERE session_id = ?")
+        .bind(session_id)
+        .execute(&mut *tx)
+        .await?;
+
+    for resource_id in resource_ids {
+        sqlx::query(
+            "INSERT OR IGNORE INTO session_context_resources (session_id, resource_id) VALUES (?, ?)",
+        )
+        .bind(session_id)
+        .bind(resource_id)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
+    Ok(())
+}
+
+pub async fn list_session_context_resources(
+    pool: &DbPool,
+    session_id: i64,
+) -> Result<Vec<SessionContextResourceRecord>, sqlx::Error> {
+    sqlx::query_as::<_, SessionContextResourceRecord>(
+        "SELECT r.resource_id, r.file_type, r.file_path, r.content, r.display_name \
+         FROM session_context_resources scr \
+         INNER JOIN resources r ON r.resource_id = scr.resource_id \
+         WHERE scr.session_id = ? \
+         ORDER BY r.created_at DESC",
+    )
+    .bind(session_id)
+    .fetch_all(pool)
+    .await
 }

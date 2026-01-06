@@ -206,33 +206,22 @@ pub struct IngestionResultData {
     pub error: Option<String>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Type, Serialize, Deserialize)]
-#[sqlx(rename_all = "lowercase")]
-#[serde(rename_all = "lowercase")]
-pub enum ChatSessionType {
-    Task,
-    Resource,
-}
-
 #[derive(Debug, FromRow, Serialize)]
 pub struct ChatSessionRecord {
     pub session_id: i64,
-    pub session_type: ChatSessionType,
     pub task_id: Option<i64>,
-    pub resource_id: Option<i64>,
     pub title: Option<String>,
     pub summary: Option<String>,
     pub chat_model: Option<String>,
     pub created_at: Option<String>,
+    pub updated_at: Option<String>,
     pub is_deleted: bool,
     pub deleted_at: Option<String>,
     pub user_id: i64,
 }
 
 pub struct NewChatSession<'a> {
-    pub session_type: ChatSessionType,
     pub task_id: Option<i64>,
-    pub resource_id: Option<i64>,
     pub title: Option<&'a str>,
     pub summary: Option<&'a str>,
     pub chat_model: Option<&'a str>,
@@ -245,8 +234,6 @@ pub struct ChatMessageRecord {
     pub session_id: i64,
     pub user_content: String,
     pub assistant_content: Option<String>,
-    pub ref_resource_id: Option<i64>,
-    pub ref_chunk_id: Option<i64>,
     pub input_tokens: Option<i64>,
     pub output_tokens: Option<i64>,
     pub reasoning_tokens: Option<i64>,
@@ -258,8 +245,6 @@ pub struct NewChatMessage<'a> {
     pub session_id: i64,
     pub user_content: &'a str,
     pub assistant_content: Option<&'a str>,
-    pub ref_resource_id: Option<i64>,
-    pub ref_chunk_id: Option<i64>,
     pub input_tokens: Option<i64>,
     pub output_tokens: Option<i64>,
     pub reasoning_tokens: Option<i64>,

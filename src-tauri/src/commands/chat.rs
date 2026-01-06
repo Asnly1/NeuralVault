@@ -9,7 +9,7 @@ use crate::{
         list_chat_sessions_by_resource, update_chat_session, soft_delete_chat_session,
         insert_chat_message, list_chat_messages as list_chat_messages_db, update_chat_message_contents, delete_chat_message,
         insert_message_attachments, list_message_attachments_with_resource,
-        delete_message_attachment, ChatSessionType, NewChatMessage,
+        delete_message_attachment, set_session_context_resources, NewChatMessage,
         NewChatSession, NewMessageAttachment,
     },
 };
@@ -19,6 +19,7 @@ use super::{
     ChatUsagePayload, CreateChatMessageRequest, CreateChatMessageResponse,
     CreateChatSessionRequest, CreateChatSessionResponse, DeleteChatMessageRequest,
     DeleteChatSessionRequest, ListChatSessionsRequest, RemoveMessageAttachmentRequest,
+    SetSessionContextResourcesRequest,
     UpdateChatMessageRequest, UpdateChatSessionRequest,
 };
 
@@ -27,24 +28,10 @@ pub async fn create_chat_session(
     state: State<'_, AppState>,
     payload: CreateChatSessionRequest,
 ) -> Result<CreateChatSessionResponse, String> {
-    let session_type = payload.session_type;
-
-    match session_type {
-        ChatSessionType::Task if payload.task_id.is_none() => {
-            return Err("task_id is required for task session".to_string());
-        }
-        ChatSessionType::Resource if payload.resource_id.is_none() => {
-            return Err("resource_id is required for resource session".to_string());
-        }
-        _ => {}
-    }
-
     let session_id = insert_chat_session(
         &state.db,
         NewChatSession {
-            session_type,
             task_id: payload.task_id,
-            resource_id: payload.resource_id,
             title: payload.title.as_deref(),
             summary: payload.summary.as_deref(),
             chat_model: payload.chat_model.as_deref(),
@@ -53,6 +40,12 @@ pub async fn create_chat_session(
     )
     .await
     .map_err(|e| e.to_string())?;
+
+    if let Some(resource_ids) = payload.context_resource_ids {
+        set_session_context_resources(&state.db, session_id, &resource_ids)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
 
     Ok(CreateChatSessionResponse { session_id })
 }
@@ -73,24 +66,19 @@ pub async fn list_chat_sessions(
     payload: ListChatSessionsRequest,
 ) -> Result<Vec<crate::db::ChatSessionRecord>, String> {
     let include_deleted = payload.include_deleted.unwrap_or(false);
-    match payload.session_type {
-        ChatSessionType::Task => {
-            let task_id = payload
-                .task_id
-                .ok_or_else(|| "task_id is required for task session".to_string())?;
-            list_chat_sessions_by_task(&state.db, task_id, include_deleted)
-                .await
-                .map_err(|e| e.to_string())
-        }
-        ChatSessionType::Resource => {
-            let resource_id = payload
-                .resource_id
-                .ok_or_else(|| "resource_id is required for resource session".to_string())?;
-            list_chat_sessions_by_resource(&state.db, resource_id, include_deleted)
-                .await
-                .map_err(|e| e.to_string())
-        }
+    if let Some(task_id) = payload.task_id {
+        return list_chat_sessions_by_task(&state.db, task_id, include_deleted)
+            .await
+            .map_err(|e| e.to_string());
     }
+
+    if let Some(resource_id) = payload.resource_id {
+        return list_chat_sessions_by_resource(&state.db, resource_id, include_deleted)
+            .await
+            .map_err(|e| e.to_string());
+    }
+
+    Err("task_id or resource_id is required".to_string())
 }
 
 #[tauri::command]
@@ -130,8 +118,6 @@ pub async fn create_chat_message(
             session_id: payload.session_id,
             user_content: &payload.user_content,
             assistant_content: payload.assistant_content.as_deref(),
-            ref_resource_id: payload.ref_resource_id,
-            ref_chunk_id: payload.ref_chunk_id,
             input_tokens: None,
             output_tokens: None,
             reasoning_tokens: None,
@@ -260,6 +246,16 @@ pub async fn remove_message_attachment(
     payload: RemoveMessageAttachmentRequest,
 ) -> Result<(), String> {
     delete_message_attachment(&state.db, payload.message_id, payload.resource_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn set_session_context_resources_command(
+    state: State<'_, AppState>,
+    payload: SetSessionContextResourcesRequest,
+) -> Result<(), String> {
+    set_session_context_resources(&state.db, payload.session_id, &payload.resource_ids)
         .await
         .map_err(|e| e.to_string())
 }

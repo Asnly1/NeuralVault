@@ -21,9 +21,9 @@ interface ChatPanelProps {
   isResizing: boolean;
   onMouseDown: (e: React.MouseEvent) => void;
   onNavigateToSettings?: () => void;
-  sessionType?: "task" | "resource";
   taskId?: number;
   resourceId?: number;
+  contextResourceIds: number[];
 }
 
 export function ChatPanel({
@@ -32,9 +32,9 @@ export function ChatPanel({
   isResizing,
   onMouseDown,
   onNavigateToSettings,
-  sessionType,
   taskId,
   resourceId,
+  contextResourceIds,
 }: ChatPanelProps) {
   const { t } = useLanguage();
   const {
@@ -50,6 +50,7 @@ export function ChatPanel({
   } = useAI();
   const [chatInput, setChatInput] = useState("");
   const [thinkingEffort, setThinkingEffort] = useState<ThinkingEffort>("low");
+  const hasSessionContext = !!taskId || !!resourceId;
 
   const currentWidth = tempWidth !== null ? tempWidth : width;
 
@@ -65,17 +66,15 @@ export function ChatPanel({
 
   const handleSend = async () => {
     if (!chatInput.trim() || !selectedModel || isChatLoading) return;
-    if (!sessionType || (sessionType === "task" && !taskId) || (sessionType === "resource" && !resourceId)) {
-      return;
-    }
+    if (!hasSessionContext) return;
     const content = chatInput;
     setChatInput("");
     try {
       await sendMessage(content, {
-        session_type: sessionType,
         task_id: taskId,
         resource_id: resourceId,
         thinking_effort: thinkingEffort,
+        context_resource_ids: contextResourceIds,
       });
     } catch (e) {
       console.error("Failed to send message:", e);
@@ -90,29 +89,23 @@ export function ChatPanel({
   };
 
   useEffect(() => {
-    if (!sessionType) {
-      clearMessages();
-      return;
-    }
-    if (sessionType === "task" && !taskId) {
-      clearMessages();
-      return;
-    }
-    if (sessionType === "resource" && !resourceId) {
+    if (!hasSessionContext) {
       clearMessages();
       return;
     }
     void loadSessionMessages({
-      session_type: sessionType,
       task_id: taskId,
       resource_id: resourceId,
+    }, {
+      context_resource_ids: contextResourceIds,
     });
   }, [
-    sessionType,
     taskId,
     resourceId,
+    contextResourceIds,
     loadSessionMessages,
     clearMessages,
+    hasSessionContext,
   ]);
 
   return (
@@ -290,9 +283,7 @@ export function ChatPanel({
                 !chatInput.trim() ||
                 !selectedModel ||
                 isChatLoading ||
-                !sessionType ||
-                (sessionType === "task" && !taskId) ||
-                (sessionType === "resource" && !resourceId)
+                !hasSessionContext
               }
               onClick={handleSend}
             >

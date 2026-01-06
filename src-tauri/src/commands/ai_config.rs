@@ -11,7 +11,8 @@ use crate::{
     db::{
         NewChatMessage, NewMessageAttachment, ResourceFileType,
         insert_chat_message, insert_message_attachments, list_chat_messages,
-        list_message_attachments_with_resource, update_chat_session,
+        list_message_attachments_with_resource, list_session_context_resources,
+        update_chat_session,
         update_chat_message_assistant,
     },
     services::ProviderConfig,
@@ -217,8 +218,6 @@ pub async fn send_chat_message(
             session_id: request.session_id,
             user_content: &request.content,
             assistant_content: None,
-            ref_resource_id: None,
-            ref_chunk_id: None,
             input_tokens: None,
             output_tokens: None,
             reasoning_tokens: None,
@@ -278,7 +277,47 @@ pub async fn send_chat_message(
         }
     }
 
-    let mut python_messages: Vec<serde_json::Value> = Vec::with_capacity(messages.len() * 2);
+    let context_resources = list_session_context_resources(&state.db, request.session_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut context_images: Vec<String> = Vec::new();
+    let mut context_files: Vec<String> = Vec::new();
+    let mut context_lines: Vec<String> = Vec::new();
+
+    for resource in context_resources {
+        let display_name = resource
+            .display_name
+            .unwrap_or_else(|| format!("resource {}", resource.resource_id));
+
+        if let Some(file_path) = resource.file_path {
+            let abs_path = resolve_file_path(&app, &file_path)?;
+            match resource.file_type {
+                ResourceFileType::Image => context_images.push(abs_path),
+                _ => context_files.push(abs_path),
+            }
+            context_lines.push(format!("- [file] {}", display_name));
+        } else if let Some(content) = resource.content {
+            context_lines.push(format!("- [text] {}: {}", display_name, content));
+        } else {
+            context_lines.push(format!("- [resource] {}", display_name));
+        }
+    }
+
+    let mut python_messages: Vec<serde_json::Value> = Vec::with_capacity(messages.len() * 2 + 1);
+    if !context_images.is_empty() || !context_files.is_empty() || !context_lines.is_empty() {
+        let content = if context_lines.is_empty() {
+            "Context files attached.".to_string()
+        } else {
+            format!("Context resources:\n{}", context_lines.join("\n"))
+        };
+        python_messages.push(serde_json::json!({
+            "role": "user",
+            "content": content,
+            "images": context_images,
+            "files": context_files,
+        }));
+    }
     for message in messages {
         let (images, files) = attachment_map.remove(&message.message_id).unwrap_or_default();
         if !message.user_content.is_empty() {

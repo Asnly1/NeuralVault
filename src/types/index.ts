@@ -393,25 +393,23 @@ export interface ChatStreamAck {
 
 export interface ChatSession {
   session_id: number;
-  session_type: "task" | "resource";
   task_id?: number | null;
-  resource_id?: number | null;
   title?: string | null;
   summary?: string | null;
   chat_model?: string | null;
   created_at?: string | null;
+  updated_at?: string | null;
   is_deleted: boolean;
   deleted_at?: string | null;
   user_id: number;
 }
 
 export interface CreateChatSessionRequest {
-  session_type: "task" | "resource";
   task_id?: number;
-  resource_id?: number;
   title?: string;
   summary?: string;
   chat_model?: string;
+  context_resource_ids?: number[];
 }
 
 export interface CreateChatSessionResponse {
@@ -419,7 +417,6 @@ export interface CreateChatSessionResponse {
 }
 
 export interface ListChatSessionsRequest {
-  session_type: "task" | "resource";
   task_id?: number;
   resource_id?: number;
   include_deleted?: boolean;
@@ -440,8 +437,6 @@ export interface CreateChatMessageRequest {
   session_id: number;
   user_content: string;
   assistant_content?: string;
-  ref_resource_id?: number;
-  ref_chunk_id?: number;
   attachment_resource_ids?: number[];
 }
 
@@ -467,6 +462,11 @@ export interface AddMessageAttachmentsRequest {
 export interface RemoveMessageAttachmentRequest {
   message_id: number;
   resource_id: number;
+}
+
+export interface SetSessionContextResourcesRequest {
+  session_id: number;
+  resource_ids: number[];
 }
 
 /**

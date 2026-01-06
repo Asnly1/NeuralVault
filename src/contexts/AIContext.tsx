@@ -18,6 +18,7 @@ import {
   createChatSession,
   listChatSessions,
   listChatMessages,
+  setSessionContextResources,
 } from "@/api";
 import {
   AIProvider,
@@ -59,25 +60,35 @@ interface AIContextType {
   sendMessage: (
     content: string,
     context?: {
-      session_type: "task" | "resource";
       task_id?: number;
       resource_id?: number;
       images?: number[];
       files?: number[];
       thinking_effort?: ThinkingEffort;
+      context_resource_ids?: number[];
     }
   ) => Promise<void>;
   clearMessages: () => void;
-  loadSessionMessages: (context: {
-    session_type: "task" | "resource";
-    task_id?: number;
-    resource_id?: number;
-  }) => Promise<void>;
+  loadSessionMessages: (
+    context: {
+      task_id?: number;
+      resource_id?: number;
+    },
+    options?: {
+      context_resource_ids?: number[];
+    }
+  ) => Promise<void>;
   refreshConfig: () => Promise<void>;
 }
 
 const AIContext = createContext<AIContextType | undefined>(undefined);
 const enabledProviders: AIProvider[] = ["openai"];
+
+const buildSessionKey = (context: { task_id?: number; resource_id?: number }) => {
+  if (context.task_id) return `task:${context.task_id}`;
+  if (context.resource_id) return `resource:${context.resource_id}`;
+  return "unknown";
+};
 
 export function AIContextProvider({ children }: { children: React.ReactNode }) {
   const [config, setConfig] = useState<AIConfigStatus | null>(null);
@@ -162,22 +173,43 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
   };
 
   const ensureSession = useCallback(
-    async (context: {
-      session_type: "task" | "resource";
-      task_id?: number;
-      resource_id?: number;
-    }) => {
-      const key =
-        context.session_type === "task"
-          ? `task:${context.task_id ?? "none"}`
-          : `resource:${context.resource_id ?? "none"}`;
+    async (
+      context: {
+        task_id?: number;
+        resource_id?: number;
+      },
+      contextResourceIds?: number[]
+    ) => {
+      const key = buildSessionKey(context);
+      if (key === "unknown") {
+        throw new Error("task_id or resource_id is required");
+      }
+
       const existing = sessionMap.get(key);
       if (existing) return existing;
 
-      const response = await createChatSession({
-        session_type: context.session_type,
+      const sessions = await listChatSessions({
         task_id: context.task_id,
         resource_id: context.resource_id,
+        include_deleted: false,
+      });
+
+      if (sessions.length > 0) {
+        const sessionId = sessions[0].session_id;
+        setSessionMap((prev) => {
+          const next = new Map(prev);
+          next.set(key, sessionId);
+          return next;
+        });
+        return sessionId;
+      }
+
+      const response = await createChatSession({
+        task_id: context.task_id,
+        title: undefined,
+        summary: undefined,
+        chat_model: undefined,
+        context_resource_ids: contextResourceIds,
       });
       setSessionMap((prev) => {
         const next = new Map(prev);
@@ -214,41 +246,35 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const loadSessionMessages = useCallback(
-    async (context: {
-      session_type: "task" | "resource";
-      task_id?: number;
-      resource_id?: number;
-    }) => {
+    async (
+      context: {
+        task_id?: number;
+        resource_id?: number;
+      },
+      options?: {
+        context_resource_ids?: number[];
+      }
+    ) => {
       const loadToken = ++loadTokenRef.current;
       try {
-        const key =
-          context.session_type === "task"
-            ? `task:${context.task_id ?? "none"}`
-            : `resource:${context.resource_id ?? "none"}`;
-        const cached = sessionMap.get(key);
-        let sessionId = cached;
-
-        if (!sessionId) {
-          const sessions = await listChatSessions({
-            session_type: context.session_type,
-            task_id: context.task_id,
-            resource_id: context.resource_id,
-            include_deleted: false,
-          });
-          if (!sessions.length) {
-            if (loadToken === loadTokenRef.current) {
-              setMessages([]);
-            }
-            return;
+        if (!context.task_id && !context.resource_id) {
+          if (loadToken === loadTokenRef.current) {
+            setMessages([]);
           }
-          sessionId = sessions[0].session_id;
-          setSessionMap((prev) => {
-            const next = new Map(prev);
-            next.set(key, sessionId!);
-            return next;
-          });
+          return;
         }
 
+        const sessionId = await ensureSession(context, options?.context_resource_ids);
+        if (options?.context_resource_ids) {
+          try {
+            await setSessionContextResources({
+              session_id: sessionId,
+              resource_ids: options.context_resource_ids,
+            });
+          } catch (e) {
+            console.error("Failed to sync session context:", e);
+          }
+        }
         const turns = await listChatMessages(sessionId);
         if (loadToken !== loadTokenRef.current) return;
         setMessages(toChatMessages(turns));
@@ -259,18 +285,18 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
         console.error("Failed to load chat history:", e);
       }
     },
-    [sessionMap, toChatMessages]
+    [ensureSession, toChatMessages]
   );
 
   const sendMessage = async (
     content: string,
     context?: {
-      session_type: "task" | "resource";
       task_id?: number;
       resource_id?: number;
       images?: number[];
       files?: number[];
       thinking_effort?: ThinkingEffort;
+      context_resource_ids?: number[];
     }
   ) => {
     const unlistenRef: { current: null | (() => void) } = { current: null };
@@ -282,13 +308,26 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
       throw new Error("Chat session context is required");
     }
 
+    if (!context.task_id && !context.resource_id) {
+      throw new Error("task_id or resource_id is required");
+    }
+
     loadTokenRef.current += 1;
 
-    const sessionId = await ensureSession({
-      session_type: context.session_type,
-      task_id: context.task_id,
-      resource_id: context.resource_id,
-    });
+    const sessionId = await ensureSession(
+      {
+        task_id: context.task_id,
+        resource_id: context.resource_id,
+      },
+      context.context_resource_ids
+    );
+
+    if (context.context_resource_ids) {
+      await setSessionContextResources({
+        session_id: sessionId,
+        resource_ids: context.context_resource_ids,
+      });
+    }
 
     const userMessage: ChatMessage = {
       role: "user",

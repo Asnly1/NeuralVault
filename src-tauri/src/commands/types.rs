@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::db::{ResourceRecord, TaskPriority, TaskRecord, TaskStatus, ChatSessionType};
+use crate::db::{ResourceRecord, TaskPriority, TaskRecord, TaskStatus};
 
 // ========== 捕获相关 ==========
 
@@ -117,12 +117,11 @@ pub struct ReadClipboardResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateChatSessionRequest {
-    pub session_type: ChatSessionType,
     pub task_id: Option<i64>,
-    pub resource_id: Option<i64>,
     pub title: Option<String>,
     pub summary: Option<String>,
     pub chat_model: Option<String>,
+    pub context_resource_ids: Option<Vec<i64>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -132,7 +131,6 @@ pub struct CreateChatSessionResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct ListChatSessionsRequest {
-    pub session_type: ChatSessionType,
     pub task_id: Option<i64>,
     pub resource_id: Option<i64>,
     pub include_deleted: Option<bool>,
@@ -156,8 +154,6 @@ pub struct CreateChatMessageRequest {
     pub session_id: i64,
     pub user_content: String,
     pub assistant_content: Option<String>,
-    pub ref_resource_id: Option<i64>,
-    pub ref_chunk_id: Option<i64>,
     pub attachment_resource_ids: Option<Vec<i64>>,
 }
 
@@ -188,6 +184,12 @@ pub struct AddMessageAttachmentsRequest {
 pub struct RemoveMessageAttachmentRequest {
     pub message_id: i64,
     pub resource_id: i64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SetSessionContextResourcesRequest {
+    pub session_id: i64,
+    pub resource_ids: Vec<i64>,
 }
 
 #[derive(Debug, Serialize)]
