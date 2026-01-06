@@ -21,7 +21,6 @@ Python依赖：
         "pyinstaller>=6.17.0",
         "pymupdf>=1.26.7",
         "qdrant-client>=1.16.2",
-        "sqlmodel>=0.0.27",
         "uvicorn[standard]>=0.38.0",
         "xai-sdk>=1.5.0",
     ]

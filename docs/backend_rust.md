@@ -378,6 +378,7 @@ app.manage(AppState { db, python }) - 注入状态
 | `ChatMessagePayload`    | 聊天消息（按轮次） | message_id, user_content, assistant_content, attachments, usage |
 | `SendChatRequest`       | 发送聊天请求       | session_id, provider, model, task_type, content, images, files, thinking_effort |
 | `ChatStreamAck`         | 发送聊天响应       | ok                                                       |
+| `SetSessionContextResourcesRequest` | 会话上下文更新 | session_id, resource_ids |
 
 ##### 命令列表
 
@@ -399,6 +400,7 @@ app.manage(AppState { db, python }) - 注入状态
 | `link_resource`                   | `state, LinkResourceRequest`  | `Result<LinkResourceResponse>`  | 关联资源到任务                           |
 | `unlink_resource`                 | `state, task_id, resource_id` | `Result<LinkResourceResponse>`  | 取消关联                                 |
 | `get_task_resources`              | `state, task_id`              | `Result<TaskResourcesResponse>` | 获取任务关联的资源列表                   |
+| `get_all_resources`               | `state`                       | `Result<Vec<ResourceRecord>>`  | 获取全部资源（用于上下文选择）          |
 | `soft_delete_resource_command`    | `state, resource_id`          | `Result<LinkResourceResponse>`  | 软删除资源（设置 is_deleted = 1，不删除数据库记录） |
 | `hard_delete_resource_command`    | `app, state, resource_id`     | `Result<LinkResourceResponse>`  | 硬删除资源（数据库记录 + 级联数据） |
 | `update_resource_content_command` | `state, resource_id, content` | `Result<()>`                    | 更新资源内容（保存编辑器修改）           |
@@ -416,6 +418,7 @@ app.manage(AppState { db, python }) - 注入状态
 | `create_chat_session`             | `state, CreateChatSessionRequest` | `Result<CreateChatSessionResponse>` | 创建聊天会话                          |
 | `get_chat_session`                | `state, session_id`           | `Result<ChatSession>`           | 获取聊天会话详情                         |
 | `list_chat_sessions`              | `state, ListChatSessionsRequest` | `Result<Vec<ChatSession>>`    | 获取聊天会话列表                         |
+| `set_session_context_resources_command` | `state, SetSessionContextResourcesRequest` | `Result<()>` | 更新会话上下文资源                 |
 | `update_chat_session_command`     | `state, UpdateChatSessionRequest` | `Result<()>`                 | 更新聊天会话                             |
 | `delete_chat_session_command`     | `state, DeleteChatSessionRequest` | `Result<()>`                 | 删除聊天会话（软删除）                   |
 | `create_chat_message`             | `state, CreateChatMessageRequest` | `Result<CreateChatMessageResponse>` | 创建聊天消息                      |
@@ -499,7 +502,7 @@ app.manage(AppState { db, python }) - 注入状态
 **流程**：
 
 1. 从加密配置获取 API Key
-2. 写入本轮 `user_content` 与附件，组装历史（按轮次拆分 user/assistant）并发送给 Python `/chat/completions`
+2. 写入本轮 `user_content` 与附件，读取 `session_context_resources` 并插入首条 user 消息（含附件路径），再组装历史（按轮次拆分 user/assistant）并发送给 Python `/chat/completions`
 3. Python 调用 OpenAI Responses API（当前前端仅开放 OpenAI）
 4. Rust 读取 Python SSE 流并通过 `chat-stream` 事件转发给前端
 5. Rust 使用 `done_text`（或累积的 delta 兜底）更新同一条 chat_messages 的 `assistant_content`，同时保存 `usage`（含 `reasoning_tokens`）
@@ -781,15 +784,18 @@ HUD 窗口管理实现。
 | `resources`          | 资源表                    | resource_id, uuid, file_hash, file_type, content, display_name, file_path, file_size_bytes, sync_status, processing_stage, classification_status, indexed_hash, processing_hash, last_indexed_at, last_error |
 | `task_resource_link` | 任务-资源关联表（多对多） | task_id, resource_id, visibility_scope, local_alias                                |
 | `context_chunks`     | 向量化分块表              | chunk_id, resource_id, chunk_text, chunk_index, page_number, qdrant_uuid, embedding_hash, embedding_model, embedding_at, token_count |
-| `chat_sessions`      | 聊天会话表                | session_id, session_type, task_id, resource_id, title, summary, chat_model          |
-| `chat_messages`      | 聊天消息表（按轮次）       | message_id, session_id, user_content, assistant_content, ref_resource_id, ref_chunk_id, reasoning_tokens |
+| `chat_sessions`      | 聊天会话表                | session_id, task_id, title, summary, chat_model, created_at, updated_at, is_deleted |
+| `session_context_resources` | 会话上下文资源关系表 | session_id, resource_id |
+| `chat_messages`      | 聊天消息表（按轮次）       | message_id, session_id, user_content, assistant_content, input_tokens, output_tokens, reasoning_tokens, total_tokens |
+| `message_attachments` | 消息附件表               | id, message_id, resource_id |
+| `message_citations`  | 消息引用表                | id, message_id, resource_id, chunk_id, score |
 
 ##### 索引
 
 - **任务表**：`due_date`、`status`、`status + due_date`、`created_at`、`parent_task_id`、`root_task_id`
 - **资源表**：`sync_status`、唯一索引 `(file_hash, user_id)` WHERE `is_deleted = 0`（防止重复上传）
 - **分块表**：`resource_id + chunk_index`、`embedding_hash`、`qdrant_uuid`（唯一）
-- **会话表**：`task_id + created_at`
+- **会话表**：`task_id + created_at`、`task_id + updated_at`
 
 ##### 外键约束
 

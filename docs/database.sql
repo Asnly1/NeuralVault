@@ -158,16 +158,14 @@ CREATE INDEX idx_chunks_embedding_hash ON context_chunks(embedding_hash);
 -- ==========================================
 CREATE TABLE chat_sessions (
     session_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_type TEXT DEFAULT 'task' CHECK (session_type IN ('task', 'resource')),
-     -- 当 session_type == 'resource' 时，允许用户基于资源对话
     task_id INTEGER,
-    resource_id INTEGER,
 
     title TEXT, -- 由AI生成的标题
     summary TEXT, -- 由AI生成的总结
     chat_model TEXT,
     
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
     is_deleted BOOLEAN DEFAULT 0, --用户是否删除（前端展示与否），防止用户误删除
     deleted_at DATETIME,
@@ -175,33 +173,60 @@ CREATE TABLE chat_sessions (
     user_id INTEGER NOT NULL DEFAULT 1, --预留user_id，但是先不用
 
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-    FOREIGN KEY(task_id) REFERENCES tasks(task_id) ON DELETE CASCADE,
-    FOREIGN KEY(resource_id) REFERENCES resources(resource_id) ON DELETE CASCADE
+    FOREIGN KEY(task_id) REFERENCES tasks(task_id) ON DELETE SET NULL
 );
 
-CREATE INDEX idx_session_task_time ON chat_sessions(task_id, created_at);
-CREATE INDEX idx_session_resource_time ON chat_sessions(resource_id, created_at);
+CREATE INDEX idx_session_task_created_at ON chat_sessions(task_id, created_at);
+CREATE INDEX idx_session_task_updated_at ON chat_sessions(task_id, updated_at);
+
+CREATE TABLE session_context_resources (
+    session_id INTEGER NOT NULL,
+    resource_id INTEGER NOT NULL,
+
+    PRIMARY KEY (session_id, resource_id),
+    FOREIGN KEY (session_id) REFERENCES chat_sessions(session_id) ON DELETE CASCADE,
+    FOREIGN KEY (resource_id) REFERENCES resources(resource_id) ON DELETE CASCADE
+);
 
 CREATE TABLE chat_messages (
     message_id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id INTEGER NOT NULL,
     
-    role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
-    content TEXT NOT NULL,
+    user_content TEXT NOT NULL,
+    assistant_content TEXT,
     
-    -- 如果某条消息引用了特定的 resource，可以在此关联
-    ref_resource_id INTEGER, 
-    -- 引用现在可以精确到具体的 chunk，实现“点击引用跳转到PDF第几页”
-    ref_chunk_id INTEGER,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    reasoning_tokens INTEGER,
+    total_tokens INTEGER,
     
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     
-    FOREIGN KEY(session_id) REFERENCES chat_sessions(session_id) ON DELETE CASCADE,
-    FOREIGN KEY(ref_resource_id) REFERENCES resources(resource_id) ON DELETE SET NULL,
-    FOREIGN KEY(ref_chunk_id) REFERENCES context_chunks(chunk_id) ON DELETE SET NULL
+    FOREIGN KEY(session_id) REFERENCES chat_sessions(session_id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_chat_session_id ON chat_messages(session_id);
+
+CREATE TABLE message_attachments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id INTEGER NOT NULL,
+    resource_id INTEGER NOT NULL,
+
+    FOREIGN KEY(message_id) REFERENCES chat_messages(message_id) ON DELETE CASCADE,
+    FOREIGN KEY(resource_id) REFERENCES resources(resource_id) ON DELETE CASCADE
+);
+
+CREATE TABLE message_citations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id INTEGER NOT NULL,
+    resource_id INTEGER NOT NULL,
+    chunk_id INTEGER,
+    score REAL,
+
+    FOREIGN KEY(message_id) REFERENCES chat_messages(message_id) ON DELETE CASCADE,
+    FOREIGN KEY(resource_id) REFERENCES resources(resource_id) ON DELETE CASCADE,
+    FOREIGN KEY(chunk_id) REFERENCES context_chunks(chunk_id) ON DELETE SET NULL
+);
 
 -- ==========================================
 -- Page C 的脉搏/报告表
@@ -507,8 +532,8 @@ BEGIN
     NEW.message_id, 
     'chat_message', 
     cs.user_id,
-    COALESCE(cs.title, 'New Chat') || ' (' || NEW.role || ')',
-    NEW.content
+    COALESCE(cs.title, 'New Chat'),
+    COALESCE(NEW.user_content, '') || ' ' || COALESCE(NEW.assistant_content, '')
   FROM chat_sessions cs
   WHERE cs.session_id = NEW.session_id AND cs.is_deleted = 0; 
 END;
@@ -523,8 +548,8 @@ BEGIN
     NEW.message_id, 
     'chat_message', 
     cs.user_id,
-    COALESCE(cs.title, 'New Chat') || ' (' || NEW.role || ')',
-    NEW.content
+    COALESCE(cs.title, 'New Chat'),
+    COALESCE(NEW.user_content, '') || ' ' || COALESCE(NEW.assistant_content, '')
   FROM chat_sessions cs
   WHERE cs.session_id = NEW.session_id AND cs.is_deleted = 0;
 END;
@@ -571,8 +596,8 @@ BEGIN
       m.message_id, 
       'chat_message', 
       NEW.user_id,
-      COALESCE(NEW.title, 'New Chat') || ' (' || m.role || ')', 
-      m.content
+      COALESCE(NEW.title, 'New Chat'), 
+      COALESCE(m.user_content, '') || ' ' || COALESCE(m.assistant_content, '')
   FROM chat_messages m
   WHERE m.session_id = NEW.session_id 
     AND NEW.is_deleted = 0;

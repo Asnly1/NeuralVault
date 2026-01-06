@@ -80,9 +80,10 @@ public/
 - API 类型：`CreateTaskRequest/Response`、`CaptureRequest/Response`、`SeedResponse`、`LinkResourceRequest/Response`、`TaskResourcesResponse`
 - 剪贴板类型：`ClipboardContent`、`ReadClipboardResponse`
 - 资源处理进度：`ProcessingStage`、`IngestProgress`
-- AI 类型：`AIProvider`、`AI_PROVIDER_INFO`、`AIProviderStatus`、`AIConfigStatus`、`SetApiKeyRequest`、`SetDefaultModelRequest`、`ChatMessagePayload`、`SendChatRequest`、`ThinkingEffort`、`ChatUsage`、`ChatStreamAck`、`ChatSession`、`CreateChatSessionRequest/Response`、`ListChatSessionsRequest`、`UpdateChatSessionRequest`、`DeleteChatSessionRequest`、`CreateChatMessageRequest/Response`、`UpdateChatMessageRequest`、`DeleteChatMessageRequest`、`AddMessageAttachmentsRequest`、`RemoveMessageAttachmentRequest`、`ModelOption`、`ChatMessage`
+- AI 类型：`AIProvider`、`AI_PROVIDER_INFO`、`AIProviderStatus`、`AIConfigStatus`、`SetApiKeyRequest`、`SetDefaultModelRequest`、`ChatMessagePayload`、`SendChatRequest`、`ThinkingEffort`、`ChatUsage`、`ChatStreamAck`、`ChatSession`、`CreateChatSessionRequest/Response`、`ListChatSessionsRequest`、`UpdateChatSessionRequest`、`DeleteChatSessionRequest`、`CreateChatMessageRequest/Response`、`UpdateChatMessageRequest`、`DeleteChatMessageRequest`、`AddMessageAttachmentsRequest`、`RemoveMessageAttachmentRequest`、`SetSessionContextResourcesRequest`、`ModelOption`、`ChatMessage`
   - `ChatMessagePayload` 为按轮次结构：`user_content + assistant_content + attachments + usage`
   - `SendChatRequest` 仅发送最新输入（content + images/files 的 resource_id），并可选 `thinking_effort`
+  - `ChatSession` 以 `task_id` 为主上下文，带 `updated_at`；资源上下文通过 `session_context_resources` 关联
 
 ---
 
@@ -92,13 +93,13 @@ public/
 
 - Dashboard：`fetchDashboardData()`
 - Task：`createTask()`、`softDeleteTask()`、`hardDeleteTask()`、`markTaskAsDone()`、`markTaskAsTodo()`、`updateTaskTitle()`、`updateTaskDescription()`、`updateTaskPriority()`、`updateTaskDueDate()`、`fetchTasksByDate()`、`fetchAllTasks()`
-- Resource：`quickCapture()`、`linkResource()`、`unlinkResource()`、`fetchTaskResources()`、`softDeleteResource()`、`hardDeleteResource()`、`updateResourceContent()`、`updateResourceDisplayName()`
+- Resource：`quickCapture()`、`linkResource()`、`unlinkResource()`、`fetchTaskResources()`、`fetchAllResources()`、`softDeleteResource()`、`hardDeleteResource()`、`updateResourceContent()`、`updateResourceDisplayName()`
 - Demo：`seedDemoData()`
 - HUD：`toggleHUD()`、`hideHUD()`
 - Clipboard：`readClipboard()`
 - File system：`getAssetsPath()`
 - AI Config：`getAIConfigStatus()`、`saveApiKey()`、`removeApiKey()`、`setDefaultModel()`、`sendChatMessage()`
-- Chat Session/Message：`createChatSession()`、`getChatSession()`、`listChatSessions()`、`updateChatSession()`、`deleteChatSession()`、`createChatMessage()`、`listChatMessages()`、`updateChatMessage()`、`deleteChatMessage()`、`addMessageAttachments()`、`removeMessageAttachment()`
+- Chat Session/Message：`createChatSession()`、`getChatSession()`、`listChatSessions()`、`updateChatSession()`、`deleteChatSession()`、`setSessionContextResources()`、`createChatMessage()`、`listChatMessages()`、`updateChatMessage()`、`deleteChatMessage()`、`addMessageAttachments()`、`removeMessageAttachment()`
 
 > 当前前端仅展示 OpenAI Provider，其他 Provider UI 隐藏。
 
@@ -111,17 +112,17 @@ public/
 AI 配置与聊天状态管理。
 
 - 状态：`config`、`loading`、`error`、`configuredProviders`、`selectedModel`、`messages`、`isChatLoading`
-- 方法：`saveKey()`、`removeKey()`、`saveDefaultModel()`、`sendMessage()`（需要 session context: task/resource + ids + attachments + thinking_effort）、`loadSessionMessages()`（加载最近会话历史）、`clearMessages()`、`refreshConfig()`
+- 方法：`saveKey()`、`removeKey()`、`saveDefaultModel()`、`sendMessage()`（需要 task/resource + context_resource_ids + attachments + thinking_effort）、`loadSessionMessages()`（确保会话存在并同步上下文）、`clearMessages()`、`refreshConfig()`
 - 事件：监听 Tauri `chat-stream`，按 `session_id` 拼接 assistant delta
 - 历史渲染：`listChatMessages` 返回按轮次数据，前端拆分为 user/assistant 两条消息渲染
 
 #### Chat 消息端到端流程 (ChatPanel -> Rust -> Python -> Rust -> 前端)
 
-1. 前端 `ChatPanel` 选择模型与思考强度，切换任务/资源时调用 `loadSessionMessages` 加载最近会话历史 (`src/components/workspace/ChatPanel.tsx`)。
-2. 发送时触发 `useAI().sendMessage`，校验 `sessionType`/`taskId`/`resourceId` 并清空输入 (`src/contexts/AIContext.tsx`)。
-3. `AIContext` 通过 `createChatSession` 确保会话存在，追加用户消息、设置 loading，并注册 `chat-stream` 事件监听 (`src/contexts/AIContext.tsx`, `src/api/index.ts`)。
+1. 前端 `ChatPanel` 选择模型与思考强度，切换任务/资源或上下文变更时调用 `loadSessionMessages`（携带 `context_resource_ids`）加载最近会话历史 (`src/components/workspace/ChatPanel.tsx`)。
+2. 发送时触发 `useAI().sendMessage`，校验 `taskId`/`resourceId` 与 `context_resource_ids` 并清空输入 (`src/contexts/AIContext.tsx`)。
+3. `AIContext` 通过 `createChatSession` 确保会话存在，同时调用 `setSessionContextResources` 同步上下文，追加用户消息、设置 loading，并注册 `chat-stream` 事件监听 (`src/contexts/AIContext.tsx`, `src/api/index.ts`)。
 4. 前端调用 Tauri 命令 `send_chat_message`，携带 `session_id`、`provider`/`model`、`content`、`thinking_effort` 以及附件的 `resource_id` (`src/api/index.ts`)。
-5. Rust `send_chat_message` 写入本轮 `user_content` 与附件到数据库，组装完整历史（按轮次拆分 user/assistant），解析附件资源为绝对路径，构造 Python 请求 `messages` (含 `images`/`files`) (`src-tauri/src/commands/ai_config.rs`)。
+5. Rust `send_chat_message` 写入本轮 `user_content` 与附件到数据库，读取 `session_context_resources` 并在消息列表首部插入一条 user 消息（含附件路径），再组装历史并构造 Python 请求 `messages` (含 `images`/`files`) (`src-tauri/src/commands/ai_config.rs`)。
 6. Rust 使用 streaming client 调用 Python `/chat/completions`，Python 通过 `llm_service.stream_chat` 返回 SSE 流 (`src-python/app/api/chat.py`, `src-python/app/services/llm_service.py`)。
 7. Python SSE 事件包含 `delta`/`done_text`/`usage`/`error`；Rust 逐行解析 `data: ...`，转发 `delta`/`usage`/`error` 到前端，`done_text` 仅用于写库（更新同一轮的 `assistant_content`），收到 `usage` 即视为流结束 (`src-tauri/src/commands/ai_config.rs`)。
 8. 前端监听 `chat-stream`：`delta` 拼接到最后一条 assistant 消息，`usage` 更新 token 统计并停止 loading，`error` 终止本轮并提示错误，界面即时更新 (`src/contexts/AIContext.tsx`)。
@@ -215,9 +216,9 @@ AI 配置与聊天状态管理。
 
 #### `components/workspace/`
 
-- `ContextPanel.tsx`：任务/资源详情与关联资源列表，文件模式下展示附带文本
+- `ContextPanel.tsx`：上下文资源显示区（加号添加/减号移除），保留附带文本；任务模式下额外展示任务信息
 - `EditorPanel.tsx`：文本编辑（Tiptap）、PDF 预览、图片缩放/拖拽（`react-zoom-pan-pinch`），支持资源名称编辑与文本/文件视图切换
-- `ChatPanel.tsx`：AI 聊天（模型选择 + 思考强度 + 消息历史/发送），需要传入 session context（task/resource + id），无可用模型时引导进入设置页
+- `ChatPanel.tsx`：AI 聊天（模型选择 + 思考强度 + 消息历史/发送），需要传入 `taskId/resourceId + contextResourceIds`，上下文变更会同步到会话，无可用模型时引导进入设置页
 
 ---
 
@@ -237,6 +238,7 @@ AI 配置与聊天状态管理。
 - 左右面板可拖拽调整，localStorage：
   - `neuralvault_workspace_left_width`
   - `neuralvault_workspace_right_width`
+- 任务模式默认上下文为任务关联资源；资源模式默认上下文为当前资源；上下文增删会同步到会话
 - 支持资源内容与名称保存：`updateResourceContent` + `updateResourceDisplayName`
 - 支持 Ctrl+S / Command+S 保存
 

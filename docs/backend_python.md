@@ -145,6 +145,8 @@ Error:
 >
 > `images/files` 必须是绝对路径；Rust 负责拼接完整对话历史并传给 Python。
 >
+> 会话存在 `session_context_resources` 时，Rust 会在 `messages` 首部插入一条 user 消息，附带这些资源的图片/文件路径作为上下文输入。
+>
 > `thinking_effort` 可选，仅支持 `none` / `low` / `high`，映射为 OpenAI Responses API 的 `reasoning.effort`。
 
 ### 关键行为
