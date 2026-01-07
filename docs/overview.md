@@ -8,6 +8,10 @@ Task：Option(多个Resource) + Option(多个Topic) + title + DDL。允许Task�
     2. 后端： Tauri(Rust) + FastAPI(Python)（处理AI相关，无状态微服务）+ Llamaindex + FastEmbed
     3. 数据库：SQLite + Qdrant
 
+平台依赖：
+    1. pdfium
+    2. libc
+    
 Python依赖：
     requires-python = ">=3.12"
     dependencies = [
@@ -28,7 +32,7 @@ Python依赖：
     
 页面：
     1. HUD：一键唤醒+捕获Resource。同时捕获 Window Title 和 Process Name (如 "Chrome") 作为 Context
-    2. Dashboard：上传Resource + 显示未完成Task。添加一个AI对话框，用户可以问一些General的问题（上个月做了什么？）
+    2. Dashboard：上传Resource + 显示未完成Task + 未分类 Resource + 添加一个AI对话框，用户可以问一些General的问题（上个月做了什么？）
     3. Workspace（参考Cursor）：
         - 左侧：Task模式（即点击Task进入）：显示当前Task关联Topic + Resource / Topic模式（点击Topic进入）：显示当前Topic关联Resource
         - 中间：文本编辑
