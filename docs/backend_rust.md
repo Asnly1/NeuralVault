@@ -304,8 +304,8 @@ app.manage(AppState { db, python }) - 注入状态
 | `NewResource<'a>`        | 插入资源的参数              | 生命周期借用                                                     |
 | `SourceMeta`             | 资源来源元信息（存为 JSON） | url, window_title                                                |
 | `LinkResourceParams`     | 关联资源到任务的参数        | task_id, resource_id                                             |
-| `TopicRecord`            | Topic表记录                 | topic_id, title, summary, is_system_default, updated_at          |
-| `NewTopic<'a>`           | 插入Topic的参数             | title, summary, is_system_default, user_id                       |
+| `TopicRecord`            | Topic表记录                 | topic_id, title, summary, is_system_default, is_favourite, updated_at          |
+| `NewTopic<'a>`           | 插入Topic的参数             | title, summary, is_system_default, is_favourite, user_id                       |
 | `TopicResourceLinkRecord`| Topic-资源关联记录          | topic_id, resource_id, confidence_score, is_auto_generated, review_status |
 | `NewTopicResourceLink`   | 创建Topic-资源关联的参数     | topic_id, resource_id, confidence_score, is_auto_generated, review_status |
 | `ChunkData`              | Python 分块结果             | chunk_text, chunk_index, page_number, qdrant_uuid, embedding_hash, token_count |
@@ -346,6 +346,7 @@ app.manage(AppState { db, python }) - 注入状态
 | `list_topics()`                 | `pool`                       | `Result<Vec<TopicRecord>>`    | 查询所有Topic                                      |
 | `update_topic_title()`          | `pool, topic_id, title`      | `Result<()>`                  | 更新Topic标题                                      |
 | `update_topic_summary()`        | `pool, topic_id, summary`    | `Result<()>`                  | 更新Topic摘要                                      |
+| `update_topic_favourite()`      | `pool, topic_id, is_favourite` | `Result<()>`                | 更新Topic收藏状态（显示在Sidebar）                 |
 | `hard_delete_topic()`           | `pool, topic_id`             | `Result<()>`                  | 硬删除Topic                                        |
 | `link_resource_to_topic()`      | `pool, NewTopicResourceLink` | `Result<()>`                  | 关联资源到Topic                                    |
 | `unlink_resource_from_topic()`  | `pool, topic_id, resource_id`| `Result<()>`                  | 取消资源与Topic的关联                              |
@@ -448,6 +449,7 @@ app.manage(AppState { db, python }) - 注入状态
 | `list_topics_command`             | `state`                       | `Result<Vec<TopicRecord>>`      | 获取所有 Topic 列表                      |
 | `update_topic_title_command`      | `state, topic_id, title`      | `Result<()>`                    | 更新 Topic 标题                          |
 | `update_topic_summary_command`    | `state, topic_id, summary`    | `Result<()>`                    | 更新 Topic 摘要                          |
+| `update_topic_favourite_command`  | `state, topic_id, is_favourite` | `Result<()>`                  | 更新 Topic 收藏状态（控制是否显示在Sidebar） |
 | `hard_delete_topic_command`       | `state, topic_id`             | `Result<()>`                    | 硬删除 Topic                             |
 | `link_resource_to_topic_command`  | `state, LinkResourceToTopicRequest` | `Result<SuccessResponse>` | 关联资源到 Topic                         |
 | `unlink_resource_from_topic_command` | `state, topic_id, resource_id` | `Result<SuccessResponse>`   | 取消资源与 Topic 的关联                  |
