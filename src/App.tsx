@@ -8,7 +8,6 @@ import { getFileTypeFromPath } from "./lib/utils";
 import {
   fetchDashboardData,
   quickCapture,
-  seedDemoData,
   linkResource,
   fetchAllTasks,
 } from "./api";
@@ -25,7 +24,6 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
-  const [seeding, setSeeding] = useState(false);
   
   // Theme state
   const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
@@ -144,20 +142,6 @@ function App() {
     [reloadData]
   );
 
-  const handleSeed = useCallback(async () => {
-    setSeeding(true);
-    setError(null);
-    try {
-      await seedDemoData();
-      await reloadData();
-    } catch (err) {
-      console.error(err);
-      setError("生成演示数据失败");
-    } finally {
-      setSeeding(false);
-    }
-  }, [reloadData]);
-
   const handleSelectTask = useCallback((task: Task) => {
     setSelectedTask(task);
     setSelectedResource(null); // 清除资源选择
@@ -241,10 +225,9 @@ function App() {
           <DashboardPage
             tasks={tasks}
             resources={resources}
-            loading={loading || seeding}
+            loading={loading}
             error={error}
             onCapture={handleCapture}
-            onSeed={handleSeed}
             onRefresh={reloadData}
             onSelectTask={handleSelectTask}
             onSelectResource={handleSelectResource}

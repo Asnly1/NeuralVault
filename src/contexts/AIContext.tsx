@@ -288,6 +288,107 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
     [ensureSession, toChatMessages]
   );
 
+  // ============================================
+  // Helper functions for sendMessage (提取辅助函数提高可读性)
+  // ============================================
+
+  /**
+   * 创建用户消息对象
+   */
+  const createUserMessage = (
+    content: string,
+    images?: number[],
+    files?: number[]
+  ): ChatMessage => ({
+    role: "user",
+    content,
+    timestamp: new Date(),
+    attachments: [
+      ...(images || []).map((resourceId) => ({ resource_id: resourceId })),
+      ...(files || []).map((resourceId) => ({ resource_id: resourceId })),
+    ],
+  });
+
+  /**
+   * 创建空的 assistant 消息占位
+   */
+  const createEmptyAssistantMessage = (): ChatMessage => ({
+    role: "assistant",
+    content: "",
+    timestamp: new Date(),
+  });
+
+  /**
+   * 更新最后一条 assistant 消息的 usage 统计
+   */
+  const applyUsageToLastAssistant = (usage: ChatUsage) => {
+    setMessages((prev) => {
+      const next = [...prev];
+      for (let i = next.length - 1; i >= 0; i -= 1) {
+        if (next[i].role === "assistant") {
+          next[i] = { ...next[i], usage };
+          break;
+        }
+      }
+      return next;
+    });
+  };
+
+  /**
+   * 追加 delta 内容到最后一条 assistant 消息
+   */
+  const appendDeltaToLastAssistant = (delta: string) => {
+    setMessages((prev) => {
+      const next = [...prev];
+      const lastIndex = next.length - 1;
+      if (lastIndex >= 0 && next[lastIndex].role === "assistant") {
+        next[lastIndex] = {
+          ...next[lastIndex],
+          content: next[lastIndex].content + delta,
+        };
+      }
+      return next;
+    });
+  };
+
+  /**
+   * 设置 SSE 流监听器
+   */
+  const setupStreamListener = async (
+    sessionId: number,
+    unlistenRef: { current: null | (() => void) }
+  ) => {
+    unlistenRef.current = await listen<{
+      session_id: number;
+      type: string;
+      delta?: string;
+      usage?: ChatUsage;
+      message?: unknown;
+    }>("chat-stream", (event) => {
+      if (event.payload.session_id !== sessionId) return;
+
+      if (event.payload.type === "delta" && event.payload.delta) {
+        appendDeltaToLastAssistant(event.payload.delta);
+      }
+
+      if (event.payload.type === "usage" && event.payload.usage) {
+        applyUsageToLastAssistant(event.payload.usage);
+        setIsChatLoading(false);
+        if (unlistenRef.current) unlistenRef.current();
+      }
+
+      if (event.payload.type === "error") {
+        setError("Chat failed");
+        setIsChatLoading(false);
+        if (unlistenRef.current) unlistenRef.current();
+      }
+    });
+  };
+
+  // ============================================
+  // Main sendMessage function (使用上述辅助函数简化主逻辑)
+  // ============================================
+
   const sendMessage = async (
     content: string,
     context?: {
@@ -300,25 +401,23 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
     }
   ) => {
     const unlistenRef: { current: null | (() => void) } = { current: null };
+    
+    // 前置校验
     if (!selectedModel) {
       throw new Error("No model selected");
     }
-
     if (!context) {
       throw new Error("Chat session context is required");
     }
-
     if (!context.task_id && !context.resource_id) {
       throw new Error("task_id or resource_id is required");
     }
 
     loadTokenRef.current += 1;
 
+    // 确保会话存在并同步上下文资源
     const sessionId = await ensureSession(
-      {
-        task_id: context.task_id,
-        resource_id: context.resource_id,
-      },
+      { task_id: context.task_id, resource_id: context.resource_id },
       context.context_resource_ids
     );
 
@@ -329,80 +428,20 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
       });
     }
 
-    const userMessage: ChatMessage = {
-      role: "user",
-      content,
-      timestamp: new Date(),
-      attachments: [
-        ...(context.images || []).map((resourceId) => ({ resource_id: resourceId })),
-        ...(context.files || []).map((resourceId) => ({ resource_id: resourceId })),
-      ],
-    };
+    // 添加用户消息到 UI
+    const userMessage = createUserMessage(content, context.images, context.files);
     setMessages((prev) => [...prev, userMessage]);
     setIsChatLoading(true);
     setError(null);
 
     try {
-      const assistantMessage: ChatMessage = {
-        role: "assistant",
-        content: "",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
+      // 添加空的 assistant 消息占位
+      setMessages((prev) => [...prev, createEmptyAssistantMessage()]);
 
-      const applyUsage = (usage: ChatUsage) => {
-        setMessages((prev) => {
-          const next = [...prev];
-          for (let i = next.length - 1; i >= 0; i -= 1) {
-            if (next[i].role === "assistant") {
-              next[i] = { ...next[i], usage };
-              break;
-            }
-          }
-          return next;
-        });
-      };
+      // 设置流监听器
+      await setupStreamListener(sessionId, unlistenRef);
 
-      const setupListener = async () => {
-        unlistenRef.current = await listen<{
-          session_id: number;
-          type: string;
-          delta?: string;
-          usage?: ChatUsage;
-          message?: unknown;
-        }>("chat-stream", (event) => {
-          if (event.payload.session_id !== sessionId) return;
-
-          if (event.payload.type === "delta" && event.payload.delta) {
-            setMessages((prev) => {
-              const next = [...prev];
-              const lastIndex = next.length - 1;
-              if (lastIndex >= 0 && next[lastIndex].role === "assistant") {
-                next[lastIndex] = {
-                  ...next[lastIndex],
-                  content: next[lastIndex].content + event.payload.delta,
-                };
-              }
-              return next;
-            });
-          }
-
-          if (event.payload.type === "usage" && event.payload.usage) {
-            applyUsage(event.payload.usage);
-            setIsChatLoading(false);
-            if (unlistenRef.current) unlistenRef.current();
-          }
-
-          if (event.payload.type === "error") {
-            setError("Chat failed");
-            setIsChatLoading(false);
-            if (unlistenRef.current) unlistenRef.current();
-          }
-        });
-      };
-
-      await setupListener();
-
+      // 发送请求到后端
       await sendChatMessage({
         session_id: sessionId,
         provider: selectedModel.provider,
@@ -415,7 +454,7 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Chat failed");
-      setMessages((prev) => prev.slice(0, -1));
+      setMessages((prev) => prev.slice(0, -1)); // 移除失败的 assistant 消息
       setIsChatLoading(false);
       if (unlistenRef.current) unlistenRef.current();
       throw e;

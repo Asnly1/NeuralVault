@@ -22,3 +22,32 @@ export function getFileTypeFromPath(filePath: string): string {
   }
   return "other"
 }
+
+/**
+ * 根据文件名返回对应的图标 emoji
+ * 用于 QuickCapture、文件列表等地方显示文件图标
+ */
+export function getFileIcon(fileName: string): string {
+  const ext = fileName.split(".").pop()?.toLowerCase() || "";
+
+  const iconMap: Record<string, string> = {
+    txt: "📄",
+    md: "📝",
+    json: "📋",
+    png: "🖼️",
+    jpg: "🖼️",
+    jpeg: "🖼️",
+    gif: "🖼️",
+    webp: "🖼️",
+    svg: "🖼️",
+    pdf: "📕",
+    epub: "📖",
+    js: "📜",
+    ts: "📜",
+    html: "🌐",
+    css: "🎨",
+  };
+
+  return iconMap[ext] || "📎";
+}
+

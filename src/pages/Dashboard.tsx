@@ -20,7 +20,6 @@ interface DashboardPageProps {
   loading: boolean;
   error: string | null;
   onCapture: (content: string, filePath?: string) => Promise<void>;
-  onSeed: () => Promise<void>;
   onRefresh: () => Promise<void>;
   onSelectTask: (task: Task) => void;
   onSelectResource: (resource: Resource) => void;

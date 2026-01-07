@@ -10,18 +10,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { 
-  FileText, 
-  Image as ImageIcon, 
-  Link as LinkIcon, 
-  File, 
   MoreHorizontal,
-  Paperclip,
   CheckCircle2,
   Circle,
   Trash2,
   Loader2
 } from "lucide-react";
-import { Resource, Task, ResourceType, IngestProgress, ProcessingStage } from "../types";
+import { Resource, Task, IngestProgress, ProcessingStage, resourceTypeIcons } from "../types";
 
 interface ResourceCardProps {
   resource: Resource;
@@ -31,15 +26,6 @@ interface ResourceCardProps {
   onClick?: (resource: Resource) => void;
   progress?: IngestProgress;
 }
-
-const iconMap: Record<ResourceType, React.ReactNode> = {
-  text: <FileText className="h-4 w-4 text-orange-500" />,
-  image: <ImageIcon className="h-4 w-4 text-purple-500" />,
-  pdf: <FileText className="h-4 w-4 text-red-500" />,
-  url: <LinkIcon className="h-4 w-4 text-blue-500" />,
-  epub: <File className="h-4 w-4 text-green-500" />,
-  other: <Paperclip className="h-4 w-4 text-gray-500" />,
-};
 
 // Processing stage display config
 const stageConfig: Record<ProcessingStage, { label: string; color: string }> = {
@@ -81,8 +67,8 @@ export function ResourceCard({
     >
       <CardContent className="flex items-center gap-3 p-3">
         {/* File Icon */}
-        <div className="shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">
-          {iconMap[resource.file_type] || <Paperclip className="h-4 w-4" />}
+        <div className="shrink-0 opacity-80 group-hover:opacity-100 transition-opacity text-base">
+          {resourceTypeIcons[resource.file_type] || "📎"}
         </div>
 
         {/* File Info */}

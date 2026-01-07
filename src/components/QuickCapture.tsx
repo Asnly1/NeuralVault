@@ -7,7 +7,7 @@ import {
   ClipboardEvent,
 } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { cn } from "@/lib/utils";
+import { cn, getFileIcon } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
@@ -397,28 +397,4 @@ export function QuickCapture({
       </ContentWrapper>
     </Wrapper>
   );
-}
-
-function getFileIcon(fileName: string): string {
-  const ext = fileName.split(".").pop()?.toLowerCase() || "";
-
-  const iconMap: Record<string, string> = {
-    txt: "📄",
-    md: "📝",
-    json: "📋",
-    png: "🖼️",
-    jpg: "🖼️",
-    jpeg: "🖼️",
-    gif: "🖼️",
-    webp: "🖼️",
-    svg: "🖼️",
-    pdf: "📕",
-    epub: "📖",
-    js: "📜",
-    ts: "📜",
-    html: "🌐",
-    css: "🎨",
-  };
-
-  return iconMap[ext] || "📎";
 }

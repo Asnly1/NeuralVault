@@ -6,6 +6,7 @@ import { Task, Resource, resourceTypeIcons } from "../types";
 import { fetchAllResources, fetchTaskResources, getAssetsPath, updateResourceContent, updateResourceDisplayName } from "../api";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { ContextPanel, EditorPanel, ChatPanel } from "../components/workspace";
+import { usePanelResize } from "@/hooks/usePanelResize";
 
 interface WorkspacePageProps {
   selectedTask: Task | null;
@@ -39,19 +40,22 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
   const [editedDisplayName, setEditedDisplayName] = useState("");
   const [viewMode, setViewMode] = useState<'file' | 'text'>('file');
 
-  // Panel resize state
-  const [leftPanelWidth, setLeftPanelWidth] = useState(() => {
-    const saved = localStorage.getItem("neuralvault_workspace_left_width");
-    return saved ? parseInt(saved, 10) : 256;
+  // 使用 usePanelResize Hook 替代内联的拖拽逻辑
+  const leftPanel = usePanelResize({
+    min: LEFT_MIN,
+    max: LEFT_MAX,
+    storageKey: "neuralvault_workspace_left_width",
+    initialWidth: 256,
+    direction: "right", // 从右边缘拖拽
   });
-  const [rightPanelWidth, setRightPanelWidth] = useState(() => {
-    const saved = localStorage.getItem("neuralvault_workspace_right_width");
-    return saved ? parseInt(saved, 10) : 288;
+
+  const rightPanel = usePanelResize({
+    min: RIGHT_MIN,
+    max: RIGHT_MAX,
+    storageKey: "neuralvault_workspace_right_width",
+    initialWidth: 288,
+    direction: "left", // 从左边缘拖拽
   });
-  const [isResizingLeft, setIsResizingLeft] = useState(false);
-  const [isResizingRight, setIsResizingRight] = useState(false);
-  const [tempLeftWidth, setTempLeftWidth] = useState<number | null>(null);
-  const [tempRightWidth, setTempRightWidth] = useState<number | null>(null);
 
   const { t } = useLanguage();
   const contextResourceIds = useMemo(
@@ -253,70 +257,7 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
     });
   }, [selectedResource]);
 
-  // Handle left panel resize
-  const handleLeftMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizingLeft(true);
-    setTempLeftWidth(leftPanelWidth);
-  };
-
-  // Handle right panel resize
-  const handleRightMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizingRight(true);
-    setTempRightWidth(rightPanelWidth);
-  };
-
-  // Handle resize drag
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (isResizingLeft) {
-        const workspaceContainer = document.querySelector('main.flex-1');
-        if (workspaceContainer) {
-          const containerRect = workspaceContainer.getBoundingClientRect();
-          const newWidth = e.clientX - containerRect.left;
-          if (newWidth >= LEFT_MIN && newWidth <= LEFT_MAX) {
-            setTempLeftWidth(newWidth);
-          }
-        }
-      }
-      if (isResizingRight) {
-        const newWidth = window.innerWidth - e.clientX;
-        if (newWidth >= RIGHT_MIN && newWidth <= RIGHT_MAX) {
-          setTempRightWidth(newWidth);
-        }
-      }
-    };
-
-    const handleMouseUp = () => {
-      if (tempLeftWidth !== null) {
-        setLeftPanelWidth(tempLeftWidth);
-        localStorage.setItem("neuralvault_workspace_left_width", tempLeftWidth.toString());
-      }
-      if (tempRightWidth !== null) {
-        setRightPanelWidth(tempRightWidth);
-        localStorage.setItem("neuralvault_workspace_right_width", tempRightWidth.toString());
-      }
-      setIsResizingLeft(false);
-      setIsResizingRight(false);
-      setTempLeftWidth(null);
-      setTempRightWidth(null);
-    };
-
-    if (isResizingLeft || isResizingRight) {
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-    }
-
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-  }, [isResizingLeft, isResizingRight, tempLeftWidth, tempRightWidth]);
+  // 注意：面板拖拽逻辑已迁移到 usePanelResize Hook
 
   // 监听 Ctrl+S / Command+S 快捷键
   useEffect(() => {
@@ -386,26 +327,14 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
             </>
           )}
         </div>
-        {isModified && (
-          <Badge variant="secondary" className="ml-auto">
-            ● 未保存
-          </Badge>
-        )}
-        {isSaving && (
-          <Badge variant="outline" className="ml-auto">
-            保存中...
-          </Badge>
-        )}
-        {saveSuccess && (
-          <Badge variant="default" className="ml-auto bg-green-600">
-            ✓ 已保存
-          </Badge>
-        )}
-        {saveError && (
-          <Badge variant="destructive" className="ml-auto">
-            ✗ {saveError}
-          </Badge>
-        )}
+        {/* 保存状态 Badge（简化为单一条件判断） */}
+        {(() => {
+          if (isSaving) return <Badge variant="outline" className="ml-auto">保存中...</Badge>;
+          if (saveError) return <Badge variant="destructive" className="ml-auto">✗ {saveError}</Badge>;
+          if (saveSuccess) return <Badge variant="default" className="ml-auto bg-green-600">✓ 已保存</Badge>;
+          if (isModified) return <Badge variant="secondary" className="ml-auto">● 未保存</Badge>;
+          return null;
+        })()}
       </header>
 
       {/* Three-column Layout */}
@@ -420,10 +349,10 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
           loadingResources={loadingResources}
           editorContent={editorContent}
           viewMode={viewMode}
-          width={leftPanelWidth}
-          tempWidth={tempLeftWidth}
-          isResizing={isResizingLeft}
-          onMouseDown={handleLeftMouseDown}
+          width={leftPanel.width}
+          tempWidth={leftPanel.tempWidth}
+          isResizing={leftPanel.isResizing}
+          onMouseDown={leftPanel.onMouseDown}
           onResourceClick={handleResourceClick}
           onAddToContext={handleAddToContext}
           onRemoveFromContext={handleRemoveFromContext}
@@ -448,10 +377,10 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
 
         {/* Right: Chat Panel */}
         <ChatPanel
-          width={rightPanelWidth}
-          tempWidth={tempRightWidth}
-          isResizing={isResizingRight}
-          onMouseDown={handleRightMouseDown}
+          width={rightPanel.width}
+          tempWidth={rightPanel.tempWidth}
+          isResizing={rightPanel.isResizing}
+          onMouseDown={rightPanel.onMouseDown}
           onNavigateToSettings={onNavigateToSettings}
           taskId={!isResourceMode ? selectedTask?.task_id : undefined}
           resourceId={isResourceMode ? (sessionAnchorResourceId ?? currentResource?.resource_id) : undefined}
