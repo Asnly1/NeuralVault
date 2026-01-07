@@ -29,7 +29,7 @@ pub use commands::{
     add_message_attachments, remove_message_attachment, set_session_context_resources_command,
     // Topic commands
     create_topic, get_topic_command, list_topics_command,
-    update_topic_title_command, update_topic_summary_command, hard_delete_topic_command,
+    update_topic_title_command, update_topic_summary_command, update_topic_favourite_command, hard_delete_topic_command,
     link_resource_to_topic_command, unlink_resource_from_topic_command,
     update_topic_resource_review_status_command, get_topic_resources_command, get_resource_topics_command,
     link_task_to_topic_command, unlink_task_from_topic_command,
@@ -218,6 +218,7 @@ pub fn run() {
             list_topics_command,
             update_topic_title_command,
             update_topic_summary_command,
+            update_topic_favourite_command,
             hard_delete_topic_command,
             link_resource_to_topic_command,
             unlink_resource_from_topic_command,

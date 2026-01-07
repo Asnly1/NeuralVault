@@ -199,6 +199,7 @@ pub struct TopicRecord {
     pub title: String,
     pub summary: Option<String>,
     pub is_system_default: bool,
+    pub is_favourite: bool,
     pub created_at: Option<String>,
     pub updated_at: Option<String>,
     pub user_id: i64,
@@ -208,6 +209,7 @@ pub struct NewTopic<'a> {
     pub title: &'a str,
     pub summary: Option<&'a str>,
     pub is_system_default: bool,
+    pub is_favourite: bool,
     pub user_id: i64,
 }
 

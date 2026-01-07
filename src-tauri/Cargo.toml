@@ -39,6 +39,7 @@ thiserror = "2.0.17"
 pdf_oxide = "0.2.3"
 active-win-pos-rs = "0.9.1"
 ocr_rs = { git = "https://github.com/Asnly1/rust-paddle-ocr.git", rev = "ab7ac86", package = "ocr-rs" }
+pdfium-render = "0.8.37"
 
 # 只有在目标平台是 Unix 系列（Linux / macOS / BSD 等）时，才会安装 libc
 [target.'cfg(unix)'.dependencies]

@@ -11,7 +11,7 @@ Task：Option(多个Resource) + Option(多个Topic) + title + DDL。允许Task�
 平台依赖：
     1. pdfium
     2. libc
-    
+
 Python依赖：
     requires-python = ">=3.12"
     dependencies = [
@@ -37,7 +37,9 @@ Python依赖：
         - 左侧：Task模式（即点击Task进入）：显示当前Task关联Topic + Resource / Topic模式（点击Topic进入）：显示当前Topic关联Resource
         - 中间：文本编辑
         - 右侧：对话框。可以上传图片/文件/文字。如果上传了图片/文件，自动添加到左侧的关联Resource。添加一个“Pin to Context”按钮，如果 AI 说了一段很好的解释，可以一键把它转成一个 Resource 固定在左侧
-    4. 侧边栏：搜索框 + 跳转到不同页面。使用Hybrid Search，优先显示精确匹配的 Topic/Task，然后显示语义相关的 Resource Chunk（Qdrant完成）
+    4. Sidebar：搜索框 + 跳转到不同页面。
+        1. 语义匹配（99%情况）：使用Hybrid Search，优先显示精确匹配的 Topic/Task，然后显示语义相关的 Resource Chunk（Qdrant完成）
+        2. 精确匹配（1%情况）： SQL LIKE
     5. Warehouse：显示所有Topic / Task
     6. Calendar：显示日程，即每个Task的DDL
     7. Settings：颜色/语言/ API Key/ 快捷键

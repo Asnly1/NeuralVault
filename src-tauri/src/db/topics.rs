@@ -5,11 +5,11 @@ use super::{
 
 /// Topic 表的完整字段列表（用于 SELECT 查询）
 const TOPIC_FIELDS: &str = 
-    "topic_id, title, summary, is_system_default, created_at, updated_at, user_id";
+    "topic_id, title, summary, is_system_default, is_favourite, created_at, updated_at, user_id";
 
 /// Topic 表的完整字段列表（带 t. 前缀，用于 JOIN 查询）
 const TOPIC_FIELDS_PREFIXED: &str = 
-    "t.topic_id, t.title, t.summary, t.is_system_default, t.created_at, t.updated_at, t.user_id";
+    "t.topic_id, t.title, t.summary, t.is_system_default, t.is_favourite, t.created_at, t.updated_at, t.user_id";
 
 /// Resource 表的完整字段列表（带 r. 前缀，用于 JOIN 查询）
 const RESOURCE_FIELDS_PREFIXED: &str = 
@@ -29,11 +29,12 @@ const TASK_FIELDS_PREFIXED: &str =
 
 pub async fn insert_topic(pool: &DbPool, params: NewTopic<'_>) -> Result<i64, sqlx::Error> {
     let result = sqlx::query(
-        "INSERT INTO topics (title, summary, is_system_default, user_id) VALUES (?, ?, ?, ?)",
+        "INSERT INTO topics (title, summary, is_system_default, is_favourite, user_id) VALUES (?, ?, ?, ?, ?)",
     )
     .bind(params.title)
     .bind(params.summary)
     .bind(params.is_system_default)
+    .bind(params.is_favourite)
     .bind(params.user_id)
     .execute(pool)
     .await?;
@@ -91,6 +92,21 @@ pub async fn update_topic_summary(
         "UPDATE topics SET summary = ?, updated_at = CURRENT_TIMESTAMP WHERE topic_id = ?",
     )
     .bind(summary)
+    .bind(topic_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn update_topic_favourite(
+    pool: &DbPool,
+    topic_id: i64,
+    is_favourite: bool,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE topics SET is_favourite = ?, updated_at = CURRENT_TIMESTAMP WHERE topic_id = ?",
+    )
+    .bind(is_favourite)
     .bind(topic_id)
     .execute(pool)
     .await?;

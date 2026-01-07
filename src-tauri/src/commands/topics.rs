@@ -7,9 +7,9 @@ use crate::{
         get_topic_by_id, hard_delete_topic, insert_topic, link_resource_to_topic,
         link_task_to_topic, list_resources_for_topic, list_tasks_for_topic, list_topics,
         list_topics_for_resource, list_topics_for_task, unlink_resource_from_topic,
-        unlink_task_from_topic, update_topic_resource_review_status, update_topic_summary,
-        update_topic_title, NewTopic, NewTopicResourceLink, ResourceRecord, TaskRecord,
-        TopicRecord, TopicReviewStatus,
+        unlink_task_from_topic, update_topic_favourite, update_topic_resource_review_status, 
+        update_topic_summary, update_topic_title, NewTopic, NewTopicResourceLink, ResourceRecord, 
+        TaskRecord, TopicRecord, TopicReviewStatus,
     },
     simple_void_command,
     AppResult,
@@ -22,6 +22,7 @@ pub struct CreateTopicRequest {
     pub title: String,
     pub summary: Option<String>,
     pub is_system_default: Option<bool>,
+    pub is_favourite: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -93,6 +94,7 @@ pub async fn create_topic(
             title: &payload.title,
             summary: payload.summary.as_deref(),
             is_system_default: payload.is_system_default.unwrap_or(false),
+            is_favourite: payload.is_favourite.unwrap_or(false),
             user_id: 1,
         },
     )
@@ -139,6 +141,15 @@ pub async fn update_topic_summary_command(
     summary: Option<String>,
 ) -> AppResult<()> {
     Ok(update_topic_summary(&state.db, topic_id, summary.as_deref()).await?)
+}
+
+#[tauri::command]
+pub async fn update_topic_favourite_command(
+    state: State<'_, AppState>,
+    topic_id: i64,
+    is_favourite: bool,
+) -> AppResult<()> {
+    Ok(update_topic_favourite(&state.db, topic_id, is_favourite).await?)
 }
 
 // ========== Topic-Resource Link Commands ==========

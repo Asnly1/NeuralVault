@@ -54,6 +54,7 @@ CREATE TABLE topics (
     summary TEXT,               -- AI 生成的 Topic Summary (不断迭代)
     
     is_system_default BOOLEAN DEFAULT 0, -- 用于标记 "Unsorted/Inbox" 这种特殊 Topic
+    is_favourite BOOLEAN DEFAULT 0, -- 用于标记是否收藏（显示在Sidebar）
     
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, -- Summary 更新时修改此时间
