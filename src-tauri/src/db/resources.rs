@@ -2,6 +2,19 @@ use sqlx::types::Json;
 
 use super::{DbPool, LinkResourceParams, NewResource, ResourceRecord};
 
+/// Resource 表的完整字段列表（用于 SELECT 查询）
+const RESOURCE_FIELDS: &str = 
+    "resource_id, uuid, source_meta, summary, file_hash, file_type, content, display_name, \
+     file_path, file_size_bytes, indexed_hash, processing_hash, sync_status, last_indexed_at, \
+     last_error, processing_stage, created_at, updated_at, is_deleted, deleted_at, user_id";
+
+/// Resource 表的完整字段列表（带 r. 前缀，用于 JOIN 查询）
+const RESOURCE_FIELDS_PREFIXED: &str = 
+    "r.resource_id, r.uuid, r.source_meta, r.summary, r.file_hash, r.file_type, r.content, \
+     r.display_name, r.file_path, r.file_size_bytes, r.indexed_hash, r.processing_hash, \
+     r.sync_status, r.last_indexed_at, r.last_error, r.processing_stage, r.created_at, \
+     r.updated_at, r.is_deleted, r.deleted_at, r.user_id";
+
 pub async fn insert_resource(
     pool: &DbPool,
     params: NewResource<'_>,
@@ -37,30 +50,23 @@ pub async fn get_resource_by_id(
     pool: &DbPool,
     resource_id: i64,
 ) -> Result<ResourceRecord, sqlx::Error> {
-    sqlx::query_as::<_, ResourceRecord>(
-        "SELECT resource_id, uuid, source_meta, summary, file_hash, file_type, content, display_name, \
-                file_path, file_size_bytes, indexed_hash, processing_hash, sync_status, last_indexed_at, \
-                last_error, processing_stage, created_at, updated_at, is_deleted, deleted_at, user_id \
-         FROM resources WHERE resource_id = ?",
-    )
-    .bind(resource_id)
-    .fetch_one(pool)
-    .await
+    let sql = format!("SELECT {} FROM resources WHERE resource_id = ?", RESOURCE_FIELDS);
+    sqlx::query_as::<_, ResourceRecord>(&sql)
+        .bind(resource_id)
+        .fetch_one(pool)
+        .await
 }
 
 pub async fn list_all_resources(
     pool: &DbPool,
 ) -> Result<Vec<ResourceRecord>, sqlx::Error> {
-    sqlx::query_as::<_, ResourceRecord>(
-        "SELECT resource_id, uuid, source_meta, summary, file_hash, file_type, content, display_name, \
-                file_path, file_size_bytes, indexed_hash, processing_hash, sync_status, last_indexed_at, \
-                last_error, processing_stage, created_at, updated_at, is_deleted, deleted_at, user_id \
-         FROM resources \
-         WHERE is_deleted = 0 \
-         ORDER BY created_at DESC",
-    )
-    .fetch_all(pool)
-    .await
+    let sql = format!(
+        "SELECT {} FROM resources WHERE is_deleted = 0 ORDER BY created_at DESC",
+        RESOURCE_FIELDS
+    );
+    sqlx::query_as::<_, ResourceRecord>(&sql)
+        .fetch_all(pool)
+        .await
 }
 
 pub async fn link_resource_to_task(
@@ -97,18 +103,16 @@ pub async fn list_resources_for_task(
     pool: &DbPool,
     task_id: i64,
 ) -> Result<Vec<ResourceRecord>, sqlx::Error> {
-    sqlx::query_as::<_, ResourceRecord>(
-        "SELECT r.resource_id, r.uuid, r.source_meta, r.summary, r.file_hash, r.file_type, r.content, \
-                r.display_name, r.file_path, r.file_size_bytes, r.indexed_hash, r.processing_hash, \
-                r.sync_status, r.last_indexed_at, r.last_error, r.processing_stage, r.created_at, \
-                r.updated_at, r.is_deleted, r.deleted_at, r.user_id \
-         FROM resources r \
+    let sql = format!(
+        "SELECT {} FROM resources r \
          INNER JOIN task_resource_link l ON l.resource_id = r.resource_id \
          WHERE l.task_id = ?",
-    )
-    .bind(task_id)
-    .fetch_all(pool)
-    .await
+        RESOURCE_FIELDS_PREFIXED
+    );
+    sqlx::query_as::<_, ResourceRecord>(&sql)
+        .bind(task_id)
+        .fetch_all(pool)
+        .await
 }
 
 /// 软删除资源（设置 is_deleted = 1 和 deleted_at = 当前时间）
@@ -158,16 +162,15 @@ pub async fn update_resource_content(
 pub async fn list_pending_resources(
     pool: &DbPool,
 ) -> Result<Vec<ResourceRecord>, sqlx::Error> {
-    sqlx::query_as::<_, ResourceRecord>(
-        "SELECT resource_id, uuid, source_meta, summary, file_hash, file_type, content, display_name, \
-                file_path, file_size_bytes, indexed_hash, processing_hash, sync_status, last_indexed_at, \
-                last_error, processing_stage, created_at, updated_at, is_deleted, deleted_at, user_id \
-         FROM resources \
+    let sql = format!(
+        "SELECT {} FROM resources \
          WHERE sync_status IN ('pending', 'dirty', 'error') AND is_deleted = 0 \
          ORDER BY created_at ASC",
-    )
-    .fetch_all(pool)
-    .await
+        RESOURCE_FIELDS
+    );
+    sqlx::query_as::<_, ResourceRecord>(&sql)
+        .fetch_all(pool)
+        .await
 }
 
 /// 更新资源显示名称

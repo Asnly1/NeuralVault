@@ -8,16 +8,40 @@ use crate::{
         TaskPriority, TaskStatus, mark_task_as_done, mark_task_as_todo, 
         update_task_priority, update_task_due_date, update_task_title, 
         update_task_description, update_task_summary, list_tasks_by_date, list_all_tasks,
+        TaskRecord,
     },
+    simple_void_command,
+    AppResult,
 };
 
 use super::{CreateTaskRequest, CreateTaskResponse};
+
+// ========== 使用宏生成的简单命令 ==========
+
+simple_void_command!(soft_delete_task_command, soft_delete_task, task_id: i64);
+simple_void_command!(hard_delete_task_command, hard_delete_task, task_id: i64);
+simple_void_command!(mark_task_as_done_command, mark_task_as_done, task_id: i64);
+simple_void_command!(mark_task_as_todo_command, mark_task_as_todo, task_id: i64);
+simple_void_command!(update_task_priority_command, update_task_priority, task_id: i64, priority: TaskPriority);
+
+// ========== 需要额外处理的命令（不适合用宏） ==========
+
+/// 更新任务标题
+#[tauri::command]
+pub async fn update_task_title_command(
+    state: State<'_, AppState>,
+    task_id: i64,
+    title: String,
+) -> AppResult<()> {
+    // 进行了引用，无法使用宏
+    Ok(update_task_title(&state.db, task_id, &title).await?)
+}
 
 #[tauri::command]
 pub async fn create_task(
     state: State<'_, AppState>,
     payload: CreateTaskRequest,
-) -> Result<CreateTaskResponse, String> {
+) -> AppResult<CreateTaskResponse> {
     let status = payload.status.unwrap_or(TaskStatus::Todo);
     let priority = payload.priority.unwrap_or(TaskPriority::Medium);
 
@@ -36,79 +60,10 @@ pub async fn create_task(
             user_id: 1,
         },
     )
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
 
-    let task = get_task_by_id(pool, task_id)
-        .await
-        .map_err(|e| e.to_string())?;
-
+    let task = get_task_by_id(pool, task_id).await?;
     Ok(CreateTaskResponse { task })
-}
-
-#[tauri::command]
-pub async fn soft_delete_task_command(
-    state: State<'_, AppState>,
-    task_id: i64,
-) -> Result<(), String> {
-    let pool = &state.db;
-    soft_delete_task(pool, task_id)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-/// 硬删除任务（物理删除数据库记录和级联数据）
-#[tauri::command]
-pub async fn hard_delete_task_command(
-    state: State<'_, AppState>,
-    task_id: i64,
-) -> Result<(), String> {
-    let pool = &state.db;
-    hard_delete_task(pool, task_id)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-/// 将任务状态从 'todo' 转换为 'done'
-#[tauri::command]
-pub async fn mark_task_as_done_command(
-    state: State<'_, AppState>,
-    task_id: i64,
-) -> Result<(), String> {
-    let pool = &state.db;
-    mark_task_as_done(pool, task_id)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-/// 将任务状态从 'done' 转换为 'todo'
-#[tauri::command]
-pub async fn mark_task_as_todo_command(
-    state: State<'_, AppState>,
-    task_id: i64,
-) -> Result<(), String> {
-    let pool = &state.db;
-    mark_task_as_todo(pool, task_id)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-/// 更新任务优先级
-#[tauri::command]
-pub async fn update_task_priority_command(
-    state: State<'_, AppState>,
-    task_id: i64,
-    priority: TaskPriority,
-) -> Result<(), String> {
-    let pool = &state.db;
-    update_task_priority(pool, task_id, priority)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(())
 }
 
 /// 更新任务的截止日期
@@ -117,26 +72,8 @@ pub async fn update_task_due_date_command(
     state: State<'_, AppState>,
     task_id: i64,
     due_date: Option<String>,
-) -> Result<(), String> {
-    let pool = &state.db;
-    update_task_due_date(pool, task_id, due_date.as_deref())
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-/// 更新任务标题
-#[tauri::command]
-pub async fn update_task_title_command(
-    state: State<'_, AppState>,
-    task_id: i64,
-    title: String,
-) -> Result<(), String> {
-    let pool = &state.db;
-    update_task_title(pool, task_id, &title)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(())
+) -> AppResult<()> {
+    Ok(update_task_due_date(&state.db, task_id, due_date.as_deref()).await?)
 }
 
 /// 更新任务描述
@@ -145,12 +82,8 @@ pub async fn update_task_description_command(
     state: State<'_, AppState>,
     task_id: i64,
     description: Option<String>,
-) -> Result<(), String> {
-    let pool = &state.db;
-    update_task_description(pool, task_id, description.as_deref())
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(())
+) -> AppResult<()> {
+    Ok(update_task_description(&state.db, task_id, description.as_deref()).await?)
 }
 
 /// 更新任务摘要 (AI 生成)
@@ -159,12 +92,8 @@ pub async fn update_task_summary_command(
     state: State<'_, AppState>,
     task_id: i64,
     summary: Option<String>,
-) -> Result<(), String> {
-    let pool = &state.db;
-    update_task_summary(pool, task_id, summary.as_deref())
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(())
+) -> AppResult<()> {
+    Ok(update_task_summary(&state.db, task_id, summary.as_deref()).await?)
 }
 
 /// 获取指定 due_date 的所有任务
@@ -172,20 +101,14 @@ pub async fn update_task_summary_command(
 pub async fn get_tasks_by_date(
     state: State<'_, AppState>,
     date: String,  // 格式: "YYYY-MM-DD"
-) -> Result<Vec<crate::db::TaskRecord>, String> {
-    let pool = &state.db;
-    list_tasks_by_date(pool, &date)
-        .await
-        .map_err(|e| e.to_string())
+) -> AppResult<Vec<TaskRecord>> {
+    Ok(list_tasks_by_date(&state.db, &date).await?)
 }
 
 /// 获取所有任务（包括 todo 和 done 状态），用于 Calendar 视图
 #[tauri::command]
 pub async fn get_all_tasks(
     state: State<'_, AppState>,
-) -> Result<Vec<crate::db::TaskRecord>, String> {
-    let pool = &state.db;
-    list_all_tasks(pool)
-        .await
-        .map_err(|e| e.to_string())
+) -> AppResult<Vec<TaskRecord>> {
+    Ok(list_all_tasks(&state.db).await?)
 }

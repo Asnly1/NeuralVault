@@ -1,6 +1,7 @@
 mod app_state;
 mod commands;
 mod db;
+mod error;
 mod services;
 mod sidecar;
 mod utils;
@@ -13,6 +14,7 @@ use tauri::{Emitter, Manager};
 use tokio::sync::Mutex;
 
 pub use app_state::AppState;
+pub use error::{AppError, AppResult};
 pub use commands::{
     capture_resource, create_task, soft_delete_resource_command, soft_delete_task_command,
     get_assets_path, get_dashboard, get_task_resources, hard_delete_resource_command,

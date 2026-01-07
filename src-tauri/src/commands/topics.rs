@@ -11,6 +11,8 @@ use crate::{
         update_topic_title, NewTopic, NewTopicResourceLink, ResourceRecord, TaskRecord,
         TopicRecord, TopicReviewStatus,
     },
+    simple_void_command,
+    AppResult,
 };
 
 // ========== Request/Response Types ==========
@@ -82,7 +84,7 @@ fn parse_review_status(s: Option<&str>) -> TopicReviewStatus {
 pub async fn create_topic(
     state: State<'_, AppState>,
     payload: CreateTopicRequest,
-) -> Result<CreateTopicResponse, String> {
+) -> AppResult<CreateTopicResponse> {
     let pool = &state.db;
     
     let topic_id = insert_topic(
@@ -94,13 +96,9 @@ pub async fn create_topic(
             user_id: 1,
         },
     )
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
 
-    let topic = get_topic_by_id(pool, topic_id)
-        .await
-        .map_err(|e| e.to_string())?;
-
+    let topic = get_topic_by_id(pool, topic_id).await?;
     Ok(CreateTopicResponse { topic })
 }
 
@@ -108,33 +106,30 @@ pub async fn create_topic(
 pub async fn get_topic_command(
     state: State<'_, AppState>,
     topic_id: i64,
-) -> Result<TopicRecord, String> {
-    let pool = &state.db;
-    get_topic_by_id(pool, topic_id)
-        .await
-        .map_err(|e| e.to_string())
+) -> AppResult<TopicRecord> {
+    Ok(get_topic_by_id(&state.db, topic_id).await?)
 }
 
 #[tauri::command]
 pub async fn list_topics_command(
     state: State<'_, AppState>,
-) -> Result<Vec<TopicRecord>, String> {
-    let pool = &state.db;
-    list_topics(pool)
-        .await
-        .map_err(|e| e.to_string())
+) -> AppResult<Vec<TopicRecord>> {
+    Ok(list_topics(&state.db).await?)
 }
+
+// ========== 使用宏生成的简单命令 ==========
+
+simple_void_command!(hard_delete_topic_command, hard_delete_topic, topic_id: i64);
+
+// ========== 需要特殊处理的命令 ==========
 
 #[tauri::command]
 pub async fn update_topic_title_command(
     state: State<'_, AppState>,
     topic_id: i64,
     title: String,
-) -> Result<(), String> {
-    let pool = &state.db;
-    update_topic_title(pool, topic_id, &title)
-        .await
-        .map_err(|e| e.to_string())
+) -> AppResult<()> {
+    Ok(update_topic_title(&state.db, topic_id, &title).await?)
 }
 
 #[tauri::command]
@@ -142,22 +137,8 @@ pub async fn update_topic_summary_command(
     state: State<'_, AppState>,
     topic_id: i64,
     summary: Option<String>,
-) -> Result<(), String> {
-    let pool = &state.db;
-    update_topic_summary(pool, topic_id, summary.as_deref())
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn hard_delete_topic_command(
-    state: State<'_, AppState>,
-    topic_id: i64,
-) -> Result<(), String> {
-    let pool = &state.db;
-    hard_delete_topic(pool, topic_id)
-        .await
-        .map_err(|e| e.to_string())
+) -> AppResult<()> {
+    Ok(update_topic_summary(&state.db, topic_id, summary.as_deref()).await?)
 }
 
 // ========== Topic-Resource Link Commands ==========
@@ -166,13 +147,11 @@ pub async fn hard_delete_topic_command(
 pub async fn link_resource_to_topic_command(
     state: State<'_, AppState>,
     payload: LinkResourceToTopicRequest,
-) -> Result<SuccessResponse, String> {
-    let pool = &state.db;
-
+) -> AppResult<SuccessResponse> {
     let review_status = parse_review_status(payload.review_status.as_deref());
 
     link_resource_to_topic(
-        pool,
+        &state.db,
         NewTopicResourceLink {
             topic_id: payload.topic_id,
             resource_id: payload.resource_id,
@@ -181,8 +160,7 @@ pub async fn link_resource_to_topic_command(
             review_status,
         },
     )
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
 
     Ok(SuccessResponse { success: true })
 }
@@ -192,11 +170,8 @@ pub async fn unlink_resource_from_topic_command(
     state: State<'_, AppState>,
     topic_id: i64,
     resource_id: i64,
-) -> Result<SuccessResponse, String> {
-    let pool = &state.db;
-    unlink_resource_from_topic(pool, topic_id, resource_id)
-        .await
-        .map_err(|e| e.to_string())?;
+) -> AppResult<SuccessResponse> {
+    unlink_resource_from_topic(&state.db, topic_id, resource_id).await?;
     Ok(SuccessResponse { success: true })
 }
 
@@ -204,23 +179,17 @@ pub async fn unlink_resource_from_topic_command(
 pub async fn update_topic_resource_review_status_command(
     state: State<'_, AppState>,
     payload: UpdateReviewStatusRequest,
-) -> Result<(), String> {
-    let pool = &state.db;
+) -> AppResult<()> {
     let review_status = parse_review_status(Some(&payload.review_status));
-    update_topic_resource_review_status(pool, payload.topic_id, payload.resource_id, review_status)
-        .await
-        .map_err(|e| e.to_string())
+    Ok(update_topic_resource_review_status(&state.db, payload.topic_id, payload.resource_id, review_status).await?)
 }
 
 #[tauri::command]
 pub async fn get_topic_resources_command(
     state: State<'_, AppState>,
     topic_id: i64,
-) -> Result<TopicResourcesResponse, String> {
-    let pool = &state.db;
-    let resources = list_resources_for_topic(pool, topic_id)
-        .await
-        .map_err(|e| e.to_string())?;
+) -> AppResult<TopicResourcesResponse> {
+    let resources = list_resources_for_topic(&state.db, topic_id).await?;
     Ok(TopicResourcesResponse { resources })
 }
 
@@ -228,11 +197,8 @@ pub async fn get_topic_resources_command(
 pub async fn get_resource_topics_command(
     state: State<'_, AppState>,
     resource_id: i64,
-) -> Result<ResourceTopicsResponse, String> {
-    let pool = &state.db;
-    let topics = list_topics_for_resource(pool, resource_id)
-        .await
-        .map_err(|e| e.to_string())?;
+) -> AppResult<ResourceTopicsResponse> {
+    let topics = list_topics_for_resource(&state.db, resource_id).await?;
     Ok(ResourceTopicsResponse { topics })
 }
 
@@ -243,11 +209,8 @@ pub async fn link_task_to_topic_command(
     state: State<'_, AppState>,
     task_id: i64,
     topic_id: i64,
-) -> Result<SuccessResponse, String> {
-    let pool = &state.db;
-    link_task_to_topic(pool, task_id, topic_id)
-        .await
-        .map_err(|e| e.to_string())?;
+) -> AppResult<SuccessResponse> {
+    link_task_to_topic(&state.db, task_id, topic_id).await?;
     Ok(SuccessResponse { success: true })
 }
 
@@ -256,11 +219,8 @@ pub async fn unlink_task_from_topic_command(
     state: State<'_, AppState>,
     task_id: i64,
     topic_id: i64,
-) -> Result<SuccessResponse, String> {
-    let pool = &state.db;
-    unlink_task_from_topic(pool, task_id, topic_id)
-        .await
-        .map_err(|e| e.to_string())?;
+) -> AppResult<SuccessResponse> {
+    unlink_task_from_topic(&state.db, task_id, topic_id).await?;
     Ok(SuccessResponse { success: true })
 }
 
@@ -268,11 +228,8 @@ pub async fn unlink_task_from_topic_command(
 pub async fn get_topic_tasks_command(
     state: State<'_, AppState>,
     topic_id: i64,
-) -> Result<TopicTasksResponse, String> {
-    let pool = &state.db;
-    let tasks = list_tasks_for_topic(pool, topic_id)
-        .await
-        .map_err(|e| e.to_string())?;
+) -> AppResult<TopicTasksResponse> {
+    let tasks = list_tasks_for_topic(&state.db, topic_id).await?;
     Ok(TopicTasksResponse { tasks })
 }
 
@@ -280,10 +237,7 @@ pub async fn get_topic_tasks_command(
 pub async fn get_task_topics_command(
     state: State<'_, AppState>,
     task_id: i64,
-) -> Result<TaskTopicsResponse, String> {
-    let pool = &state.db;
-    let topics = list_topics_for_task(pool, task_id)
-        .await
-        .map_err(|e| e.to_string())?;
+) -> AppResult<TaskTopicsResponse> {
+    let topics = list_topics_for_task(&state.db, task_id).await?;
     Ok(TaskTopicsResponse { topics })
 }

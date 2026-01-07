@@ -9,11 +9,13 @@ use crate::{
         link_resource_to_task, list_all_resources, list_resources_for_task,
         unlink_resource_from_task, LinkResourceParams, NewResource,
         ResourceFileType, ResourceProcessingStage, ResourceSyncStatus, SourceMeta,
+        ResourceRecord,
     },
     utils::{
         compute_sha256, get_assets_dir, get_extension, notify_python, parse_file_type,
         resolve_file_path, IngestPayload, NotifyAction,
     },
+    AppResult, AppError,
 };
 
 use super::{
@@ -29,7 +31,7 @@ fn build_ingest_payload(
     file_type: ResourceFileType,
     content: Option<String>,
     file_path: Option<String>,
-) -> Result<IngestPayload, String> {
+) -> AppResult<IngestPayload> {
     let resolved_path = match file_path {
         Some(path) => Some(resolve_file_path(app, &path)?),
         None => None,
@@ -49,7 +51,7 @@ fn load_or_copy_file_for_capture(
     app: &AppHandle,
     source_path: &str,
     resource_uuid: &str,
-) -> Result<(Vec<u8>, i64, String, Option<String>), String> {
+) -> AppResult<(Vec<u8>, i64, String, Option<String>)> {
     // 检查是否是从剪贴板粘贴的文件（已保存到 assets 目录）
     // 相对路径格式: "assets/xxx.png"
     if source_path.starts_with("assets/") {
@@ -59,7 +61,7 @@ fn load_or_copy_file_for_capture(
         let full_path = assets_dir.join(file_name);
 
         // 读取文件内容
-        let bytes = fs::read(&full_path).map_err(|e| format!("读取文件失败: {}", e))?;
+        let bytes = fs::read(&full_path)?;
         let size = bytes.len() as i64;
 
         Ok((
@@ -71,7 +73,7 @@ fn load_or_copy_file_for_capture(
     } else {
         // 正常的外部文件，需要复制到 assets 目录
         // 读取原始文件
-        let bytes = fs::read(source_path).map_err(|e| format!("读取文件失败: {}", e))?;
+        let bytes = fs::read(source_path)?;
         let size = bytes.len() as i64;
 
         // 提取原始文件名
@@ -93,8 +95,7 @@ fn load_or_copy_file_for_capture(
         let target_path = assets_dir.join(&target_filename);
 
         // 复制文件到应用目录
-        fs::copy(source_path, &target_path)
-            .map_err(|e| format!("复制文件失败: {}", e))?;
+        fs::copy(source_path, &target_path)?;
 
         // 存储相对路径
         let relative_path = format!("assets/{}", target_filename);
@@ -109,7 +110,7 @@ pub async fn capture_resource(
     app: AppHandle,
     state: State<'_, AppState>,
     payload: CaptureRequest,
-) -> Result<CaptureResponse, String> {
+) -> AppResult<CaptureResponse> {
     let CaptureRequest {
         mut content,
         display_name,
@@ -239,8 +240,7 @@ pub async fn capture_resource(
             user_id: 1,
         },
     )
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
 
     // ========== 异步通知 Python ==========
     // 捕获成功后立即通知 Python 后台处理
@@ -271,18 +271,15 @@ pub async fn capture_resource(
 pub async fn link_resource(
     state: State<'_, AppState>,
     payload: LinkResourceRequest,
-) -> Result<LinkResourceResponse, String> {
-    let pool = &state.db;
-
+) -> AppResult<LinkResourceResponse> {
     link_resource_to_task(
-        pool,
+        &state.db,
         LinkResourceParams {
             task_id: payload.task_id,
             resource_id: payload.resource_id,
         },
     )
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
 
     Ok(LinkResourceResponse { success: true })
 }
@@ -293,13 +290,8 @@ pub async fn unlink_resource(
     state: State<'_, AppState>,
     task_id: i64,
     resource_id: i64,
-) -> Result<LinkResourceResponse, String> {
-    let pool = &state.db;
-
-    unlink_resource_from_task(pool, task_id, resource_id)
-        .await
-        .map_err(|e| e.to_string())?;
-
+) -> AppResult<LinkResourceResponse> {
+    unlink_resource_from_task(&state.db, task_id, resource_id).await?;
     Ok(LinkResourceResponse { success: true })
 }
 
@@ -308,13 +300,8 @@ pub async fn unlink_resource(
 pub async fn get_task_resources(
     state: State<'_, AppState>,
     task_id: i64,
-) -> Result<TaskResourcesResponse, String> {
-    let pool = &state.db;
-
-    let resources = list_resources_for_task(pool, task_id)
-        .await
-        .map_err(|e| e.to_string())?;
-
+) -> AppResult<TaskResourcesResponse> {
+    let resources = list_resources_for_task(&state.db, task_id).await?;
     Ok(TaskResourcesResponse { resources })
 }
 
@@ -322,21 +309,19 @@ pub async fn get_task_resources(
 #[tauri::command]
 pub async fn get_all_resources(
     state: State<'_, AppState>,
-) -> Result<Vec<crate::db::ResourceRecord>, String> {
-    list_all_resources(&state.db)
-        .await
-        .map_err(|e| e.to_string())
+) -> AppResult<Vec<ResourceRecord>> {
+    Ok(list_all_resources(&state.db).await?)
 }
 
 /// 获取 assets 目录的完整路径
 /// 
 /// 用于前端将相对路径（如 "assets/xxx.png"）转换为完整路径
 #[tauri::command]
-pub fn get_assets_path(app: AppHandle) -> Result<String, String> {
+pub fn get_assets_path(app: AppHandle) -> AppResult<String> {
     let assets_dir = get_assets_dir(&app)?;
     assets_dir
         .to_str()
-        .ok_or_else(|| "无法转换路径为字符串".to_string())
+        .ok_or_else(|| AppError::Custom("无法转换路径为字符串".to_string()))
         .map(|s| s.to_string())
 }
 
@@ -348,13 +333,8 @@ pub fn get_assets_path(app: AppHandle) -> Result<String, String> {
 pub async fn soft_delete_resource_command(
     state: State<'_, AppState>,
     resource_id: i64,
-) -> Result<LinkResourceResponse, String> {
-    let pool = &state.db;
-
-    crate::db::soft_delete_resource(pool, resource_id)
-        .await
-        .map_err(|e| e.to_string())?;
-
+) -> AppResult<LinkResourceResponse> {
+    crate::db::soft_delete_resource(&state.db, resource_id).await?;
     Ok(LinkResourceResponse { success: true })
 }
 
@@ -367,16 +347,12 @@ pub async fn update_resource_content_command(
     state: State<'_, AppState>,
     resource_id: i64,
     content: String,
-) -> Result<(), String> {
-    let pool = &state.db;
-
-    let resource = crate::db::get_resource_by_id(pool, resource_id)
-        .await
-        .map_err(|e| format!("获取资源失败: {}", e))?;
+) -> AppResult<()> {
+    let resource = crate::db::get_resource_by_id(&state.db, resource_id).await?;
 
     let file_bytes = if let Some(file_path) = &resource.file_path {
         let abs_path = resolve_file_path(&app, file_path)?;
-        fs::read(&abs_path).map_err(|e| format!("读取文件失败: {}", e))?
+        fs::read(&abs_path)?
     } else {
         Vec::new()
     };
@@ -389,9 +365,7 @@ pub async fn update_resource_content_command(
     let file_hash = compute_sha256(&combined_bytes);
     let file_size_bytes = combined_bytes.len() as i64;
 
-    crate::db::update_resource_content(pool, resource_id, &content, &file_hash, Some(file_size_bytes))
-        .await
-        .map_err(|e| e.to_string())?;
+    crate::db::update_resource_content(&state.db, resource_id, &content, &file_hash, Some(file_size_bytes)).await?;
 
     let ingest_payload = build_ingest_payload(
         &app,
@@ -420,14 +394,8 @@ pub async fn update_resource_display_name_command(
     state: State<'_, AppState>,
     resource_id: i64,
     display_name: String,
-) -> Result<(), String> {
-    let pool = &state.db;
-
-    crate::db::update_resource_display_name(pool, resource_id, &display_name)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    Ok(())
+) -> AppResult<()> {
+    Ok(crate::db::update_resource_display_name(&state.db, resource_id, &display_name).await?)
 }
 
 /// 更新资源摘要 (AI 生成)
@@ -436,14 +404,8 @@ pub async fn update_resource_summary_command(
     state: State<'_, AppState>,
     resource_id: i64,
     summary: Option<String>,
-) -> Result<(), String> {
-    let pool = &state.db;
-
-    crate::db::update_resource_summary(pool, resource_id, summary.as_deref())
-        .await
-        .map_err(|e| e.to_string())?;
-
-    Ok(())
+) -> AppResult<()> {
+    Ok(crate::db::update_resource_summary(&state.db, resource_id, summary.as_deref()).await?)
 }
 
 /// 硬删除资源（物理删除数据库记录、级联数据和文件）
@@ -456,18 +418,12 @@ pub async fn hard_delete_resource_command(
     app: AppHandle,
     state: State<'_, AppState>,
     resource_id: i64,
-) -> Result<LinkResourceResponse, String> {
-    let pool = &state.db;
-
+) -> AppResult<LinkResourceResponse> {
     // 1. 先获取资源信息，以便删除物理文件
-    let resource = crate::db::get_resource_by_id(pool, resource_id)
-        .await
-        .map_err(|e| format!("获取资源失败: {}", e))?;
+    let resource = crate::db::get_resource_by_id(&state.db, resource_id).await?;
 
     // 2. 删除数据库记录（会级联删除关联记录和分块）
-    crate::db::hard_delete_resource(pool, resource_id)
-        .await
-        .map_err(|e| e.to_string())?;
+    crate::db::hard_delete_resource(&state.db, resource_id).await?;
 
     // 3. 删除物理文件（如果存在）
     if let Some(file_path) = &resource.file_path {
@@ -503,3 +459,4 @@ pub async fn hard_delete_resource_command(
 
     Ok(LinkResourceResponse { success: true })
 }
+

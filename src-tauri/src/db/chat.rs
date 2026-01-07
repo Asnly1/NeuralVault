@@ -5,6 +5,18 @@ use super::{
     NewChatMessage, NewChatSession, NewMessageAttachment, ResourceFileType,
 };
 
+/// ChatSession 表的完整字段列表（用于 SELECT 查询）
+const SESSION_FIELDS: &str = 
+    "session_id, task_id, topic_id, title, summary, chat_model, created_at, updated_at, is_deleted, deleted_at, user_id";
+
+/// ChatSession 表的完整字段列表（带 s. 前缀，用于 JOIN 查询）
+const SESSION_FIELDS_PREFIXED: &str = 
+    "s.session_id, s.task_id, s.topic_id, s.title, s.summary, s.chat_model, s.created_at, s.updated_at, s.is_deleted, s.deleted_at, s.user_id";
+
+/// ChatMessage 表的完整字段列表（用于 SELECT 查询）
+const MESSAGE_FIELDS: &str = 
+    "message_id, session_id, user_content, assistant_content, input_tokens, output_tokens, reasoning_tokens, total_tokens, created_at";
+
 #[derive(Debug, FromRow)]
 pub struct MessageAttachmentWithResource {
     pub message_id: i64,
@@ -46,13 +58,11 @@ pub async fn get_chat_session_by_id(
     pool: &DbPool,
     session_id: i64,
 ) -> Result<ChatSessionRecord, sqlx::Error> {
-    sqlx::query_as::<_, ChatSessionRecord>(
-        "SELECT session_id, task_id, topic_id, title, summary, chat_model, created_at, updated_at, is_deleted, deleted_at, user_id \
-         FROM chat_sessions WHERE session_id = ?",
-    )
-    .bind(session_id)
-    .fetch_one(pool)
-    .await
+    let sql = format!("SELECT {} FROM chat_sessions WHERE session_id = ?", SESSION_FIELDS);
+    sqlx::query_as::<_, ChatSessionRecord>(&sql)
+        .bind(session_id)
+        .fetch_one(pool)
+        .await
 }
 
 pub async fn list_chat_sessions_by_task(
@@ -61,14 +71,12 @@ pub async fn list_chat_sessions_by_task(
     include_deleted: bool,
 ) -> Result<Vec<ChatSessionRecord>, sqlx::Error> {
     let sql = if include_deleted {
-        "SELECT session_id, task_id, topic_id, title, summary, chat_model, created_at, updated_at, is_deleted, deleted_at, user_id \
-         FROM chat_sessions WHERE task_id = ? ORDER BY created_at DESC"
+        format!("SELECT {} FROM chat_sessions WHERE task_id = ? ORDER BY created_at DESC", SESSION_FIELDS)
     } else {
-        "SELECT session_id, task_id, topic_id, title, summary, chat_model, created_at, updated_at, is_deleted, deleted_at, user_id \
-         FROM chat_sessions WHERE task_id = ? AND is_deleted = 0 ORDER BY created_at DESC"
+        format!("SELECT {} FROM chat_sessions WHERE task_id = ? AND is_deleted = 0 ORDER BY created_at DESC", SESSION_FIELDS)
     };
 
-    sqlx::query_as::<_, ChatSessionRecord>(sql)
+    sqlx::query_as::<_, ChatSessionRecord>(&sql)
         .bind(task_id)
         .fetch_all(pool)
         .await
@@ -80,14 +88,12 @@ pub async fn list_chat_sessions_by_topic(
     include_deleted: bool,
 ) -> Result<Vec<ChatSessionRecord>, sqlx::Error> {
     let sql = if include_deleted {
-        "SELECT session_id, task_id, topic_id, title, summary, chat_model, created_at, updated_at, is_deleted, deleted_at, user_id \
-         FROM chat_sessions WHERE topic_id = ? ORDER BY created_at DESC"
+        format!("SELECT {} FROM chat_sessions WHERE topic_id = ? ORDER BY created_at DESC", SESSION_FIELDS)
     } else {
-        "SELECT session_id, task_id, topic_id, title, summary, chat_model, created_at, updated_at, is_deleted, deleted_at, user_id \
-         FROM chat_sessions WHERE topic_id = ? AND is_deleted = 0 ORDER BY created_at DESC"
+        format!("SELECT {} FROM chat_sessions WHERE topic_id = ? AND is_deleted = 0 ORDER BY created_at DESC", SESSION_FIELDS)
     };
 
-    sqlx::query_as::<_, ChatSessionRecord>(sql)
+    sqlx::query_as::<_, ChatSessionRecord>(&sql)
         .bind(topic_id)
         .fetch_all(pool)
         .await
@@ -99,18 +105,22 @@ pub async fn list_chat_sessions_by_resource(
     include_deleted: bool,
 ) -> Result<Vec<ChatSessionRecord>, sqlx::Error> {
     let sql = if include_deleted {
-        "SELECT s.session_id, s.task_id, s.topic_id, s.title, s.summary, s.chat_model, s.created_at, s.updated_at, s.is_deleted, s.deleted_at, s.user_id \
-         FROM chat_sessions s \
-         INNER JOIN session_context_resources scr ON scr.session_id = s.session_id \
-         WHERE scr.resource_id = ? ORDER BY s.created_at DESC"
+        format!(
+            "SELECT {} FROM chat_sessions s \
+             INNER JOIN session_context_resources scr ON scr.session_id = s.session_id \
+             WHERE scr.resource_id = ? ORDER BY s.created_at DESC",
+            SESSION_FIELDS_PREFIXED
+        )
     } else {
-        "SELECT s.session_id, s.task_id, s.topic_id, s.title, s.summary, s.chat_model, s.created_at, s.updated_at, s.is_deleted, s.deleted_at, s.user_id \
-         FROM chat_sessions s \
-         INNER JOIN session_context_resources scr ON scr.session_id = s.session_id \
-         WHERE scr.resource_id = ? AND s.is_deleted = 0 ORDER BY s.created_at DESC"
+        format!(
+            "SELECT {} FROM chat_sessions s \
+             INNER JOIN session_context_resources scr ON scr.session_id = s.session_id \
+             WHERE scr.resource_id = ? AND s.is_deleted = 0 ORDER BY s.created_at DESC",
+            SESSION_FIELDS_PREFIXED
+        )
     };
 
-    sqlx::query_as::<_, ChatSessionRecord>(sql)
+    sqlx::query_as::<_, ChatSessionRecord>(&sql)
         .bind(resource_id)
         .fetch_all(pool)
         .await
@@ -176,13 +186,14 @@ pub async fn list_chat_messages(
     pool: &DbPool,
     session_id: i64,
 ) -> Result<Vec<ChatMessageRecord>, sqlx::Error> {
-    sqlx::query_as::<_, ChatMessageRecord>(
-        "SELECT message_id, session_id, user_content, assistant_content, input_tokens, output_tokens, reasoning_tokens, total_tokens, created_at \
-         FROM chat_messages WHERE session_id = ? ORDER BY created_at ASC, message_id ASC",
-    )
-    .bind(session_id)
-    .fetch_all(pool)
-    .await
+    let sql = format!(
+        "SELECT {} FROM chat_messages WHERE session_id = ? ORDER BY created_at ASC, message_id ASC",
+        MESSAGE_FIELDS
+    );
+    sqlx::query_as::<_, ChatMessageRecord>(&sql)
+        .bind(session_id)
+        .fetch_all(pool)
+        .await
 }
 
 pub async fn update_chat_message_contents(
