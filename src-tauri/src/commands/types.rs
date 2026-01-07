@@ -49,12 +49,6 @@ pub struct DashboardData {
     pub resources: Vec<ResourceRecord>,
 }
 
-#[derive(Debug, Serialize)]
-pub struct SeedResponse {
-    pub tasks_created: usize,
-    pub resources_created: usize,
-}
-
 // ========== 资源关联 ==========
 
 /// 关联资源到任务的请求

@@ -151,14 +151,6 @@ export interface CaptureResponse {
 }
 
 /**
- * 生成演示数据响应 (对应 Rust: SeedResponse)
- */
-export interface SeedResponse {
-  tasks_created: number;
-  resources_created: number;
-}
-
-/**
  * 关联资源到任务请求 (对应 Rust: LinkResourceRequest)
  */
 export interface LinkResourceRequest {

@@ -384,7 +384,6 @@ app.manage(AppState { db, python }) - 注入状态
 | `LinkResourceRequest`   | 关联资源请求       | task_id, resource_id, visibility_scope, local_alias      |
 | `LinkResourceResponse`  | 关联/取消关联响应  | success                                                  |
 | `TaskResourcesResponse` | 任务资源列表响应   | resources                                                |
-| `SeedResponse`          | 演示数据生成响应   | tasks_created, resources_created                         |
 | `ClipboardContent`      | 剪贴板内容（枚举） | Image/Files/Text/Html/Empty                              |
 | `ReadClipboardResponse` | 读取剪贴板响应     | content                                                  |
 | `SetApiKeyRequest`      | 设置 API Key       | provider, api_key, base_url                              |

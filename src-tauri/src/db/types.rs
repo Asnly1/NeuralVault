@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use sqlx::types::Json;
 use sqlx::{FromRow, Pool, Sqlite, Type};
 

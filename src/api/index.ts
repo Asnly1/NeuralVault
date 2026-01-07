@@ -6,7 +6,6 @@ import {
   CreateTaskResponse,
   CaptureRequest,
   CaptureResponse,
-  SeedResponse,
   LinkResourceRequest,
   LinkResourceResponse,
   TaskResourcesResponse,

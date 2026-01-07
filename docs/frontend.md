@@ -77,7 +77,7 @@ public/
 - 枚举值：`taskStatusValues`、`taskPriorityValues`、`resourceTypeValues`、`classificationValues`
 - 数据类型：`Task`、`Resource`、`DashboardData`、`TaskStatus`、`TaskPriority`、`ResourceType`、`PageType`
 - 常量：`priorityConfig`（优先级标签与颜色）、`resourceTypeIcons`、`navItems`
-- API 类型：`CreateTaskRequest/Response`、`CaptureRequest/Response`、`SeedResponse`、`LinkResourceRequest/Response`、`TaskResourcesResponse`
+- API 类型：`CreateTaskRequest/Response`、`CaptureRequest/Response`、`LinkResourceRequest/Response`、`TaskResourcesResponse`
 - 剪贴板类型：`ClipboardContent`、`ReadClipboardResponse`
 - 资源处理进度：`ProcessingStage`、`IngestProgress`
 - AI 类型：`AIProvider`、`AI_PROVIDER_INFO`、`AIProviderStatus`、`AIConfigStatus`、`SetApiKeyRequest`、`SetDefaultModelRequest`、`ChatMessagePayload`、`SendChatRequest`、`ThinkingEffort`、`ChatUsage`、`ChatStreamAck`、`ChatSession`、`CreateChatSessionRequest/Response`、`ListChatSessionsRequest`、`UpdateChatSessionRequest`、`DeleteChatSessionRequest`、`CreateChatMessageRequest/Response`、`UpdateChatMessageRequest`、`DeleteChatMessageRequest`、`AddMessageAttachmentsRequest`、`RemoveMessageAttachmentRequest`、`SetSessionContextResourcesRequest`、`ModelOption`、`ChatMessage`
