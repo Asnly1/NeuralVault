@@ -5,6 +5,7 @@ mod python;
 mod chat;
 mod resources;
 mod tasks;
+mod topics;
 mod types;
 
 pub use ai_config::*;
@@ -14,4 +15,5 @@ pub use python::*;
 pub use chat::*;
 pub use resources::*;
 pub use tasks::*;
+pub use topics::*;
 pub use types::*;

@@ -15,7 +15,8 @@ src-tauri/
 │   │   ├── pool.rs         # 数据库连接池初始化
 │   │   ├── tasks.rs        # 任务相关数据库操作
 │   │   ├── resources.rs    # 资源相关数据库操作
-│   │   └── tests.rs        # 数据库集成测试
+│   │   ├── topics.rs       # Topic 相关数据库操作
+│   │   └── chat.rs         # 聊天相关数据库操作
 │   ├── commands/            # Tauri 命令模块
 │   │   ├── mod.rs          # 模块导出
 │   │   ├── types.rs        # 请求/响应类型定义
@@ -24,7 +25,9 @@ src-tauri/
 │   │   ├── clipboard.rs    # 剪贴板相关命令
 │   │   ├── dashboard.rs    # Dashboard 相关命令
 │   │   ├── python.rs       # Python Sidecar 相关命令
-│   │   └── ai_config.rs    # AI 配置相关命令（API Key 管理、聊天）
+│   │   ├── topics.rs       # Topic 相关命令
+│   │   ├── chat.rs         # 聊天相关命令
+│   │   └── ai_config.rs    # AI 配置相关命令（API Key 管理）
 │   ├── services/            # 服务层模块
 │   │   ├── mod.rs          # 模块导出
 │   │   └── ai_config.rs    # AI 配置服务（加密存储 API Key）
@@ -270,7 +273,8 @@ app.manage(AppState { db, python }) - 注入状态
 - **`pool.rs`**: 数据库连接池初始化和配置
 - **`tasks.rs`**: 任务相关的数据库操作
 - **`resources.rs`**: 资源相关的数据库操作
-- **`tests.rs`**: 集成测试（仅在测试时编译）
+- **`topics.rs`**: Topic 相关的数据库操作（CRUD + 关联表）
+- **`chat.rs`**: 聊天相关的数据库操作
 - **`mod.rs`**: 导出所有公共接口
 
 #### `db/types.rs`
@@ -288,19 +292,22 @@ app.manage(AppState { db, python }) - 注入状态
 | `ResourceSyncStatus`           | Pending/Synced/Dirty/Error            | 资源同步状态     |
 | `ResourceProcessingStage`      | Todo/Chunking/Embedding/Done          | 资源处理阶段     |
 | `ResourceFileType`             | Text/Image/Pdf/Url/Epub/Other         | 资源文件类型     |
-| `ResourceClassificationStatus` | Unclassified/Suggested/Linked/Ignored | 资源分类状态     |
-| `VisibilityScope`              | This/Subtree/Global                   | 资源关联可见范围 |
+| `TopicReviewStatus`            | Pending/Approved/Rejected             | Topic-资源关联审核状态 |
 
 **数据结构**
 
 | 结构体                   | 功能                        | 关键字段                                                         |
 | ------------------------ | --------------------------- | ---------------------------------------------------------------- |
-| `TaskRecord`             | 任务表记录                  | task_id, uuid, parent_task_id, root_task_id, title, description, status, priority, due_date, done_date, is_deleted |
+| `TaskRecord`             | 任务表记录                  | task_id, uuid, title, description, summary, status, priority, due_date, done_date, updated_at, is_deleted |
 | `NewTask<'a>`            | 插入任务的参数              | 生命周期借用，避免字符串复制                                     |
-| `ResourceRecord`         | 资源表记录                  | resource_id, uuid, file_hash, file_type, content, display_name, file_path, file_size_bytes, sync_status, processing_stage, classification_status, indexed_hash, processing_hash, last_indexed_at, last_error, is_deleted |
+| `ResourceRecord`         | 资源表记录                  | resource_id, uuid, file_hash, file_type, content, summary, display_name, file_path, file_size_bytes, sync_status, processing_stage, indexed_hash, processing_hash, last_indexed_at, last_error, updated_at, is_deleted |
 | `NewResource<'a>`        | 插入资源的参数              | 生命周期借用                                                     |
 | `SourceMeta`             | 资源来源元信息（存为 JSON） | url, window_title                                                |
-| `LinkResourceParams<'a>` | 关联资源到任务的参数        | task_id, resource_id, visibility_scope                           |
+| `LinkResourceParams`     | 关联资源到任务的参数        | task_id, resource_id                                             |
+| `TopicRecord`            | Topic表记录                 | topic_id, title, summary, is_system_default, updated_at          |
+| `NewTopic<'a>`           | 插入Topic的参数             | title, summary, is_system_default, user_id                       |
+| `TopicResourceLinkRecord`| Topic-资源关联记录          | topic_id, resource_id, confidence_score, is_auto_generated, review_status |
+| `NewTopicResourceLink`   | 创建Topic-资源关联的参数     | topic_id, resource_id, confidence_score, is_auto_generated, review_status |
 | `ChunkData`              | Python 分块结果             | chunk_text, chunk_index, page_number, qdrant_uuid, embedding_hash, token_count |
 | `IngestionResultData`    | Python 处理结果             | resource_id, success, chunks, embedding_model, indexed_hash, error |
 
@@ -320,18 +327,34 @@ app.manage(AppState { db, python }) - 注入状态
 | `update_task_due_date()`        | `pool, task_id, due_date`    | `Result<()>`                  | 更新任务截止日期                                   |
 | `update_task_title()`           | `pool, task_id, title`       | `Result<()>`                  | 更新任务标题                                       |
 | `update_task_description()`     | `pool, task_id, description` | `Result<()>`                  | 更新任务描述                                       |
+| `update_task_summary()`         | `pool, task_id, summary`     | `Result<()>`                  | 更新任务摘要（AI 生成）                            |
 | `list_tasks_by_date()`          | `pool, date: &str`           | `Result<Vec<TaskRecord>>`     | 查询指定日期的所有任务（根据 due_date）            |
 | `list_all_tasks()`              | `pool`                       | `Result<Vec<TaskRecord>>`     | 查询所有任务（包括 todo 和 done），用于 Calendar   |
 | `insert_resource()`             | `pool, NewResource<'_>`      | `Result<i64>`                 | 插入资源并返回 `resource_id`                       |
 | `get_resource_by_id()`          | `pool, resource_id`          | `Result<ResourceRecord>`      | 根据 ID 查询资源                                   |
-| `list_unclassified_resources()` | `pool`                       | `Result<Vec<ResourceRecord>>` | 查询未分类资源                                     |
+| `list_all_resources()`          | `pool`                       | `Result<Vec<ResourceRecord>>` | 查询所有未删除资源                                 |
 | `soft_delete_resource()`        | `pool, resource_id`          | `Result<()>`                  | 软删除资源（设置 is_deleted/deleted_at）           |
 | `hard_delete_resource()`        | `pool, resource_id`          | `Result<()>`                  | 硬删除资源（级联删除关联与分块）                   |
 | `update_resource_content()`     | `pool, resource_id, content` | `Result<()>`                  | 更新资源内容（保存编辑器修改）                     |
 | `update_resource_display_name()` | `pool, resource_id, display_name` | `Result<()>`            | 更新资源显示名称（重命名资源）                     |
-| `link_resource_to_task()`       | `pool, LinkResourceParams`   | `Result<()>`                  | 关联资源到任务，更新分类状态为 linked              |
-| `unlink_resource_from_task()`   | `pool, task_id, resource_id` | `Result<()>`                  | 取消关联，检查是否需恢复为 unclassified            |
+| `update_resource_summary()`     | `pool, resource_id, summary` | `Result<()>`                  | 更新资源摘要（AI 生成）                            |
+| `link_resource_to_task()`       | `pool, LinkResourceParams`   | `Result<()>`                  | 关联资源到任务                                     |
+| `unlink_resource_from_task()`   | `pool, task_id, resource_id` | `Result<()>`                  | 取消资源与任务的关联                               |
 | `list_resources_for_task()`     | `pool, task_id`              | `Result<Vec<ResourceRecord>>` | 查询任务的所有关联资源                             |
+| `insert_topic()`                | `pool, NewTopic<'_>`         | `Result<i64>`                 | 插入Topic并返回 `topic_id`                         |
+| `get_topic_by_id()`             | `pool, topic_id`             | `Result<TopicRecord>`         | 根据 ID 查询Topic                                  |
+| `list_topics()`                 | `pool`                       | `Result<Vec<TopicRecord>>`    | 查询所有Topic                                      |
+| `update_topic_title()`          | `pool, topic_id, title`      | `Result<()>`                  | 更新Topic标题                                      |
+| `update_topic_summary()`        | `pool, topic_id, summary`    | `Result<()>`                  | 更新Topic摘要                                      |
+| `hard_delete_topic()`           | `pool, topic_id`             | `Result<()>`                  | 硬删除Topic                                        |
+| `link_resource_to_topic()`      | `pool, NewTopicResourceLink` | `Result<()>`                  | 关联资源到Topic                                    |
+| `unlink_resource_from_topic()`  | `pool, topic_id, resource_id`| `Result<()>`                  | 取消资源与Topic的关联                              |
+| `list_resources_for_topic()`    | `pool, topic_id`             | `Result<Vec<ResourceRecord>>` | 查询Topic的所有关联资源                            |
+| `list_topics_for_resource()`    | `pool, resource_id`          | `Result<Vec<TopicRecord>>`    | 查询资源关联的所有Topic                            |
+| `link_task_to_topic()`          | `pool, task_id, topic_id`    | `Result<()>`                  | 关联任务到Topic                                    |
+| `unlink_task_from_topic()`      | `pool, task_id, topic_id`    | `Result<()>`                  | 取消任务与Topic的关联                              |
+| `list_topics_for_task()`        | `pool, task_id`              | `Result<Vec<TopicRecord>>`    | 查询任务关联的所有Topic                            |
+| `list_tasks_for_topic()`        | `pool, topic_id`             | `Result<Vec<TaskRecord>>`     | 查询Topic关联的所有任务                            |
 | `insert_context_chunks()`       | `pool, resource_id, chunks, embedding_model`  | `Result<()>`       | 写入 Python 处理后的分块结果                        |
 | `update_resource_embedding_status()` | `pool, resource_id, sync_status, processing_stage, indexed_hash, last_error` | `Result<()>` | 更新向量化同步/处理状态（仅在 synced 时更新 last_indexed_at） |
 | `delete_context_chunks()`       | `pool, resource_id`          | `Result<()>`                  | 删除资源分块（更新前清理旧数据）                    |
@@ -342,13 +365,6 @@ app.manage(AppState { db, python }) - 注入状态
 - **同步**：Normal（平衡性能与安全）
 - **外键**：启用（`PRAGMA foreign_keys = ON`）
 - **超时**：5 秒（避免长时间阻塞）
-
-##### 测试
-
-包含完整的集成测试（`#[tokio::test]`）：
-
-- 数据库初始化与 WAL 模式验证
-- 任务与资源的插入、查询、关联操作
 
 ---
 
@@ -396,7 +412,7 @@ app.manage(AppState { db, python }) - 注入状态
 | `update_task_description_command` | `state, task_id, description` | `Result<()>`                    | 更新任务描述                             |
 | `get_tasks_by_date`               | `state, date`                 | `Result<Vec<TaskRecord>>`       | 获取指定日期（due_date）的所有任务       |
 | `get_all_tasks`                   | `state`                       | `Result<Vec<TaskRecord>>`       | 获取所有任务，用于 Calendar 视图         |
-| `get_dashboard`                   | `state`                       | `Result<DashboardData>`         | 返回活跃任务 + 未分类资源                |
+| `get_dashboard`                   | `state`                       | `Result<DashboardData>`         | 返回活跃任务 + 所有资源                  |
 | `link_resource`                   | `state, LinkResourceRequest`  | `Result<LinkResourceResponse>`  | 关联资源到任务                           |
 | `unlink_resource`                 | `state, task_id, resource_id` | `Result<LinkResourceResponse>`  | 取消关联                                 |
 | `get_task_resources`              | `state, task_id`              | `Result<TaskResourcesResponse>` | 获取任务关联的资源列表                   |
@@ -407,7 +423,6 @@ app.manage(AppState { db, python }) - 注入状态
 | `update_resource_display_name_command` | `state, resource_id, display_name` | `Result<()>`           | 更新资源显示名称（重命名资源）           |
 | `check_python_health`             | `state`                       | `Result<serde_json::Value>`     | 检查 Python 后端健康状态                 |
 | `is_python_running`               | `state`                       | `Result<bool>`                  | 检查 Python 进程是否存活                 |
-| `seed_demo_data`                  | `state`                       | `Result<SeedResponse>`          | 生成演示数据（3 个任务 + 3 个资源）      |
 | `read_clipboard`                  | `app`                         | `Result<ReadClipboardResponse>` | 读取系统剪贴板（图片/文件/HTML/文本）    |
 | `get_assets_path`                 | `app`                         | `Result<String>`                | 获取 assets 目录的完整路径               |
 | `get_ai_config_status`            | `state`                       | `Result<AIConfigStatusResponse>`| 获取 AI 配置状态（各 Provider 是否已配置）|
@@ -427,6 +442,23 @@ app.manage(AppState { db, python }) - 注入状态
 | `delete_chat_message_command`     | `state, DeleteChatMessageRequest` | `Result<()>`                 | 删除聊天消息                             |
 | `add_message_attachments`         | `state, AddMessageAttachmentsRequest` | `Result<()>`               | 添加消息附件                             |
 | `remove_message_attachment`       | `state, RemoveMessageAttachmentRequest` | `Result<()>`               | 移除消息附件                             |
+| `update_task_summary_command`     | `state, task_id, summary`     | `Result<()>`                    | 更新任务摘要（AI 生成）                  |
+| `update_resource_summary_command` | `state, resource_id, summary` | `Result<()>`                    | 更新资源摘要（AI 生成）                  |
+| `create_topic`                    | `state, CreateTopicRequest`   | `Result<CreateTopicResponse>`   | 创建 Topic                               |
+| `get_topic_command`               | `state, topic_id`             | `Result<TopicRecord>`           | 获取 Topic 详情                          |
+| `list_topics_command`             | `state`                       | `Result<Vec<TopicRecord>>`      | 获取所有 Topic 列表                      |
+| `update_topic_title_command`      | `state, topic_id, title`      | `Result<()>`                    | 更新 Topic 标题                          |
+| `update_topic_summary_command`    | `state, topic_id, summary`    | `Result<()>`                    | 更新 Topic 摘要                          |
+| `hard_delete_topic_command`       | `state, topic_id`             | `Result<()>`                    | 硬删除 Topic                             |
+| `link_resource_to_topic_command`  | `state, LinkResourceToTopicRequest` | `Result<SuccessResponse>` | 关联资源到 Topic                         |
+| `unlink_resource_from_topic_command` | `state, topic_id, resource_id` | `Result<SuccessResponse>`   | 取消资源与 Topic 的关联                  |
+| `update_topic_resource_review_status_command` | `state, UpdateReviewStatusRequest` | `Result<()>`      | 更新 Topic-资源关联的审核状态            |
+| `get_topic_resources_command`     | `state, topic_id`             | `Result<TopicResourcesResponse>`| 获取 Topic 关联的资源列表                |
+| `get_resource_topics_command`     | `state, resource_id`          | `Result<ResourceTopicsResponse>`| 获取资源关联的 Topic 列表                |
+| `link_task_to_topic_command`      | `state, task_id, topic_id`    | `Result<SuccessResponse>`       | 关联任务到 Topic                         |
+| `unlink_task_from_topic_command`  | `state, task_id, topic_id`    | `Result<SuccessResponse>`       | 取消任务与 Topic 的关联                  |
+| `get_topic_tasks_command`         | `state, topic_id`             | `Result<TopicTasksResponse>`    | 获取 Topic 关联的任务列表                |
+| `get_task_topics_command`         | `state, task_id`              | `Result<TaskTopicsResponse>`    | 获取任务关联的 Topic 列表                |
 
 ##### 核心逻辑详解
 
@@ -490,10 +522,6 @@ app.manage(AppState { db, python }) - 注入状态
 - **空**：返回 `ClipboardContent::Empty`
 
 > **注意**：文件优先于图片，因为 macOS 复制文件时会同时生成预览图片
-
-###### `seed_demo_data`
-
-生成 3 个演示任务和 3 个演示资源，用于快速体验功能。
 
 ###### `send_chat_message`
 
@@ -780,11 +808,14 @@ HUD 窗口管理实现。
 | 表名                 | 说明                      | 关键字段                                                                           |
 | -------------------- | ------------------------- | ---------------------------------------------------------------------------------- |
 | `users`              | 用户表（预留多用户）      | user_id, user_name                                                                 |
-| `tasks`              | 任务表                    | task_id, uuid, title, status, priority, due_date, parent_task_id, root_task_id     |
-| `resources`          | 资源表                    | resource_id, uuid, file_hash, file_type, content, display_name, file_path, file_size_bytes, sync_status, processing_stage, classification_status, indexed_hash, processing_hash, last_indexed_at, last_error |
-| `task_resource_link` | 任务-资源关联表（多对多） | task_id, resource_id, visibility_scope, local_alias                                |
+| `tasks`              | 任务表                    | task_id, uuid, title, summary, status, priority, due_date, updated_at, is_deleted  |
+| `topics`             | Topic表                   | topic_id, title, summary, is_system_default, updated_at                            |
+| `resources`          | 资源表                    | resource_id, uuid, file_hash, file_type, content, summary, display_name, file_path, file_size_bytes, sync_status, processing_stage, indexed_hash, processing_hash, updated_at, is_deleted |
+| `task_resource_link` | 任务-资源关联表（多对多） | task_id, resource_id                                                               |
+| `topic_resource_link`| Topic-资源关联表         | topic_id, resource_id, confidence_score, is_auto_generated, review_status          |
+| `task_topic_link`    | 任务-Topic关联表          | task_id, topic_id                                                                  |
 | `context_chunks`     | 向量化分块表              | chunk_id, resource_id, chunk_text, chunk_index, page_number, qdrant_uuid, embedding_hash, embedding_model, embedding_at, token_count |
-| `chat_sessions`      | 聊天会话表                | session_id, task_id, title, summary, chat_model, created_at, updated_at, is_deleted |
+| `chat_sessions`      | 聊天会话表                | session_id, task_id, topic_id, title, summary, chat_model, created_at, updated_at, is_deleted |
 | `session_context_resources` | 会话上下文资源关系表 | session_id, resource_id |
 | `chat_messages`      | 聊天消息表（按轮次）       | message_id, session_id, user_content, assistant_content, input_tokens, output_tokens, reasoning_tokens, total_tokens |
 | `message_attachments` | 消息附件表               | id, message_id, resource_id |
@@ -792,8 +823,10 @@ HUD 窗口管理实现。
 
 ##### 索引
 
-- **任务表**：`due_date`、`status`、`status + due_date`、`created_at`、`parent_task_id`、`root_task_id`
-- **资源表**：`sync_status`、唯一索引 `(file_hash, user_id)` WHERE `is_deleted = 0`（防止重复上传）
+- **任务表**：`due_date`、`status`、`status + due_date`、`created_at DESC`、`updated_at DESC`
+- **Topic表**：`title`、`updated_at DESC`
+- **资源表**：`sync_status`、`updated_at DESC`、唯一索引 `(file_hash, user_id)` WHERE `is_deleted = 0`（防止重复上传）
+- **Topic-资源关联表**：`topic_id + review_status`（用于 RAG 查询）、`resource_id + topic_id`
 - **分块表**：`resource_id + chunk_index`、`embedding_hash`、`qdrant_uuid`（唯一）
 - **会话表**：`task_id + created_at`、`task_id + updated_at`
 

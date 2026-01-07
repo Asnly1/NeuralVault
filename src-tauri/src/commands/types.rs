@@ -62,10 +62,6 @@ pub struct SeedResponse {
 pub struct LinkResourceRequest {
     pub task_id: i64,
     pub resource_id: i64,
-    /// 可见范围: "this" | "subtree" | "global"
-    pub visibility_scope: Option<String>,
-    /// 本地别名，可在任务上下文中给资源起个别名
-    pub local_alias: Option<String>,
 }
 
 /// 关联/取消关联资源的响应
@@ -118,6 +114,7 @@ pub struct ReadClipboardResponse {
 #[derive(Debug, Deserialize)]
 pub struct CreateChatSessionRequest {
     pub task_id: Option<i64>,
+    pub topic_id: Option<i64>,
     pub title: Option<String>,
     pub summary: Option<String>,
     pub chat_model: Option<String>,
@@ -132,6 +129,7 @@ pub struct CreateChatSessionResponse {
 #[derive(Debug, Deserialize)]
 pub struct ListChatSessionsRequest {
     pub task_id: Option<i64>,
+    pub topic_id: Option<i64>,
     pub resource_id: Option<i64>,
     pub include_deleted: Option<bool>,
 }

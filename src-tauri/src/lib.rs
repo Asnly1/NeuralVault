@@ -16,14 +16,22 @@ pub use app_state::AppState;
 pub use commands::{
     capture_resource, create_task, soft_delete_resource_command, soft_delete_task_command,
     get_assets_path, get_dashboard, get_task_resources, hard_delete_resource_command,
-    hard_delete_task_command, link_resource, read_clipboard, seed_demo_data, unlink_resource,
+    hard_delete_task_command, link_resource, read_clipboard, unlink_resource,
     mark_task_as_done_command, mark_task_as_todo_command, update_task_priority_command,
     update_task_due_date_command, update_task_title_command, update_task_description_command,
+    update_task_summary_command, update_resource_summary_command,
     get_tasks_by_date, get_all_tasks, get_all_resources, update_resource_content_command, update_resource_display_name_command,
     check_python_health, is_python_running, get_ai_config_status, save_api_key, remove_api_key, set_default_model, send_chat_message,
     create_chat_session, get_chat_session, list_chat_sessions, update_chat_session_command, delete_chat_session_command,
     create_chat_message, list_chat_messages, update_chat_message_command, delete_chat_message_command,
     add_message_attachments, remove_message_attachment, set_session_context_resources_command,
+    // Topic commands
+    create_topic, get_topic_command, list_topics_command,
+    update_topic_title_command, update_topic_summary_command, hard_delete_topic_command,
+    link_resource_to_topic_command, unlink_resource_from_topic_command,
+    update_topic_resource_review_status_command, get_topic_resources_command, get_resource_topics_command,
+    link_task_to_topic_command, unlink_task_from_topic_command,
+    get_topic_tasks_command, get_task_topics_command,
 };
 pub use sidecar::PythonSidecar;
 pub use window::{hide_hud, toggle_hud};
@@ -165,7 +173,6 @@ pub fn run() {
             get_dashboard,
             get_task_resources,
             get_all_resources,
-            seed_demo_data,
             link_resource,
             unlink_resource,
             toggle_hud,
@@ -178,6 +185,8 @@ pub fn run() {
             update_task_due_date_command,
             update_task_title_command,
             update_task_description_command,
+            update_task_summary_command,
+            update_resource_summary_command,
             get_tasks_by_date,
             get_all_tasks,
             update_resource_content_command,
@@ -200,7 +209,23 @@ pub fn run() {
             delete_chat_message_command,
             add_message_attachments,
             remove_message_attachment,
-            set_session_context_resources_command
+            set_session_context_resources_command,
+            // Topic commands
+            create_topic,
+            get_topic_command,
+            list_topics_command,
+            update_topic_title_command,
+            update_topic_summary_command,
+            hard_delete_topic_command,
+            link_resource_to_topic_command,
+            unlink_resource_from_topic_command,
+            update_topic_resource_review_status_command,
+            get_topic_resources_command,
+            get_resource_topics_command,
+            link_task_to_topic_command,
+            unlink_task_from_topic_command,
+            get_topic_tasks_command,
+            get_task_topics_command
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {

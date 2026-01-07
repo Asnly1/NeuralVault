@@ -7,8 +7,8 @@ use crate::{
     app_state::AppState,
     db::{
         link_resource_to_task, list_all_resources, list_resources_for_task,
-        unlink_resource_from_task, LinkResourceParams, NewResource, ResourceClassificationStatus,
-        ResourceFileType, ResourceProcessingStage, ResourceSyncStatus, SourceMeta, VisibilityScope,
+        unlink_resource_from_task, LinkResourceParams, NewResource,
+        ResourceFileType, ResourceProcessingStage, ResourceSyncStatus, SourceMeta,
     },
     utils::{
         compute_sha256, get_assets_dir, get_extension, notify_python, parse_file_type,
@@ -221,6 +221,7 @@ pub async fn capture_resource(
         NewResource {
             uuid: &resource_uuid,
             source_meta: meta.as_ref(),
+            summary: None,
             file_hash: &file_hash,
             file_type: resource_type,
             // 文本内容存数据库，二进制文件不存
@@ -235,7 +236,6 @@ pub async fn capture_resource(
             last_indexed_at: None,
             last_error: None,
             processing_stage: ResourceProcessingStage::Todo,
-            classification_status: ResourceClassificationStatus::Unclassified,
             user_id: 1,
         },
     )
@@ -274,20 +274,11 @@ pub async fn link_resource(
 ) -> Result<LinkResourceResponse, String> {
     let pool = &state.db;
 
-    // 解析可见范围，默认为 subtree
-    let visibility_scope = match payload.visibility_scope.as_deref() {
-        Some("this") => VisibilityScope::This,
-        Some("global") => VisibilityScope::Global,
-        _ => VisibilityScope::Subtree,
-    };
-
     link_resource_to_task(
         pool,
         LinkResourceParams {
             task_id: payload.task_id,
             resource_id: payload.resource_id,
-            visibility_scope,
-            local_alias: payload.local_alias.as_deref(),
         },
     )
     .await
@@ -433,6 +424,22 @@ pub async fn update_resource_display_name_command(
     let pool = &state.db;
 
     crate::db::update_resource_display_name(pool, resource_id, &display_name)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+/// 更新资源摘要 (AI 生成)
+#[tauri::command]
+pub async fn update_resource_summary_command(
+    state: State<'_, AppState>,
+    resource_id: i64,
+    summary: Option<String>,
+) -> Result<(), String> {
+    let pool = &state.db;
+
+    crate::db::update_resource_summary(pool, resource_id, summary.as_deref())
         .await
         .map_err(|e| e.to_string())?;
 

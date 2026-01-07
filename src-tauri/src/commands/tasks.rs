@@ -7,7 +7,7 @@ use crate::{
         hard_delete_task, soft_delete_task, get_task_by_id, insert_task, NewTask, 
         TaskPriority, TaskStatus, mark_task_as_done, mark_task_as_todo, 
         update_task_priority, update_task_due_date, update_task_title, 
-        update_task_description, list_tasks_by_date, list_all_tasks,
+        update_task_description, update_task_summary, list_tasks_by_date, list_all_tasks,
     },
 };
 
@@ -27,11 +27,9 @@ pub async fn create_task(
         pool,
         NewTask {
             uuid: &uuid,
-            parent_task_id: None,
-            root_task_id: None,
             title: Some(&payload.title),
             description: payload.description.as_deref(),
-            suggested_subtasks: None,
+            summary: None,
             status,
             priority,
             due_date: payload.due_date.as_deref(),
@@ -150,6 +148,20 @@ pub async fn update_task_description_command(
 ) -> Result<(), String> {
     let pool = &state.db;
     update_task_description(pool, task_id, description.as_deref())
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// 更新任务摘要 (AI 生成)
+#[tauri::command]
+pub async fn update_task_summary_command(
+    state: State<'_, AppState>,
+    task_id: i64,
+    summary: Option<String>,
+) -> Result<(), String> {
+    let pool = &state.db;
+    update_task_summary(pool, task_id, summary.as_deref())
         .await
         .map_err(|e| e.to_string())?;
     Ok(())

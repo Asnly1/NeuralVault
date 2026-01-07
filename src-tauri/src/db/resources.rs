@@ -8,11 +8,12 @@ pub async fn insert_resource(
 ) -> Result<i64, sqlx::Error> {
     // 显式写入同步/处理/分类状态，便于调试；不要依赖 DB 默认值
     let result = sqlx::query(
-        "INSERT INTO resources (uuid, source_meta, file_hash, file_type, content, display_name, file_path, file_size_bytes, indexed_hash, processing_hash, sync_status, last_indexed_at, last_error, processing_stage, classification_status, user_id) \
+        "INSERT INTO resources (uuid, source_meta, summary, file_hash, file_type, content, display_name, file_path, file_size_bytes, indexed_hash, processing_hash, sync_status, last_indexed_at, last_error, processing_stage, user_id) \
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(params.uuid)
     .bind(params.source_meta.map(Json))
+    .bind(params.summary)
     .bind(params.file_hash)
     .bind(params.file_type)
     .bind(params.content)
@@ -25,7 +26,6 @@ pub async fn insert_resource(
     .bind(params.last_indexed_at)
     .bind(params.last_error)
     .bind(params.processing_stage)
-    .bind(params.classification_status)
     .bind(params.user_id)
     .execute(pool)
     .await?;
@@ -38,8 +38,9 @@ pub async fn get_resource_by_id(
     resource_id: i64,
 ) -> Result<ResourceRecord, sqlx::Error> {
     sqlx::query_as::<_, ResourceRecord>(
-        "SELECT resource_id, uuid, source_meta, file_hash, file_type, content, display_name, \
-                file_path, file_size_bytes, indexed_hash, processing_hash, sync_status, last_indexed_at, last_error, processing_stage, classification_status, created_at, is_deleted, deleted_at, user_id \
+        "SELECT resource_id, uuid, source_meta, summary, file_hash, file_type, content, display_name, \
+                file_path, file_size_bytes, indexed_hash, processing_hash, sync_status, last_indexed_at, \
+                last_error, processing_stage, created_at, updated_at, is_deleted, deleted_at, user_id \
          FROM resources WHERE resource_id = ?",
     )
     .bind(resource_id)
@@ -47,26 +48,13 @@ pub async fn get_resource_by_id(
     .await
 }
 
-pub async fn list_unclassified_resources(
-    pool: &DbPool,
-) -> Result<Vec<ResourceRecord>, sqlx::Error> {
-    sqlx::query_as::<_, ResourceRecord>(
-        "SELECT resource_id, uuid, source_meta, file_hash, file_type, content, display_name, \
-                file_path, file_size_bytes, indexed_hash, processing_hash, sync_status, last_indexed_at, last_error, processing_stage, classification_status, created_at, is_deleted, deleted_at, user_id \
-         FROM resources \
-         WHERE classification_status = 'unclassified' AND is_deleted = 0 \
-         ORDER BY created_at DESC",
-    )
-    .fetch_all(pool)
-    .await
-}
-
 pub async fn list_all_resources(
     pool: &DbPool,
 ) -> Result<Vec<ResourceRecord>, sqlx::Error> {
     sqlx::query_as::<_, ResourceRecord>(
-        "SELECT resource_id, uuid, source_meta, file_hash, file_type, content, display_name, \
-                file_path, file_size_bytes, indexed_hash, processing_hash, sync_status, last_indexed_at, last_error, processing_stage, classification_status, created_at, is_deleted, deleted_at, user_id \
+        "SELECT resource_id, uuid, source_meta, summary, file_hash, file_type, content, display_name, \
+                file_path, file_size_bytes, indexed_hash, processing_hash, sync_status, last_indexed_at, \
+                last_error, processing_stage, created_at, updated_at, is_deleted, deleted_at, user_id \
          FROM resources \
          WHERE is_deleted = 0 \
          ORDER BY created_at DESC",
@@ -77,28 +65,20 @@ pub async fn list_all_resources(
 
 pub async fn link_resource_to_task(
     pool: &DbPool,
-    params: LinkResourceParams<'_>,
+    params: LinkResourceParams,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "INSERT INTO task_resource_link (task_id, resource_id, visibility_scope, local_alias) \
-         VALUES (?, ?, ?, ?)",
+        "INSERT INTO task_resource_link (task_id, resource_id) VALUES (?, ?)",
     )
     .bind(params.task_id)
     .bind(params.resource_id)
-    .bind(params.visibility_scope)
-    .bind(params.local_alias)
     .execute(pool)
     .await?;
-
-    sqlx::query("UPDATE resources SET classification_status = 'linked' WHERE resource_id = ?")
-        .bind(params.resource_id)
-        .execute(pool)
-        .await?;
 
     Ok(())
 }
 
-/// 取消资源与任务的关联，并将资源状态改回 unclassified
+/// 取消资源与任务的关联
 pub async fn unlink_resource_from_task(
     pool: &DbPool,
     task_id: i64,
@@ -110,19 +90,6 @@ pub async fn unlink_resource_from_task(
         .execute(pool)
         .await?;
 
-    // 检查资源是否还有其他关联，如果没有则恢复为 unclassified
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM task_resource_link WHERE resource_id = ?")
-        .bind(resource_id)
-        .fetch_one(pool)
-        .await?;
-
-    if count == 0 {
-        sqlx::query("UPDATE resources SET classification_status = 'unclassified' WHERE resource_id = ?")
-            .bind(resource_id)
-            .execute(pool)
-            .await?;
-    }
-
     Ok(())
 }
 
@@ -131,9 +98,10 @@ pub async fn list_resources_for_task(
     task_id: i64,
 ) -> Result<Vec<ResourceRecord>, sqlx::Error> {
     sqlx::query_as::<_, ResourceRecord>(
-        "SELECT r.resource_id, r.uuid, r.source_meta, r.file_hash, r.file_type, r.content, \
+        "SELECT r.resource_id, r.uuid, r.source_meta, r.summary, r.file_hash, r.file_type, r.content, \
                 r.display_name, r.file_path, r.file_size_bytes, r.indexed_hash, r.processing_hash, \
-                r.sync_status, r.last_indexed_at, r.last_error, r.processing_stage, r.classification_status, r.created_at, r.is_deleted, r.deleted_at, r.user_id \
+                r.sync_status, r.last_indexed_at, r.last_error, r.processing_stage, r.created_at, \
+                r.updated_at, r.is_deleted, r.deleted_at, r.user_id \
          FROM resources r \
          INNER JOIN task_resource_link l ON l.resource_id = r.resource_id \
          WHERE l.task_id = ?",
@@ -160,7 +128,7 @@ pub async fn soft_delete_resource(
 }
 
 /// 更新资源内容
-/// 
+///
 /// 用于保存文本编辑器中的更改
 pub async fn update_resource_content(
     pool: &DbPool,
@@ -172,7 +140,8 @@ pub async fn update_resource_content(
     sqlx::query(
         "UPDATE resources \
          SET content = ?, file_hash = ?, file_size_bytes = ?, \
-             sync_status = 'dirty', processing_stage = 'todo', last_error = NULL \
+             sync_status = 'dirty', processing_stage = 'todo', last_error = NULL, \
+             updated_at = CURRENT_TIMESTAMP \
          WHERE resource_id = ?"
     )
         .bind(content)
@@ -190,8 +159,9 @@ pub async fn list_pending_resources(
     pool: &DbPool,
 ) -> Result<Vec<ResourceRecord>, sqlx::Error> {
     sqlx::query_as::<_, ResourceRecord>(
-        "SELECT resource_id, uuid, source_meta, file_hash, file_type, content, display_name, \
-                file_path, file_size_bytes, indexed_hash, processing_hash, sync_status, last_indexed_at, last_error, processing_stage, classification_status, created_at, is_deleted, deleted_at, user_id \
+        "SELECT resource_id, uuid, source_meta, summary, file_hash, file_type, content, display_name, \
+                file_path, file_size_bytes, indexed_hash, processing_hash, sync_status, last_indexed_at, \
+                last_error, processing_stage, created_at, updated_at, is_deleted, deleted_at, user_id \
          FROM resources \
          WHERE sync_status IN ('pending', 'dirty', 'error') AND is_deleted = 0 \
          ORDER BY created_at ASC",
@@ -201,15 +171,30 @@ pub async fn list_pending_resources(
 }
 
 /// 更新资源显示名称
-/// 
+///
 /// 用于重命名资源
 pub async fn update_resource_display_name(
     pool: &DbPool,
     resource_id: i64,
     display_name: &str,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query("UPDATE resources SET display_name = ? WHERE resource_id = ?")
+    sqlx::query("UPDATE resources SET display_name = ?, updated_at = CURRENT_TIMESTAMP WHERE resource_id = ?")
         .bind(display_name)
+        .bind(resource_id)
+        .execute(pool)
+        .await?;
+
+    Ok(())
+}
+
+/// 更新资源摘要 (AI 生成)
+pub async fn update_resource_summary(
+    pool: &DbPool,
+    resource_id: i64,
+    summary: Option<&str>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE resources SET summary = ?, updated_at = CURRENT_TIMESTAMP WHERE resource_id = ?")
+        .bind(summary)
         .bind(resource_id)
         .execute(pool)
         .await?;
@@ -221,11 +206,10 @@ pub async fn update_resource_display_name(
 ///
 /// 注意：由于配置了 ON DELETE CASCADE，删除资源会级联删除：
 /// - task_resource_link 表中的关联记录
+/// - topic_resource_link 表中的关联记录
 /// - context_chunks 表中的所有分块记录
 ///
 /// 注意：此函数不会删除物理文件（assets 目录中的文件）
-/// 如需删除文件，请在调用此函数前先获取 file_path 并手动删除
-/// TODO：删除物理文件
 pub async fn hard_delete_resource(
     pool: &DbPool,
     resource_id: i64,
@@ -284,7 +268,8 @@ pub async fn update_resource_embedding_status(
     sqlx::query(
         "UPDATE resources SET \
          sync_status = ?, processing_stage = ?, indexed_hash = ?, last_error = ?, \
-         last_indexed_at = CASE WHEN ? = 'synced' THEN CURRENT_TIMESTAMP ELSE last_indexed_at END \
+         last_indexed_at = CASE WHEN ? = 'synced' THEN CURRENT_TIMESTAMP ELSE last_indexed_at END, \
+         updated_at = CURRENT_TIMESTAMP \
          WHERE resource_id = ?"
     )
     .bind(sync_status)
@@ -306,7 +291,7 @@ pub async fn update_resource_processing_stage(
     processing_stage: &str,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "UPDATE resources SET processing_stage = ? WHERE resource_id = ?"
+        "UPDATE resources SET processing_stage = ?, updated_at = CURRENT_TIMESTAMP WHERE resource_id = ?"
     )
     .bind(processing_stage)
     .bind(resource_id)

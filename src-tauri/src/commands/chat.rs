@@ -6,8 +6,9 @@ use crate::{
     app_state::AppState,
     db::{
         insert_chat_session, get_chat_session_by_id, list_chat_sessions_by_task,
-        list_chat_sessions_by_resource, update_chat_session, soft_delete_chat_session,
-        insert_chat_message, list_chat_messages as list_chat_messages_db, update_chat_message_contents, delete_chat_message,
+        list_chat_sessions_by_topic, list_chat_sessions_by_resource, update_chat_session, 
+        soft_delete_chat_session, insert_chat_message, 
+        list_chat_messages as list_chat_messages_db, update_chat_message_contents, delete_chat_message,
         insert_message_attachments, list_message_attachments_with_resource,
         delete_message_attachment, set_session_context_resources, NewChatMessage,
         NewChatSession, NewMessageAttachment,
@@ -32,6 +33,7 @@ pub async fn create_chat_session(
         &state.db,
         NewChatSession {
             task_id: payload.task_id,
+            topic_id: payload.topic_id,
             title: payload.title.as_deref(),
             summary: payload.summary.as_deref(),
             chat_model: payload.chat_model.as_deref(),
@@ -72,13 +74,19 @@ pub async fn list_chat_sessions(
             .map_err(|e| e.to_string());
     }
 
+    if let Some(topic_id) = payload.topic_id {
+        return list_chat_sessions_by_topic(&state.db, topic_id, include_deleted)
+            .await
+            .map_err(|e| e.to_string());
+    }
+
     if let Some(resource_id) = payload.resource_id {
         return list_chat_sessions_by_resource(&state.db, resource_id, include_deleted)
             .await
             .map_err(|e| e.to_string());
     }
 
-    Err("task_id or resource_id is required".to_string())
+    Err("task_id, topic_id, or resource_id is required".to_string())
 }
 
 #[tauri::command]

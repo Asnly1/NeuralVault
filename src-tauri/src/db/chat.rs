@@ -27,10 +27,11 @@ pub async fn insert_chat_session(
     params: NewChatSession<'_>,
 ) -> Result<i64, sqlx::Error> {
     let result = sqlx::query(
-        "INSERT INTO chat_sessions (task_id, title, summary, chat_model, user_id) \
-         VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO chat_sessions (task_id, topic_id, title, summary, chat_model, user_id) \
+         VALUES (?, ?, ?, ?, ?, ?)",
     )
     .bind(params.task_id)
+    .bind(params.topic_id)
     .bind(params.title)
     .bind(params.summary)
     .bind(params.chat_model)
@@ -46,7 +47,7 @@ pub async fn get_chat_session_by_id(
     session_id: i64,
 ) -> Result<ChatSessionRecord, sqlx::Error> {
     sqlx::query_as::<_, ChatSessionRecord>(
-        "SELECT session_id, task_id, title, summary, chat_model, created_at, updated_at, is_deleted, deleted_at, user_id \
+        "SELECT session_id, task_id, topic_id, title, summary, chat_model, created_at, updated_at, is_deleted, deleted_at, user_id \
          FROM chat_sessions WHERE session_id = ?",
     )
     .bind(session_id)
@@ -60,15 +61,34 @@ pub async fn list_chat_sessions_by_task(
     include_deleted: bool,
 ) -> Result<Vec<ChatSessionRecord>, sqlx::Error> {
     let sql = if include_deleted {
-        "SELECT session_id, task_id, title, summary, chat_model, created_at, updated_at, is_deleted, deleted_at, user_id \
+        "SELECT session_id, task_id, topic_id, title, summary, chat_model, created_at, updated_at, is_deleted, deleted_at, user_id \
          FROM chat_sessions WHERE task_id = ? ORDER BY created_at DESC"
     } else {
-        "SELECT session_id, task_id, title, summary, chat_model, created_at, updated_at, is_deleted, deleted_at, user_id \
+        "SELECT session_id, task_id, topic_id, title, summary, chat_model, created_at, updated_at, is_deleted, deleted_at, user_id \
          FROM chat_sessions WHERE task_id = ? AND is_deleted = 0 ORDER BY created_at DESC"
     };
 
     sqlx::query_as::<_, ChatSessionRecord>(sql)
         .bind(task_id)
+        .fetch_all(pool)
+        .await
+}
+
+pub async fn list_chat_sessions_by_topic(
+    pool: &DbPool,
+    topic_id: i64,
+    include_deleted: bool,
+) -> Result<Vec<ChatSessionRecord>, sqlx::Error> {
+    let sql = if include_deleted {
+        "SELECT session_id, task_id, topic_id, title, summary, chat_model, created_at, updated_at, is_deleted, deleted_at, user_id \
+         FROM chat_sessions WHERE topic_id = ? ORDER BY created_at DESC"
+    } else {
+        "SELECT session_id, task_id, topic_id, title, summary, chat_model, created_at, updated_at, is_deleted, deleted_at, user_id \
+         FROM chat_sessions WHERE topic_id = ? AND is_deleted = 0 ORDER BY created_at DESC"
+    };
+
+    sqlx::query_as::<_, ChatSessionRecord>(sql)
+        .bind(topic_id)
         .fetch_all(pool)
         .await
 }
@@ -79,12 +99,12 @@ pub async fn list_chat_sessions_by_resource(
     include_deleted: bool,
 ) -> Result<Vec<ChatSessionRecord>, sqlx::Error> {
     let sql = if include_deleted {
-        "SELECT s.session_id, s.task_id, s.title, s.summary, s.chat_model, s.created_at, s.updated_at, s.is_deleted, s.deleted_at, s.user_id \
+        "SELECT s.session_id, s.task_id, s.topic_id, s.title, s.summary, s.chat_model, s.created_at, s.updated_at, s.is_deleted, s.deleted_at, s.user_id \
          FROM chat_sessions s \
          INNER JOIN session_context_resources scr ON scr.session_id = s.session_id \
          WHERE scr.resource_id = ? ORDER BY s.created_at DESC"
     } else {
-        "SELECT s.session_id, s.task_id, s.title, s.summary, s.chat_model, s.created_at, s.updated_at, s.is_deleted, s.deleted_at, s.user_id \
+        "SELECT s.session_id, s.task_id, s.topic_id, s.title, s.summary, s.chat_model, s.created_at, s.updated_at, s.is_deleted, s.deleted_at, s.user_id \
          FROM chat_sessions s \
          INNER JOIN session_context_resources scr ON scr.session_id = s.session_id \
          WHERE scr.resource_id = ? AND s.is_deleted = 0 ORDER BY s.created_at DESC"

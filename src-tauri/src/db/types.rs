@@ -44,18 +44,15 @@ pub enum TaskPriority {
 pub struct TaskRecord {
     pub task_id: i64,
     pub uuid: String,
-    pub parent_task_id: Option<i64>,
-    pub root_task_id: Option<i64>,
     pub title: Option<String>,
     pub description: Option<String>,
-    pub suggested_subtasks: Option<Json<Value>>,
+    pub summary: Option<String>,
     pub status: TaskStatus,
     pub done_date: Option<String>,
     pub priority: TaskPriority,
     pub due_date: Option<String>,
     pub created_at: Option<String>,
-    pub user_updated_at: Option<String>,
-    pub system_updated_at: Option<String>,
+    pub updated_at: Option<String>,
     pub is_deleted: bool,
     pub deleted_at: Option<String>,
     pub user_id: i64,
@@ -63,11 +60,9 @@ pub struct TaskRecord {
 
 pub struct NewTask<'a> {
     pub uuid: &'a str,
-    pub parent_task_id: Option<i64>,
-    pub root_task_id: Option<i64>,
     pub title: Option<&'a str>,
     pub description: Option<&'a str>,
-    pub suggested_subtasks: Option<&'a Value>,
+    pub summary: Option<&'a str>,
     pub status: TaskStatus,
     pub priority: TaskPriority,
     pub due_date: Option<&'a str>,
@@ -115,21 +110,12 @@ pub enum ResourceFileType {
     Other,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Type, Serialize)]
-#[sqlx(rename_all = "lowercase")]
-#[serde(rename_all = "lowercase")]
-pub enum ResourceClassificationStatus {
-    Unclassified,
-    Suggested,
-    Linked,
-    Ignored,
-}
-
 #[derive(Debug, FromRow, PartialEq, Eq, Serialize)]
 pub struct ResourceRecord {
     pub resource_id: i64,
     pub uuid: String,
     pub source_meta: Option<Json<SourceMeta>>,
+    pub summary: Option<String>,
     pub file_hash: String,
     pub file_type: ResourceFileType,
     pub content: Option<String>,
@@ -142,8 +128,8 @@ pub struct ResourceRecord {
     pub last_indexed_at: Option<String>,
     pub last_error: Option<String>,
     pub processing_stage: ResourceProcessingStage,
-    pub classification_status: ResourceClassificationStatus,
     pub created_at: Option<String>,
+    pub updated_at: Option<String>,
     pub is_deleted: bool,
     pub deleted_at: Option<String>,
     pub user_id: i64,
@@ -152,6 +138,7 @@ pub struct ResourceRecord {
 pub struct NewResource<'a> {
     pub uuid: &'a str,
     pub source_meta: Option<&'a SourceMeta>,
+    pub summary: Option<&'a str>,
     pub file_hash: &'a str,
     pub file_type: ResourceFileType,
     pub content: Option<&'a str>,
@@ -164,24 +151,12 @@ pub struct NewResource<'a> {
     pub last_indexed_at: Option<&'a str>,
     pub last_error: Option<&'a str>,
     pub processing_stage: ResourceProcessingStage,
-    pub classification_status: ResourceClassificationStatus,
     pub user_id: i64,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Type, Serialize)]
-#[sqlx(rename_all = "lowercase")]
-#[serde(rename_all = "lowercase")]
-pub enum VisibilityScope {
-    This,
-    Subtree,
-    Global,
-}
-
-pub struct LinkResourceParams<'a> {
+pub struct LinkResourceParams {
     pub task_id: i64,
     pub resource_id: i64,
-    pub visibility_scope: VisibilityScope,
-    pub local_alias: Option<&'a str>,
 }
 
 /// Python 处理后返回的 chunk 数据
@@ -206,10 +181,73 @@ pub struct IngestionResultData {
     pub error: Option<String>,
 }
 
+// ==========================================
+// Topic 相关类型
+// ==========================================
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Type, Serialize, Deserialize)]
+#[sqlx(rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+pub enum TopicReviewStatus {
+    Pending,
+    Approved,
+    Rejected,
+}
+
+#[derive(Debug, FromRow, PartialEq, Eq, Serialize)]
+pub struct TopicRecord {
+    pub topic_id: i64,
+    pub title: String,
+    pub summary: Option<String>,
+    pub is_system_default: bool,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
+    pub user_id: i64,
+}
+
+pub struct NewTopic<'a> {
+    pub title: &'a str,
+    pub summary: Option<&'a str>,
+    pub is_system_default: bool,
+    pub user_id: i64,
+}
+
+#[derive(Debug, FromRow, PartialEq, Serialize)]
+pub struct TopicResourceLinkRecord {
+    pub topic_id: i64,
+    pub resource_id: i64,
+    pub confidence_score: Option<f64>,
+    pub is_auto_generated: bool,
+    pub review_status: TopicReviewStatus,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
+}
+
+pub struct NewTopicResourceLink {
+    pub topic_id: i64,
+    pub resource_id: i64,
+    pub confidence_score: Option<f64>,
+    pub is_auto_generated: bool,
+    pub review_status: TopicReviewStatus,
+}
+
+#[derive(Debug, FromRow, PartialEq, Eq, Serialize)]
+pub struct TaskTopicLinkRecord {
+    pub task_id: i64,
+    pub topic_id: i64,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
+}
+
+// ==========================================
+// Chat 相关类型
+// ==========================================
+
 #[derive(Debug, FromRow, Serialize)]
 pub struct ChatSessionRecord {
     pub session_id: i64,
     pub task_id: Option<i64>,
+    pub topic_id: Option<i64>,
     pub title: Option<String>,
     pub summary: Option<String>,
     pub chat_model: Option<String>,
@@ -222,6 +260,7 @@ pub struct ChatSessionRecord {
 
 pub struct NewChatSession<'a> {
     pub task_id: Option<i64>,
+    pub topic_id: Option<i64>,
     pub title: Option<&'a str>,
     pub summary: Option<&'a str>,
     pub chat_model: Option<&'a str>,

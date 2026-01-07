@@ -253,17 +253,6 @@ export const updateResourceDisplayName = async (
 };
 
 // ============================================
-// Demo Data API
-// ============================================
-
-/**
- * 生成演示数据
- */
-export const seedDemoData = async (): Promise<SeedResponse> => {
-  return await invoke("seed_demo_data");
-};
-
-// ============================================
 // HUD API
 // ============================================
 
