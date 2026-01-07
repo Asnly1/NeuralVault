@@ -42,7 +42,16 @@ Python依赖：
     资源捕获+自动分类（乐观 UI + 后台异步队列）：
         1. 用户上传Resource
         2. 对Resource进行分析
-            1. 提取，解析内容（readability.js + Trafilatura / OCR / pymupdf4llm）（方案待定）
+            1. 提取，解析内容
+                1. 图片：rust-paddle-ocr
+                2. PDF：pdf_oxide + pdfium-render + rust-paddle-ocr
+                3. EPUB：epub + html2text（暂时不做）
+                4. 网页：
+                    1. 在剪贴板里用正则匹配出SourceURL
+                    2. 使用active-win获取当前Window Title（Google Chrome: Rust 语言圣经 - Google Chrome）
+                    3. 构造https://example.com/page.html#:~:text=复制的文字（"Scroll to Text Fragment" (滚动到文本片段)）
+                    4. 在前端渲染时点击url就可以打开浏览器并跳转到对应位置
+                5. Word/Excel/PowerPoint：extractous（暂时不做）
             2. FastEmbed向量化存入Qdrant ; 调用使用 LlamaIndex 的 PropertyGraphIndex提取知识图谱（暂时不做）
             3. 调用LLM，分析Resource内容，生成Summary（暂时不做）
         3. AI根据分析结果，查找过去已存在的相关的Resource，把新Resource关联到一起，加入原有Topic。如果没有找到合适的Topic，就新建一个Topic。保留记录，用户可以手动撤回
