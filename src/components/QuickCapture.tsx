@@ -12,9 +12,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Paperclip, ArrowUp, X } from "lucide-react";
+import { Paperclip, ArrowUp, X, MessageSquare } from "lucide-react";
 import { readClipboard } from "@/api";
-import { ClipboardContent } from "@/types";
+import { ClipboardContent, InputMode } from "@/types";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 // variant: 组件变体，用于添加不同的 CSS 类
@@ -41,6 +41,12 @@ interface QuickCaptureProps {
   // 是否自动聚焦
   autoFocus?: boolean;
   placeholder?: string;
+  // 输入模式：capture（默认）或 chat
+  mode?: InputMode;
+  // 模式切换回调
+  onModeChange?: (mode: InputMode) => void;
+  // Chat 模式提交回调
+  onChatSubmit?: (content: string) => void;
 }
 
 export function QuickCapture({
@@ -51,6 +57,9 @@ export function QuickCapture({
   onCancel,
   autoFocus = false,
   placeholder,
+  mode = "capture",
+  onModeChange,
+  onChatSubmit,
 }: QuickCaptureProps) {
   const [content, setContent] = useState("");
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
@@ -59,6 +68,7 @@ export function QuickCapture({
   const { t } = useLanguage();
 
   const isHUD = variant === "hud";
+  const isChatMode = mode === "chat";
 
   // 默认 placeholder
   const defaultPlaceholder = t("dashboard", "quickCapture");
@@ -122,6 +132,21 @@ export function QuickCapture({
     )
       return;
 
+    // Chat 模式：调用 onChatSubmit 并清空输入
+    if (isChatMode) {
+      const text = content.trim();
+      if (text && onChatSubmit) {
+        onChatSubmit(text);
+        setContent("");
+        // 重置 textarea 高度
+        if (textareaRef.current) {
+          textareaRef.current.style.height = "auto";
+        }
+      }
+      return;
+    }
+
+    // Capture 模式：原有逻辑
     setIsSubmitting(true);
     try {
       const text = content.trim();
@@ -336,19 +361,43 @@ export function QuickCapture({
 
           <div className={cn(
             "flex items-center gap-2 rounded-xl border bg-background px-3 py-2 transition-all focus-within:ring-1 focus-within:ring-primary/20",
-            !isHUD && "shadow-sm border-border hover:border-primary/20"
+            !isHUD && "shadow-sm border-border hover:border-primary/20",
+            // Chat 模式样式：蓝色边框和淡蓝色背景
+            isChatMode && "border-blue-400/50 bg-blue-50/50 dark:bg-blue-950/20 focus-within:ring-blue-400/30"
           )}>
-             <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0 rounded-lg"
-                onClick={handleFileButtonClick}
-                disabled={isLoading}
-                title="选择文件" 
-              >
-                <Paperclip className="h-4.5 w-4.5" />
-              </Button>
+             {/* 模式切换按钮 */}
+             {onModeChange && (
+               <Button
+                 type="button"
+                 variant="ghost"
+                 size="icon"
+                 className={cn(
+                   "h-8 w-8 shrink-0 rounded-lg transition-colors",
+                   isChatMode
+                     ? "text-blue-500 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30"
+                     : "text-muted-foreground hover:text-foreground"
+                 )}
+                 onClick={() => onModeChange(isChatMode ? "capture" : "chat")}
+                 title={isChatMode ? "切换到捕获模式" : "切换到聊天模式"}
+               >
+                 {isChatMode ? <MessageSquare className="h-4.5 w-4.5" /> : <MessageSquare className="h-4.5 w-4.5" />}
+               </Button>
+             )}
+
+             {/* 文件选择按钮（仅 Capture 模式显示） */}
+             {!isChatMode && (
+               <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0 rounded-lg"
+                  onClick={handleFileButtonClick}
+                  disabled={isLoading}
+                  title="选择文件"
+                >
+                  <Paperclip className="h-4.5 w-4.5" />
+                </Button>
+             )}
 
               <Textarea
                 ref={textareaRef}

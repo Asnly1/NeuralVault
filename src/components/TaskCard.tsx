@@ -18,7 +18,7 @@ interface TaskCardProps {
 export function TaskCard({ task, onClick, onDelete, onUpdate }: TaskCardProps) {
   const [editOpen, setEditOpen] = useState(false);
   const isOverdue = task.due_date && new Date(task.due_date) < new Date();
-  const priority = priorityConfig[task.priority];
+  const priority = priorityConfig[task.priority ?? "medium"];
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation(); // 阻止事件冒泡，防止触发卡片的 onClick

@@ -4,6 +4,7 @@ export const translations = {
   zh: {
     sidebar: {
       dashboard: "看板",
+      warehouse: "仓库",
       workspace: "工作台",
       calendar: "日历",
       settings: "设置",
@@ -12,6 +13,15 @@ export const translations = {
       searchPlaceholder: "搜索...",
       menu: "菜单",
       noFavorites: "暂无收藏",
+    },
+    warehouse: {
+      title: "仓库",
+      all: "全部",
+      topics: "主题",
+      tasks: "任务",
+      resources: "资源",
+      inbox: "收件箱",
+      empty: "暂无内容",
     },
     settings: {
       title: "设置",
@@ -90,6 +100,7 @@ export const translations = {
       goToSettings: "前往设置",
       selectModelFirst: "请先选择一个模型",
       tokenUsage: "Token 用量:",
+      pinToContext: "保存到上下文",
     },
     common: {
       untitled: "无标题",
@@ -106,6 +117,7 @@ export const translations = {
   en: {
     sidebar: {
       dashboard: "Dashboard",
+      warehouse: "Warehouse",
       workspace: "Workspace",
       calendar: "Calendar",
       settings: "Settings",
@@ -114,6 +126,15 @@ export const translations = {
       searchPlaceholder: "Search...",
       menu: "Menu",
       noFavorites: "No favorites",
+    },
+    warehouse: {
+      title: "Warehouse",
+      all: "All",
+      topics: "Topics",
+      tasks: "Tasks",
+      resources: "Resources",
+      inbox: "Inbox",
+      empty: "No content",
     },
     settings: {
       title: "Settings",
@@ -192,6 +213,7 @@ export const translations = {
       goToSettings: "Go to Settings",
       selectModelFirst: "Please select a model first",
       tokenUsage: "Tokens:",
+      pinToContext: "Save to Context",
     },
     common: {
       untitled: "Untitled",

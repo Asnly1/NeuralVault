@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 
 import {
   LayoutDashboard,
@@ -9,8 +9,13 @@ import {
   Settings,
   ChevronsLeft,
   ChevronsRight,
+  Package,
+  Tag,
+  CheckSquare,
+  FileText,
 } from "lucide-react";
-import { PageType, navItems } from "../types";
+import { PageType, navItems, NodeRecord, NodeType } from "../types";
+import { fetchPinnedNodes } from "../api";
 
 import { useLanguage } from "@/contexts/LanguageContext";
 import { SearchBar } from "./SearchBar";
@@ -22,27 +27,57 @@ interface SidebarProps {
   width: number;
   onToggleCollapse: () => void;
   onWidthChange: (width: number) => void;
+  onSelectNode?: (node: NodeRecord) => void;
 }
 
 const MIN_WIDTH = 150;
 const MAX_WIDTH = 400;
 
-export function Sidebar({ 
-  currentPage, 
-  onNavigate, 
-  isCollapsed, 
-  width, 
-  onToggleCollapse, 
-  onWidthChange 
+// 根据 node_type 返回对应图标
+const getNodeTypeIcon = (nodeType: NodeType) => {
+  switch (nodeType) {
+    case "topic":
+      return <Tag className="h-3.5 w-3.5" />;
+    case "task":
+      return <CheckSquare className="h-3.5 w-3.5" />;
+    case "resource":
+      return <FileText className="h-3.5 w-3.5" />;
+  }
+};
+
+export function Sidebar({
+  currentPage,
+  onNavigate,
+  isCollapsed,
+  width,
+  onToggleCollapse,
+  onWidthChange,
+  onSelectNode,
 }: SidebarProps) {
   const { t } = useLanguage();
   const [isResizing, setIsResizing] = useState(false);
   const [tempWidth, setTempWidth] = useState<number | null>(null);
   const tempWidthRef = useRef<number | null>(null);
+  const [pinnedNodes, setPinnedNodes] = useState<NodeRecord[]>([]);
+
+  // 加载收藏节点
+  const loadPinnedNodes = useCallback(async () => {
+    try {
+      const nodes = await fetchPinnedNodes();
+      setPinnedNodes(nodes);
+    } catch (err) {
+      console.error("Failed to load pinned nodes:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPinnedNodes();
+  }, [loadPinnedNodes]);
 
   // Icon mapping for each page type
   const iconMap: Record<PageType, React.ReactNode> = {
     dashboard: <LayoutDashboard className="h-4 w-4" />,
+    warehouse: <Package className="h-4 w-4" />,
     workspace: <Briefcase className="h-4 w-4" />,
     calendar: <Calendar className="h-4 w-4" />,
     settings: <Settings className="h-4 w-4" />,
@@ -52,7 +87,7 @@ export function Sidebar({
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     setIsResizing(true);
-    setTempWidth(width); // Initialize temp width
+    setTempWidth(width);
     tempWidthRef.current = width;
   };
 
@@ -60,17 +95,15 @@ export function Sidebar({
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing) return;
-      
+
       const newWidth = e.clientX;
       if (newWidth >= MIN_WIDTH && newWidth <= MAX_WIDTH) {
-        // Only update local state during drag for smooth performance
         setTempWidth(newWidth);
         tempWidthRef.current = newWidth;
       }
     };
 
     const handleMouseUp = () => {
-      // Save to parent state and localStorage only when drag ends
       if (tempWidthRef.current !== null) {
         onWidthChange(tempWidthRef.current);
       }
@@ -110,15 +143,14 @@ export function Sidebar({
     );
   }
 
-  // Use temp width during drag for better performance
   const currentWidth = tempWidth !== null ? tempWidth : width;
 
   return (
-    <aside 
+    <aside
       style={{ width: `${currentWidth}px` }}
       className={cn(
         "bg-sidebar border-r border-border flex flex-col h-full shrink-0 relative",
-        !isResizing && "transition-all duration-300" // Disable transition during drag
+        !isResizing && "transition-all duration-300"
       )}
     >
       {/* Header */}
@@ -128,8 +160,8 @@ export function Sidebar({
             N
           </div>
           <span className="font-medium text-sm truncate">NeuralVault</span>
-          <ChevronsLeft 
-            className="ml-auto h-4 w-4 text-muted-foreground/50 hover:text-foreground cursor-pointer transition-colors" 
+          <ChevronsLeft
+            className="ml-auto h-4 w-4 text-muted-foreground/50 hover:text-foreground cursor-pointer transition-colors"
             onClick={onToggleCollapse}
           />
         </div>
@@ -169,14 +201,32 @@ export function Sidebar({
           </Button>
         ))}
 
-        {/* Favorites Section (Placeholder) */}
+        {/* Favorites Section */}
         <div className="mt-6">
           <div className="text-[11px] font-medium text-muted-foreground px-2 py-1.5 mb-0.5">
             {t("sidebar", "favorites").toUpperCase()}
           </div>
-          <div className="px-2 py-1">
-             <span className="text-xs text-muted-foreground/60 pl-2">• &nbsp; {t("sidebar", "noFavorites")}</span>
-          </div>
+          {pinnedNodes.length === 0 ? (
+            <div className="px-2 py-1">
+              <span className="text-xs text-muted-foreground/60 pl-2">
+                {t("sidebar", "noFavorites")}
+              </span>
+            </div>
+          ) : (
+            pinnedNodes.map((node) => (
+              <Button
+                key={node.node_id}
+                variant="ghost"
+                className="w-full justify-start h-7 text-xs px-2.5 text-muted-foreground hover:text-foreground"
+                onClick={() => onSelectNode?.(node)}
+              >
+                <span className="mr-2 opacity-70">
+                  {getNodeTypeIcon(node.node_type)}
+                </span>
+                <span className="truncate">{node.title}</span>
+              </Button>
+            ))
+          )}
         </div>
       </nav>
 

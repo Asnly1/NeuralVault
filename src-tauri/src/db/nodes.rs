@@ -390,6 +390,24 @@ pub async fn delete_context_chunks_by_type(
     Ok(())
 }
 
+/// 获取所有收藏节点
+pub async fn list_pinned_nodes(pool: &DbPool) -> Result<Vec<NodeRecord>, sqlx::Error> {
+    let sql = format!(
+        "SELECT {} FROM nodes WHERE is_pinned = 1 AND is_deleted = 0 ORDER BY pinned_at DESC",
+        NODE_FIELDS
+    );
+    sqlx::query_as::<_, NodeRecord>(&sql).fetch_all(pool).await
+}
+
+/// 获取所有待审核节点
+pub async fn list_unreviewed_nodes(pool: &DbPool) -> Result<Vec<NodeRecord>, sqlx::Error> {
+    let sql = format!(
+        "SELECT {} FROM nodes WHERE review_status = 'unreviewed' AND is_deleted = 0 ORDER BY created_at DESC",
+        NODE_FIELDS
+    );
+    sqlx::query_as::<_, NodeRecord>(&sql).fetch_all(pool).await
+}
+
 /// SQL LIKE 搜索（title + file_content + user_note）
 ///
 /// 在 title、file_content、user_note 中进行模糊匹配

@@ -4,12 +4,13 @@ import { Badge } from "@/components/ui/badge";
 
 import { Sparkles, CheckCircle2, LayoutGrid, Plus } from "lucide-react";
 
-import { Task, Resource, IngestProgress } from "../types";
+import { Task, Resource, IngestProgress, InputMode } from "../types";
 import { TaskCard } from "../components/TaskCard";
 import { ResourceCard } from "../components/ResourceCard";
 import { QuickCapture } from "../components/QuickCapture";
 import { TaskEditCard } from "../components/TaskEditCard";
 import { TasksDialog } from "../components/TasksDialog";
+import { TemporaryChatPanel } from "../components/TemporaryChatPanel";
 import { softDeleteTask, softDeleteResource, fetchAllTasks } from "../api";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { isSameDay } from "date-fns";
@@ -25,6 +26,7 @@ interface DashboardPageProps {
   onSelectResource: (resource: Resource) => void;
   onLinkResource: (resourceId: number, taskId: number) => Promise<void>;
   progressMap?: Map<number, IngestProgress>;
+  onNavigateToSettings?: () => void;
 }
 
 export function DashboardPage({
@@ -38,10 +40,21 @@ export function DashboardPage({
   onSelectResource,
   onLinkResource,
   progressMap,
+  onNavigateToSettings,
 }: DashboardPageProps) {
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const [completedDialogOpen, setCompletedDialogOpen] = useState(false);
+  // Capture/Chat 模式状态
+  const [captureMode, setCaptureMode] = useState<InputMode>("capture");
+  const [showChatPanel, setShowChatPanel] = useState(false);
+  const [initialChatMessage, setInitialChatMessage] = useState("");
   const { t } = useLanguage();
+
+  // Chat 模式提交处理
+  const handleChatSubmit = (content: string) => {
+    setInitialChatMessage(content);
+    setShowChatPanel(true);
+  };
 
   // Smart Sort: Logic to sort tasks
   const sortedTasks = useMemo(() => {
@@ -50,10 +63,12 @@ export function DashboardPage({
       if (a.status === "done" && b.status !== "done") return 1;
       if (a.status !== "done" && b.status === "done") return -1;
 
-      // 1. Priority weight
-      const pWeight = { high: 3, medium: 2, low: 1 };
-      if (pWeight[a.priority] !== pWeight[b.priority]) {
-        return pWeight[b.priority] - pWeight[a.priority];
+      // 1. Priority weight (处理 null 值，默认为 medium)
+      const pWeight: Record<string, number> = { high: 3, medium: 2, low: 1 };
+      const aPriority = a.priority ?? "medium";
+      const bPriority = b.priority ?? "medium";
+      if (pWeight[aPriority] !== pWeight[bPriority]) {
+        return pWeight[bPriority] - pWeight[aPriority];
       }
 
       // 2. Due Date (Earlier first)
@@ -79,6 +94,20 @@ export function DashboardPage({
     return t("dashboard", "greetingEvening");
   };
 
+  // Chat 面板显示时，渲染临时聊天面板
+  if (showChatPanel) {
+    return (
+      <TemporaryChatPanel
+        initialMessage={initialChatMessage}
+        onClose={() => {
+          setShowChatPanel(false);
+          setInitialChatMessage("");
+        }}
+        onNavigateToSettings={onNavigateToSettings}
+      />
+    );
+  }
+
   return (
     <div className="h-full flex flex-col max-w-[1200px] mx-auto w-full p-8 lg:p-12 space-y-10 overflow-auto">
       {/* 1. Header & Quick Capture */}
@@ -93,7 +122,12 @@ export function DashboardPage({
         </header>
 
         <div className="max-w-2xl">
-          <QuickCapture onCapture={onCapture} />
+          <QuickCapture
+            onCapture={onCapture}
+            mode={captureMode}
+            onModeChange={setCaptureMode}
+            onChatSubmit={handleChatSubmit}
+          />
         </div>
       </section>
 

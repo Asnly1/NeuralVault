@@ -163,8 +163,8 @@ export function CalendarPage({ tasks, onRefresh }: CalendarPageProps) {
                       onClick={(e) => handleToggleTask(task, e)}
                       className="text-xs p-1 rounded cursor-pointer hover:bg-accent/50 transition-colors truncate"
                       style={{
-                        backgroundColor: `${priorityConfig[task.priority].color}15`,
-                        borderLeft: `2px solid ${priorityConfig[task.priority].color}`,
+                        backgroundColor: task.priority ? `${priorityConfig[task.priority].color}15` : undefined,
+                        borderLeft: task.priority ? `2px solid ${priorityConfig[task.priority].color}` : undefined,
                       }}
                     >
                       <div className={`flex items-center gap-1 ${task.status === "done" ? "line-through opacity-60" : ""}`}>

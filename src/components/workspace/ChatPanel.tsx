@@ -13,7 +13,8 @@ import {
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAI } from "@/contexts/AIContext";
 import { AI_PROVIDER_INFO, type ModelOption, type ThinkingEffort } from "@/types";
-import { Send, Loader2, Settings } from "lucide-react";
+import { Send, Loader2, Settings, Pin } from "lucide-react";
+import { quickCapture, linkNodes } from "@/api";
 
 interface ChatPanelProps {
   width: number;
@@ -24,6 +25,7 @@ interface ChatPanelProps {
   taskId?: number;
   resourceId?: number;
   contextResourceIds: number[];
+  onContextRefresh?: () => void;
 }
 
 export function ChatPanel({
@@ -35,6 +37,7 @@ export function ChatPanel({
   taskId,
   resourceId,
   contextResourceIds,
+  onContextRefresh,
 }: ChatPanelProps) {
   const { t } = useLanguage();
   const {
@@ -50,7 +53,9 @@ export function ChatPanel({
   } = useAI();
   const [chatInput, setChatInput] = useState("");
   const [thinkingEffort, setThinkingEffort] = useState<ThinkingEffort>("low");
+  const [pinningIndex, setPinningIndex] = useState<number | null>(null);
   const hasSessionContext = !!taskId || !!resourceId;
+  const anchorNodeId = taskId || resourceId;
 
   const currentWidth = tempWidth !== null ? tempWidth : width;
 
@@ -85,6 +90,41 @@ export function ChatPanel({
     if (e.key === "Enter" && !e.shiftKey && chatInput.trim() && selectedModel) {
       e.preventDefault();
       handleSend();
+    }
+  };
+
+  // Pin 对话到上下文（创建资源并关联）
+  const handlePinToContext = async (assistantMsgIndex: number) => {
+    // 找到对应的用户消息（应该在 assistant 消息之前）
+    const assistantMsg = messages[assistantMsgIndex];
+    const userMsg = messages[assistantMsgIndex - 1];
+
+    if (!userMsg || userMsg.role !== "user" || !assistantMsg) return;
+    if (!anchorNodeId) return;
+
+    setPinningIndex(assistantMsgIndex);
+    try {
+      // 1. 创建 Resource 保存对话内容
+      const content = `## 提问\n${userMsg.content}\n\n## 回答\n${assistantMsg.content}`;
+      const title = userMsg.content.slice(0, 50) + (userMsg.content.length > 50 ? "..." : "");
+
+      const response = await quickCapture({
+        content,
+        file_type: "text",
+        title: title,
+      });
+
+      // 2. 关联到当前上下文节点
+      if (response.node_id) {
+        await linkNodes(anchorNodeId, response.node_id, "contains");
+      }
+
+      // 3. 刷新上下文列表
+      onContextRefresh?.();
+    } catch (e) {
+      console.error("Failed to pin conversation:", e);
+    } finally {
+      setPinningIndex(null);
     }
   };
 
@@ -205,7 +245,7 @@ export function ChatPanel({
               <div
                 key={idx}
                 className={cn(
-                  "flex gap-3",
+                  "flex gap-3 group relative",
                   msg.role === "user" && "flex-row-reverse"
                 )}
               >
@@ -234,6 +274,23 @@ export function ChatPanel({
                     </div>
                   )}
                 </div>
+                {/* Pin 按钮：仅在 assistant 消息且有前序 user 消息时显示 */}
+                {msg.role === "assistant" && idx > 0 && messages[idx - 1]?.role === "user" && anchorNodeId && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute -bottom-1 right-0 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => handlePinToContext(idx)}
+                    disabled={pinningIndex === idx}
+                    title={t("workspace", "pinToContext")}
+                  >
+                    {pinningIndex === idx ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Pin className="h-3.5 w-3.5" />
+                    )}
+                  </Button>
+                )}
               </div>
             ))
           )}

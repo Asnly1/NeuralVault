@@ -68,7 +68,7 @@ export function ResourceCard({
       <CardContent className="flex items-center gap-3 p-3">
         {/* File Icon */}
         <div className="shrink-0 opacity-80 group-hover:opacity-100 transition-opacity text-base">
-          {resourceTypeIcons[resource.file_type] || "📎"}
+          {resource.file_type ? resourceTypeIcons[resource.file_type] : "📎"}
         </div>
 
         {/* File Info */}

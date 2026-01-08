@@ -81,14 +81,16 @@ export function ContextPanel({
                   )}
                   <div className="flex flex-wrap gap-2">
                     <Badge variant="outline">{selectedTask.status}</Badge>
-                    <Badge
-                      style={{
-                        backgroundColor: `${priorityConfig[selectedTask.priority].color}20`,
-                        color: priorityConfig[selectedTask.priority].color,
-                      }}
-                    >
-                      {priorityConfig[selectedTask.priority].label}
-                    </Badge>
+                    {selectedTask.priority && (
+                      <Badge
+                        style={{
+                          backgroundColor: `${priorityConfig[selectedTask.priority].color}20`,
+                          color: priorityConfig[selectedTask.priority].color,
+                        }}
+                      >
+                        {priorityConfig[selectedTask.priority].label}
+                      </Badge>
+                    )}
                   </div>
                   {selectedTask.due_date && (
                     <p className="text-xs text-muted-foreground">
@@ -133,7 +135,7 @@ export function ContextPanel({
                         onClick={() => onAddToContext(resource)}
                         className="cursor-pointer gap-2"
                       >
-                        <span>{resourceTypeIcons[resource.file_type]}</span>
+                        <span>{resource.file_type ? resourceTypeIcons[resource.file_type] : "📎"}</span>
                         <span className="truncate">
                           {resource.display_name || "未命名文件"}
                         </span>
@@ -167,7 +169,7 @@ export function ContextPanel({
                         onClick={() => onResourceClick(resource)}
                       >
                         {isCurrent && (
-                          <span>{resourceTypeIcons[resource.file_type]}</span>
+                          <span>{resource.file_type ? resourceTypeIcons[resource.file_type] : "📎"}</span>
                         )}
                         <span className="truncate flex-1">
                           {resource.display_name || "未命名文件"}

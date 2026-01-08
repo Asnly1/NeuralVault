@@ -3,7 +3,7 @@ import { z } from "zod";
 import { listen } from "@tauri-apps/api/event";
 import "./App.css";
 
-import { Task, Resource, PageType } from "./types";
+import { Task, Resource, PageType, NodeRecord } from "./types";
 import { getFileTypeFromPath } from "./lib/utils";
 import {
   fetchDashboardData,
@@ -13,7 +13,7 @@ import {
 } from "./api";
 import { useIngestProgress } from "./hooks/useIngestProgress";
 import { Sidebar } from "./components";
-import { DashboardPage, WorkspacePage, CalendarPage, SettingsPage } from "./pages";
+import { DashboardPage, WorkspacePage, WarehousePage, CalendarPage, SettingsPage } from "./pages";
 
 function App() {
   const [currentPage, setCurrentPage] = useState<PageType>("dashboard");
@@ -154,6 +154,22 @@ function App() {
     setCurrentPage("workspace");
   }, []);
 
+  // 处理从 Sidebar 或 Warehouse 选择节点
+  const handleSelectNode = useCallback((node: NodeRecord) => {
+    if (node.node_type === "task") {
+      setSelectedTask(node as Task);
+      setSelectedResource(null);
+    } else if (node.node_type === "resource") {
+      setSelectedResource(node as Resource);
+      setSelectedTask(null);
+    } else if (node.node_type === "topic") {
+      // Topic 暂时作为 Resource 处理
+      setSelectedResource(node as Resource);
+      setSelectedTask(null);
+    }
+    setCurrentPage("workspace");
+  }, []);
+
   const handleBackToDashboard = useCallback(() => {
     setSelectedTask(null);
     setSelectedResource(null);
@@ -199,13 +215,14 @@ function App() {
     <div className="flex h-screen bg-background text-foreground">
       {/* Sidebar: 是一个函数，接收一个参数（通常称为 props，这里被解构成了 { currentPage, onNavigate }） */}
       {/* onNavigate: 一个接受PageType并返回void的函数吗 */}
-      <Sidebar 
-        currentPage={currentPage} 
+      <Sidebar
+        currentPage={currentPage}
         onNavigate={setCurrentPage}
         isCollapsed={sidebarCollapsed}
         width={sidebarWidth}
         onToggleCollapse={handleToggleSidebar}
         onWidthChange={handleSidebarWidthChange}
+        onSelectNode={handleSelectNode}
       />
 
       <main className="flex-1 min-w-0 overflow-hidden flex flex-col">
@@ -234,6 +251,10 @@ function App() {
             onLinkResource={handleLinkResource}
             progressMap={progressMap}
           />
+        )}
+
+        {currentPage === "warehouse" && (
+          <WarehousePage onSelectNode={handleSelectNode} />
         )}
 
         {currentPage === "workspace" && (

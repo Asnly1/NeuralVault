@@ -1,270 +1,356 @@
 import { invoke } from "@tauri-apps/api/core";
+import { z } from "zod";
 import {
   dashboardSchema,
-  DashboardData,
-  CreateTaskRequest,
-  CreateTaskResponse,
-  CaptureRequest,
-  CaptureResponse,
-  LinkResourceRequest,
-  LinkResourceResponse,
-  TaskResourcesResponse,
-  ReadClipboardResponse,
-  resourceSchema,
-  Resource,
-  Task,
-  taskSchema,
+  nodeRecordSchema,
+  type NodeRecord,
+  type Task,
+  type Resource,
+  type CreateTaskRequest,
+  type CreateTaskResponse,
+  type CaptureRequest,
+  type CaptureResponse,
+  type LinkNodesRequest,
+  type LinkNodesResponse,
+  type NodeListResponse,
+  type ReadClipboardResponse,
+  type ReviewStatus,
+  type RelationType,
+  type AIConfigStatus,
+  type SetApiKeyRequest,
+  type SetDefaultModelRequest,
+  type SendChatRequest,
+  type ChatStreamAck,
+  type CreateChatSessionRequest,
+  type CreateChatSessionResponse,
+  type ListChatSessionsRequest,
+  type ChatSession,
+  type UpdateChatSessionRequest,
+  type DeleteChatSessionRequest,
+  type CreateChatMessageRequest,
+  type CreateChatMessageResponse,
+  type ChatMessagePayload,
+  type UpdateChatMessageRequest,
+  type DeleteChatMessageRequest,
+  type AddMessageAttachmentsRequest,
+  type RemoveMessageAttachmentRequest,
+  type SetSessionBindingsRequest,
+  type SemanticSearchResult,
 } from "../types";
-import { z } from "zod";
+
+// ============================================
+// 兼容性转换工具
+// ============================================
+
+/** 将 NodeRecord 转换为兼容的 Task 格式 */
+const toCompatibleTask = (node: NodeRecord): Task => ({
+  ...node,
+  task_id: node.node_id,
+  status: node.task_status ?? "todo",
+  description: node.summary,
+});
+
+/** 将 NodeRecord 转换为兼容的 Resource 格式 */
+const toCompatibleResource = (node: NodeRecord): Resource => ({
+  ...node,
+  resource_id: node.node_id,
+  content: node.file_content,
+  file_type: node.resource_subtype,
+  display_name: node.title,
+  classification_status: node.review_status === "unreviewed" ? "unclassified" : "classified",
+});
 
 // ============================================
 // Dashboard API
 // ============================================
 
-/**
- * 获取 Dashboard 数据（任务和资源）
- *
- * Promise: 代表这是一个异步操作。调用这个函数时，你拿不到现成的数据，只能拿到一个"取货凭证"
- * 你需要用 await 等待它完成，或者用 .then() 来处理结果
- * <DashboardData>: 它告诉 TypeScript："这个承诺兑现后，包在里面的数据绝对是符合 DashboardData 结构的对象。"
- */
-export const fetchDashboardData = async (): Promise<DashboardData> => {
+export const fetchDashboardData = async (): Promise<{
+  tasks: Task[];
+  resources: Resource[];
+}> => {
   const raw = await invoke("get_dashboard");
-  // 1. 自动转换： 把日期转换成标准的 JavaScript Date 对象
-  // 2. 数据校验： 确保返回的数据完全符合 dashboardSchema 的结构要求
-  // 3. 返回结果： 返回一个 Promise，里面包含符合要求的 DashboardData 对象
-  return dashboardSchema.parse(raw);
+  const data = dashboardSchema.parse(raw);
+  return {
+    tasks: data.tasks.map(toCompatibleTask),
+    resources: data.resources.map(toCompatibleResource),
+  };
+};
+
+// ============================================
+// Node API (通用节点操作)
+// ============================================
+
+/** 获取所有收藏节点 */
+export const fetchPinnedNodes = async (): Promise<NodeRecord[]> => {
+  const raw = await invoke("list_pinned_nodes");
+  return z.array(nodeRecordSchema).parse(raw);
+};
+
+/** 获取所有待审核节点 */
+export const fetchUnreviewedNodes = async (): Promise<NodeRecord[]> => {
+  const raw = await invoke("list_unreviewed_nodes");
+  return z.array(nodeRecordSchema).parse(raw);
+};
+
+/** 更新节点收藏状态 */
+export const updateNodePinned = async (
+  nodeId: number,
+  isPinned: boolean
+): Promise<void> => {
+  return await invoke("update_node_pinned", { nodeId, isPinned });
+};
+
+/** 更新节点审核状态 */
+export const updateNodeReviewStatus = async (
+  nodeId: number,
+  reviewStatus: ReviewStatus
+): Promise<void> => {
+  return await invoke("update_node_review_status", { nodeId, reviewStatus });
+};
+
+/** 链接两个节点 */
+export const linkNodes = async (
+  sourceNodeId: number,
+  targetNodeId: number,
+  relationType: RelationType
+): Promise<LinkNodesResponse> => {
+  return await invoke("link_nodes_command", {
+    payload: {
+      source_node_id: sourceNodeId,
+      target_node_id: targetNodeId,
+      relation_type: relationType,
+    } as LinkNodesRequest,
+  });
+};
+
+/** 取消链接两个节点 */
+export const unlinkNodes = async (
+  sourceNodeId: number,
+  targetNodeId: number,
+  relationType: RelationType
+): Promise<LinkNodesResponse> => {
+  return await invoke("unlink_nodes_command", {
+    payload: {
+      source_node_id: sourceNodeId,
+      target_node_id: targetNodeId,
+      relation_type: relationType,
+    } as LinkNodesRequest,
+  });
+};
+
+/** 获取目标节点列表（通过关系类型） */
+export const listTargetNodes = async (
+  sourceNodeId: number,
+  relationType: RelationType
+): Promise<NodeListResponse> => {
+  return await invoke("list_target_nodes_command", { sourceNodeId, relationType });
+};
+
+/** 获取源节点列表（通过关系类型） */
+export const listSourceNodes = async (
+  targetNodeId: number,
+  relationType: RelationType
+): Promise<NodeListResponse> => {
+  return await invoke("list_source_nodes_command", { targetNodeId, relationType });
 };
 
 // ============================================
 // Task API
 // ============================================
 
-/**
- * 创建新任务
- * @param request - 创建任务请求参数
- */
 export const createTask = async (
   request: CreateTaskRequest
 ): Promise<CreateTaskResponse> => {
   return await invoke("create_task", { payload: request });
 };
 
-/**
- * 删除任务（软删除）
- * @param taskId - 任务 ID
- */
-export const softDeleteTask = async (taskId: number): Promise<void> => {
-  return await invoke("soft_delete_task_command", { taskId });
+export const softDeleteTask = async (nodeId: number): Promise<void> => {
+  return await invoke("soft_delete_task_command", { nodeId });
 };
 
-/**
- * 硬删除任务（物理删除数据库记录和级联数据）
- * @param taskId - 任务 ID
- */
-export const hardDeleteTask = async (taskId: number): Promise<void> => {
-  return await invoke("hard_delete_task_command", { taskId });
+export const hardDeleteTask = async (nodeId: number): Promise<void> => {
+  return await invoke("hard_delete_task_command", { nodeId });
 };
 
-/**
- * 将任务状态从 'todo' 转换为 'done'
- * @param taskId - 任务 ID
- */
-export const markTaskAsDone = async (taskId: number): Promise<void> => {
-  return await invoke("mark_task_as_done_command", { taskId });
+export const markTaskAsDone = async (nodeId: number): Promise<void> => {
+  return await invoke("mark_task_as_done_command", { nodeId });
 };
 
-/**
- * 将任务状态从 'done' 转换为 'todo'
- * @param taskId - 任务 ID
- */
-export const markTaskAsTodo = async (taskId: number): Promise<void> => {
-  return await invoke("mark_task_as_todo_command", { taskId });
+export const markTaskAsTodo = async (nodeId: number): Promise<void> => {
+  return await invoke("mark_task_as_todo_command", { nodeId });
 };
 
-/**
- * 更新任务优先级
- * @param taskId - 任务 ID
- * @param priority - 优先级 ('high' | 'medium' | 'low')
- */
 export const updateTaskPriority = async (
-  taskId: number,
+  nodeId: number,
   priority: string
 ): Promise<void> => {
-  return await invoke("update_task_priority_command", { taskId, priority });
+  return await invoke("update_task_priority_command", { nodeId, priority });
 };
 
-/**
- * 更新任务的截止日期
- * @param taskId - 任务 ID
- * @param dueDate - 截止日期 (YYYY-MM-DD HH:mm:ss 格式，或 null 清除)
- */
 export const updateTaskDueDate = async (
-  taskId: number,
+  nodeId: number,
   dueDate: string | null
 ): Promise<void> => {
-  return await invoke("update_task_due_date_command", { taskId, dueDate });
+  return await invoke("update_task_due_date_command", { nodeId, dueDate });
 };
 
-/**
- * 更新任务标题
- * @param taskId - 任务 ID
- * @param title - 新标题
- */
 export const updateTaskTitle = async (
-  taskId: number,
+  nodeId: number,
   title: string
 ): Promise<void> => {
-  return await invoke("update_task_title_command", { taskId, title });
+  return await invoke("update_task_title_command", { nodeId, title });
 };
 
-/**
- * 更新任务描述
- * @param taskId - 任务 ID
- * @param description - 新描述 (或 null 清除)
- */
 export const updateTaskDescription = async (
-  taskId: number,
+  nodeId: number,
   description: string | null
 ): Promise<void> => {
-  return await invoke("update_task_description_command", {
-    taskId,
-    description,
-  });
+  return await invoke("update_task_description_command", { nodeId, description });
 };
 
-/**
- * 获取指定 due_date 的所有任务
- * @param date - 日期字符串，格式: YYYY-MM-DD
- */
 export const fetchTasksByDate = async (date: string): Promise<Task[]> => {
   const raw = await invoke("get_tasks_by_date", { date });
-  return z.array(taskSchema).parse(raw);
+  const nodes = z.array(nodeRecordSchema).parse(raw);
+  return nodes.map(toCompatibleTask);
 };
 
-/**
- * 获取所有任务（包括 todo 和 done 状态），用于 Calendar 视图
- */
 export const fetchAllTasks = async (): Promise<Task[]> => {
   const raw = await invoke("get_all_tasks");
-  return z.array(taskSchema).parse(raw);
+  const nodes = z.array(nodeRecordSchema).parse(raw);
+  return nodes.map(toCompatibleTask);
+};
+
+export const fetchActiveTasks = async (): Promise<Task[]> => {
+  const raw = await invoke("get_active_tasks");
+  const nodes = z.array(nodeRecordSchema).parse(raw);
+  return nodes.map(toCompatibleTask);
 };
 
 // ============================================
 // Resource API
 // ============================================
 
-/**
- * 快速捕获资源
- * @param request - 捕获请求参数
- */
 export const quickCapture = async (
   request: CaptureRequest
 ): Promise<CaptureResponse> => {
   return await invoke("capture_resource", { payload: request });
 };
 
-/**
- * 将资源关联到任务
- * @param request - 关联请求参数
- */
-export const linkResource = async (
-  request: LinkResourceRequest
-): Promise<LinkResourceResponse> => {
-  return await invoke("link_resource", { payload: request });
-};
-
-/**
- * 取消资源与任务的关联
- * @param taskId - 任务 ID
- * @param resourceId - 资源 ID
- */
-export const unlinkResource = async (
-  taskId: number,
-  resourceId: number
-): Promise<LinkResourceResponse> => {
-  return await invoke("unlink_resource", { taskId, resourceId });
-};
-
-/**
- * 获取任务关联的资源列表
- * @param taskId - 任务 ID
- */
-export const fetchTaskResources = async (
-  taskId: number
-): Promise<TaskResourcesResponse> => {
-  const raw = await invoke("get_task_resources", { taskId });
-  // 校验并转换资源数据
-  const parsed = z
-    .object({
-      resources: z.array(resourceSchema).default([]),
-    })
-    .parse(raw);
-  return parsed;
-};
-
-/**
- * 获取所有资源（未删除）
- */
 export const fetchAllResources = async (): Promise<Resource[]> => {
   const raw = await invoke("get_all_resources");
-  return z.array(resourceSchema).parse(raw);
+  const nodes = z.array(nodeRecordSchema).parse(raw);
+  return nodes.map(toCompatibleResource);
 };
 
-/**
- * 删除资源（软删除）
- * @param resourceId - 资源 ID
- */
-export const softDeleteResource = async (resourceId: number): Promise<void> => {
-  return await invoke("soft_delete_resource_command", { resourceId });
+export const getResourceById = async (nodeId: number): Promise<Resource> => {
+  const raw = await invoke("get_resource_by_id", { nodeId });
+  const node = nodeRecordSchema.parse(raw);
+  return toCompatibleResource(node);
 };
 
-/**
- * 硬删除资源（物理删除数据库记录、级联数据和文件）
- * @param resourceId - 资源 ID
- */
-export const hardDeleteResource = async (resourceId: number): Promise<void> => {
-  return await invoke("hard_delete_resource_command", { resourceId });
+export const softDeleteResource = async (nodeId: number): Promise<void> => {
+  return await invoke("soft_delete_resource_command", { nodeId });
 };
 
-/**
- * 更新资源内容
- * @param resourceId - 资源 ID
- * @param content - 新内容（文本或 Markdown）
- */
+export const hardDeleteResource = async (nodeId: number): Promise<void> => {
+  return await invoke("hard_delete_resource_command", { nodeId });
+};
+
 export const updateResourceContent = async (
-  resourceId: number,
+  nodeId: number,
   content: string
 ): Promise<void> => {
-  return await invoke("update_resource_content_command", { resourceId, content });
+  return await invoke("update_resource_content_command", { nodeId, content });
 };
 
-/**
- * 更新资源显示名称
- * @param resourceId - 资源 ID
- * @param displayName - 新显示名称
- */
-export const updateResourceDisplayName = async (
-  resourceId: number,
-  displayName: string
+export const updateResourceTitle = async (
+  nodeId: number,
+  title: string
 ): Promise<void> => {
-  return await invoke("update_resource_display_name_command", { resourceId, displayName });
+  return await invoke("update_resource_title_command", { nodeId, title });
+};
+
+/** @deprecated 使用 updateResourceTitle 替代 */
+export const updateResourceDisplayName = updateResourceTitle;
+
+/** 获取任务关联的资源 */
+export const fetchTaskResources = async (taskNodeId: number): Promise<Resource[]> => {
+  const response = await listTargetNodes(taskNodeId, "contains");
+  return response.nodes
+    .filter((n) => n.node_type === "resource")
+    .map(toCompatibleResource);
+};
+
+/** @deprecated 使用 linkNodes 替代 */
+export const linkResource = async (params: {
+  resource_id: number;
+  task_id: number;
+}): Promise<void> => {
+  await linkNodes(params.task_id, params.resource_id, "contains");
+};
+
+/** @deprecated 使用 setSessionBindings 替代 */
+export const setSessionContextResources = async (
+  sessionId: number,
+  resourceIds: number[]
+): Promise<void> => {
+  await setSessionBindings({
+    session_id: sessionId,
+    node_ids: resourceIds,
+    binding_type: "implicit",
+  });
+};
+
+// ============================================
+// Topic API
+// ============================================
+
+export const createTopic = async (
+  title: string,
+  summary?: string
+): Promise<{ node: NodeRecord }> => {
+  return await invoke("create_topic", { payload: { title, summary } });
+};
+
+export const fetchAllTopics = async (): Promise<NodeRecord[]> => {
+  const raw = await invoke("list_topics_command");
+  return z.array(nodeRecordSchema).parse(raw);
+};
+
+export const getTopic = async (nodeId: number): Promise<NodeRecord> => {
+  const raw = await invoke("get_topic_command", { topicId: nodeId });
+  return nodeRecordSchema.parse(raw);
+};
+
+export const updateTopicTitle = async (
+  nodeId: number,
+  title: string
+): Promise<void> => {
+  return await invoke("update_topic_title_command", { topicId: nodeId, title });
+};
+
+export const updateTopicSummary = async (
+  nodeId: number,
+  summary: string | null
+): Promise<void> => {
+  return await invoke("update_topic_summary_command", { topicId: nodeId, summary });
+};
+
+export const updateTopicFavourite = async (
+  nodeId: number,
+  isFavourite: boolean
+): Promise<void> => {
+  return await invoke("update_topic_favourite_command", { topicId: nodeId, isFavourite });
 };
 
 // ============================================
 // HUD API
 // ============================================
 
-/**
- * 切换 HUD 窗口显示/隐藏
- */
 export const toggleHUD = async (): Promise<void> => {
   return await invoke("toggle_hud");
 };
 
-/**
- * 隐藏 HUD 窗口
- */
 export const hideHUD = async (): Promise<void> => {
   return await invoke("hide_hud");
 };
@@ -273,10 +359,6 @@ export const hideHUD = async (): Promise<void> => {
 // Clipboard API
 // ============================================
 
-/**
- * 读取系统剪贴板内容
- * 支持图片、文件、HTML、纯文本
- */
 export const readClipboard = async (): Promise<ReadClipboardResponse> => {
   return await invoke("read_clipboard");
 };
@@ -285,9 +367,6 @@ export const readClipboard = async (): Promise<ReadClipboardResponse> => {
 // File System API
 // ============================================
 
-/**
- * 获取 assets 目录的完整路径
- */
 export const getAssetsPath = async (): Promise<string> => {
   return await invoke("get_assets_path");
 };
@@ -296,65 +375,24 @@ export const getAssetsPath = async (): Promise<string> => {
 // AI Configuration API
 // ============================================
 
-import type {
-  AIConfigStatus,
-  SetApiKeyRequest,
-  SetDefaultModelRequest,
-  SendChatRequest,
-  ChatStreamAck,
-  CreateChatSessionRequest,
-  CreateChatSessionResponse,
-  ListChatSessionsRequest,
-  ChatSession,
-  UpdateChatSessionRequest,
-  DeleteChatSessionRequest,
-  CreateChatMessageRequest,
-  CreateChatMessageResponse,
-  ChatMessagePayload,
-  UpdateChatMessageRequest,
-  DeleteChatMessageRequest,
-  AddMessageAttachmentsRequest,
-  RemoveMessageAttachmentRequest,
-  SetSessionContextResourcesRequest,
-} from "../types";
-
-/**
- * 获取 AI 配置状态（不返回明文 key）
- */
 export const getAIConfigStatus = async (): Promise<AIConfigStatus> => {
   return await invoke("get_ai_config_status");
 };
 
-/**
- * 保存 API Key
- * @param request - 保存请求参数
- */
 export const saveApiKey = async (request: SetApiKeyRequest): Promise<void> => {
   return await invoke("save_api_key", { request });
 };
 
-/**
- * 删除 API Key
- * @param provider - Provider 名称
- */
 export const removeApiKey = async (provider: string): Promise<void> => {
   return await invoke("remove_api_key", { provider });
 };
 
-/**
- * 设置默认模型
- * @param request - 设置请求参数
- */
 export const setDefaultModel = async (
   request: SetDefaultModelRequest
 ): Promise<void> => {
   return await invoke("set_default_model", { request });
 };
 
-/**
- * 发送聊天消息
- * @param request - 聊天请求参数
- */
 export const sendChatMessage = async (
   request: SendChatRequest
 ): Promise<ChatStreamAck> => {
@@ -390,7 +428,7 @@ export const updateChatSession = async (
 export const deleteChatSession = async (
   request: DeleteChatSessionRequest
 ): Promise<void> => {
-  return await invoke("delete_chat_session_command", { payload: request });
+  return await invoke("delete_chat_session", { payload: request });
 };
 
 export const createChatMessage = async (
@@ -402,19 +440,19 @@ export const createChatMessage = async (
 export const listChatMessages = async (
   sessionId: number
 ): Promise<ChatMessagePayload[]> => {
-  return await invoke("list_chat_messages", { sessionId });
+  return await invoke("list_chat_messages_command", { sessionId });
 };
 
 export const updateChatMessage = async (
   request: UpdateChatMessageRequest
 ): Promise<void> => {
-  return await invoke("update_chat_message_command", { payload: request });
+  return await invoke("update_chat_message", { payload: request });
 };
 
 export const deleteChatMessage = async (
   request: DeleteChatMessageRequest
 ): Promise<void> => {
-  return await invoke("delete_chat_message_command", { payload: request });
+  return await invoke("delete_chat_message", { payload: request });
 };
 
 export const addMessageAttachments = async (
@@ -429,35 +467,16 @@ export const removeMessageAttachment = async (
   return await invoke("remove_message_attachment", { payload: request });
 };
 
-export const setSessionContextResources = async (
-  request: SetSessionContextResourcesRequest
+export const setSessionBindings = async (
+  request: SetSessionBindingsRequest
 ): Promise<void> => {
-  return await invoke("set_session_context_resources_command", { payload: request });
+  return await invoke("set_session_bindings_command", { payload: request });
 };
 
 // ============================================
 // Search API
 // ============================================
 
-/**
- * 语义搜索结果（来自 Qdrant）
- */
-export interface SemanticSearchResult {
-  node_id: number;
-  chunk_index: number;
-  chunk_text: string;
-  score: number;
-  page_number: number | null;
-}
-
-/**
- * 语义搜索（使用 Qdrant 混合检索）
- *
- * @param query - 搜索查询
- * @param scopeNodeIds - 可选，限定搜索的 node_id 列表（Local scope）
- * @param embeddingType - 可选，"summary" | "content"，默认 "content"
- * @param limit - 可选，返回结果数量，默认 20
- */
 export const searchSemantic = async (
   query: string,
   scopeNodeIds?: number[],
@@ -472,45 +491,6 @@ export const searchSemantic = async (
   });
 };
 
-/**
- * 节点记录（来自 Rust NodeRecord）
- */
-export interface NodeRecord {
-  node_id: number;
-  uuid: string;
-  user_id: number;
-  title: string;
-  summary: string | null;
-  node_type: "topic" | "task" | "resource";
-  task_status: "todo" | "done" | "cancelled" | null;
-  priority: "high" | "medium" | "low" | null;
-  due_date: string | null;
-  done_date: string | null;
-  file_hash: string | null;
-  file_path: string | null;
-  file_content: string | null;
-  user_note: string | null;
-  resource_subtype: "text" | "pdf" | "image" | "url" | "epub" | "other" | null;
-  sync_status: "pending" | "synced" | "dirty" | "error";
-  processing_stage: "todo" | "chunking" | "embedding" | "done";
-  review_status: "unreviewed" | "reviewed" | "rejected";
-  is_pinned: boolean;
-  pinned_at: string | null;
-  created_at: string | null;
-  updated_at: string | null;
-  is_deleted: boolean;
-  deleted_at: string | null;
-}
-
-/**
- * 精确搜索（SQL LIKE）
- *
- * 在 title、file_content、user_note 中进行模糊匹配
- *
- * @param query - 搜索关键词
- * @param nodeType - 可选，节点类型过滤 "topic" | "task" | "resource"
- * @param limit - 可选，返回结果数量，默认 20
- */
 export const searchKeyword = async (
   query: string,
   nodeType?: "topic" | "task" | "resource",
@@ -522,3 +502,6 @@ export const searchKeyword = async (
     limit,
   });
 };
+
+// Re-export types for convenience
+export type { NodeRecord, SemanticSearchResult };

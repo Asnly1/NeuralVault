@@ -188,9 +188,10 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
       const existing = sessionMap.get(key);
       if (existing) return existing;
 
+      // 优先使用 task_id，否则使用 resource_id
+      const nodeId = context.task_id ?? context.resource_id;
       const sessions = await listChatSessions({
-        task_id: context.task_id,
-        resource_id: context.resource_id,
+        node_id: nodeId,
         include_deleted: false,
       });
 
@@ -205,11 +206,11 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
       }
 
       const response = await createChatSession({
-        task_id: context.task_id,
+        node_id: nodeId,
         title: undefined,
         summary: undefined,
         chat_model: undefined,
-        context_resource_ids: contextResourceIds,
+        context_node_ids: contextResourceIds,
       });
       setSessionMap((prev) => {
         const next = new Map(prev);
@@ -267,10 +268,7 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
         const sessionId = await ensureSession(context, options?.context_resource_ids);
         if (options?.context_resource_ids) {
           try {
-            await setSessionContextResources({
-              session_id: sessionId,
-              resource_ids: options.context_resource_ids,
-            });
+            await setSessionContextResources(sessionId, options.context_resource_ids);
           } catch (e) {
             console.error("Failed to sync session context:", e);
           }
@@ -304,8 +302,8 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
     content,
     timestamp: new Date(),
     attachments: [
-      ...(images || []).map((resourceId) => ({ resource_id: resourceId })),
-      ...(files || []).map((resourceId) => ({ resource_id: resourceId })),
+      ...(images || []).map((nodeId) => ({ node_id: nodeId })),
+      ...(files || []).map((nodeId) => ({ node_id: nodeId })),
     ],
   });
 
@@ -422,10 +420,7 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
     );
 
     if (context.context_resource_ids) {
-      await setSessionContextResources({
-        session_id: sessionId,
-        resource_ids: context.context_resource_ids,
-      });
+      await setSessionContextResources(sessionId, context.context_resource_ids);
     }
 
     // 添加用户消息到 UI

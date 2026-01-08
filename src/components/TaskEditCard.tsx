@@ -66,8 +66,8 @@ export function TaskEditCard({
       return {
         title: task.title || "",
         description: task.description || "",
-        status: task.status,
-        priority: task.priority,
+        status: task.status ?? "todo",
+        priority: task.priority ?? "medium",
         due_date: task.due_date || undefined,
       };
     }

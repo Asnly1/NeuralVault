@@ -49,7 +49,7 @@ export function useIngestProgress() {
 
           setProgressMap((prev) => {
             const newMap = new Map(prev);
-            newMap.set(progress.resource_id, progress);
+            newMap.set(progress.node_id, progress);
             return newMap;
           });
         });

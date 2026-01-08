@@ -122,12 +122,12 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
     const loadResources = async () => {
       setLoadingResources(true);
       try {
-        const data = await fetchTaskResources(selectedTask.task_id);
+        const resources = await fetchTaskResources(selectedTask.task_id);
         if (!ignore) {
-          setContextResources(data.resources);
+          setContextResources(resources);
           if (
             selectedResource &&
-            !data.resources.find((r) => r.resource_id === selectedResource.resource_id)
+            !resources.find((r: Resource) => r.resource_id === selectedResource.resource_id)
           ) {
             setSelectedResource(null);
           }
@@ -257,6 +257,20 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
     });
   }, [selectedResource]);
 
+  // 刷新上下文资源（用于 ChatPanel 的 Pin to Context 功能）
+  const handleContextRefresh = useCallback(async () => {
+    if (!isResourceMode && selectedTask) {
+      // 任务模式：重新获取任务关联的资源
+      try {
+        const resources = await fetchTaskResources(selectedTask.task_id);
+        setContextResources(resources);
+      } catch (err) {
+        console.error("刷新上下文资源失败:", err);
+      }
+    }
+    // 资源模式暂不需要刷新，因为新关联的资源会作为子资源
+  }, [isResourceMode, selectedTask]);
+
   // 注意：面板拖拽逻辑已迁移到 usePanelResize Hook
 
   // 监听 Ctrl+S / Command+S 快捷键
@@ -303,7 +317,7 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
               <span className="text-muted-foreground">/</span>
               {currentResource ? (
                 <span className="font-medium">
-                  {resourceTypeIcons[currentResource.file_type]}{" "}
+                  {currentResource.file_type ? resourceTypeIcons[currentResource.file_type] : "📎"}{" "}
                   {currentResource.display_name || "未命名资源"}
                 </span>
               ) : (
@@ -319,7 +333,7 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
                 <>
                   <span className="text-muted-foreground">/</span>
                   <span className="text-muted-foreground">
-                    {resourceTypeIcons[currentResource.file_type]}{" "}
+                    {currentResource.file_type ? resourceTypeIcons[currentResource.file_type] : "📎"}{" "}
                     {currentResource.display_name || "未命名文件"}
                   </span>
                 </>
@@ -385,6 +399,7 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
           taskId={!isResourceMode ? selectedTask?.task_id : undefined}
           resourceId={isResourceMode ? (sessionAnchorResourceId ?? currentResource?.resource_id) : undefined}
           contextResourceIds={contextResourceIds}
+          onContextRefresh={handleContextRefresh}
         />
       </div>
     </div>

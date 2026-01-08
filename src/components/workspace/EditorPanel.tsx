@@ -229,7 +229,7 @@ export function EditorPanel({
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
         <span className="text-4xl mb-4">📎</span>
         <p className="text-lg font-medium">
-          {resourceTypeIcons[currentResource.file_type]}{" "}
+          {currentResource.file_type ? resourceTypeIcons[currentResource.file_type] : "📎"}{" "}
           {currentResource.display_name}
         </p>
         <p className="text-sm">此类型文件暂不支持预览</p>
@@ -246,7 +246,7 @@ export function EditorPanel({
             // 编辑模式：显示输入框
             <>
               <span className="text-sm">
-                {resourceTypeIcons[currentResource.file_type]}
+                {currentResource.file_type ? resourceTypeIcons[currentResource.file_type] : "📎"}
               </span>
               <Input
                 value={editedDisplayName}
@@ -278,7 +278,7 @@ export function EditorPanel({
                 onClick={() => onEditingNameChange(true)}
                 title="点击编辑名称"
               >
-                {resourceTypeIcons[currentResource.file_type]}{" "}
+                {currentResource.file_type ? resourceTypeIcons[currentResource.file_type] : "📎"}{" "}
                 {currentResource.display_name || "未命名"}
               </span>
               {/* 文本/文件切换按钮 - 对所有文件类型资源都显示 */}

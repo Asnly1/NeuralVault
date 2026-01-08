@@ -38,6 +38,8 @@ pub use commands::{
     link_task_to_topic_command, unlink_task_from_topic_command, get_topic_tasks_command, get_task_topics_command,
     // Search commands
     search_semantic, search_keyword,
+    // Node commands
+    list_pinned_nodes, list_unreviewed_nodes, update_node_review_status, update_node_pinned,
 };
 pub use sidecar::PythonSidecar;
 pub use window::{hide_hud, toggle_hud};
@@ -235,7 +237,12 @@ pub fn run() {
             get_task_topics_command,
             // Search commands
             search_semantic,
-            search_keyword
+            search_keyword,
+            // Node commands
+            list_pinned_nodes,
+            list_unreviewed_nodes,
+            update_node_review_status,
+            update_node_pinned
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
