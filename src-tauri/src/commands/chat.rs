@@ -1,125 +1,100 @@
-use std::collections::HashMap;
-
 use tauri::State;
 
 use crate::{
     app_state::AppState,
     db::{
-        insert_chat_session, get_chat_session_by_id, list_chat_sessions_by_task,
-        list_chat_sessions_by_topic, list_chat_sessions_by_resource, update_chat_session, 
-        soft_delete_chat_session, insert_chat_message, 
-        list_chat_messages as list_chat_messages_db, update_chat_message_contents, delete_chat_message,
-        insert_message_attachments, list_message_attachments_with_resource,
-        delete_message_attachment, set_session_context_resources, NewChatMessage,
-        NewChatSession, NewMessageAttachment,
+        insert_chat_message, insert_chat_session, insert_message_attachments, list_chat_messages,
+        get_chat_session_by_id, list_chat_sessions_by_node, list_message_attachments_with_node,
+        list_session_bound_resources, set_session_bindings, update_chat_message_contents,
+        update_chat_session, delete_chat_message as delete_chat_message_record,
+        delete_message_attachment, soft_delete_chat_session,
+        BindingType, NewChatMessage, NewChatSession, NewMessageAttachment, SessionType,
     },
+    AppResult,
 };
 
 use super::{
-    AddMessageAttachmentsRequest, ChatMessageAttachmentPayload, ChatMessagePayload,
-    ChatUsagePayload, CreateChatMessageRequest, CreateChatMessageResponse,
-    CreateChatSessionRequest, CreateChatSessionResponse, DeleteChatMessageRequest,
-    DeleteChatSessionRequest, ListChatSessionsRequest, RemoveMessageAttachmentRequest,
-    SetSessionContextResourcesRequest,
-    UpdateChatMessageRequest, UpdateChatSessionRequest,
+    AddMessageAttachmentsRequest, ChatMessageAttachmentPayload, CreateChatMessageRequest,
+    CreateChatMessageResponse, CreateChatSessionRequest, CreateChatSessionResponse,
+    DeleteChatMessageRequest, DeleteChatSessionRequest, ListChatSessionsRequest,
+    RemoveMessageAttachmentRequest, SetSessionBindingsRequest, UpdateChatMessageRequest,
+    UpdateChatSessionRequest,
 };
 
 #[tauri::command]
 pub async fn create_chat_session(
     state: State<'_, AppState>,
     payload: CreateChatSessionRequest,
-) -> Result<CreateChatSessionResponse, String> {
+) -> AppResult<CreateChatSessionResponse> {
+    let session_type = payload.session_type.unwrap_or(SessionType::Temporary);
     let session_id = insert_chat_session(
         &state.db,
         NewChatSession {
-            task_id: payload.task_id,
-            topic_id: payload.topic_id,
             title: payload.title.as_deref(),
             summary: payload.summary.as_deref(),
             chat_model: payload.chat_model.as_deref(),
+            session_type,
             user_id: 1,
         },
     )
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
 
-    if let Some(resource_ids) = payload.context_resource_ids {
-        set_session_context_resources(&state.db, session_id, &resource_ids)
-            .await
-            .map_err(|e| e.to_string())?;
+    if let Some(node_ids) = payload.context_node_ids {
+        let binding_type = payload.binding_type.unwrap_or(BindingType::Primary);
+        set_session_bindings(&state.db, session_id, &node_ids, binding_type).await?;
     }
 
     Ok(CreateChatSessionResponse { session_id })
 }
 
 #[tauri::command]
-pub async fn get_chat_session(
-    state: State<'_, AppState>,
-    session_id: i64,
-) -> Result<crate::db::ChatSessionRecord, String> {
-    get_chat_session_by_id(&state.db, session_id)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 pub async fn list_chat_sessions(
     state: State<'_, AppState>,
     payload: ListChatSessionsRequest,
-) -> Result<Vec<crate::db::ChatSessionRecord>, String> {
+) -> AppResult<Vec<crate::db::ChatSessionRecord>> {
     let include_deleted = payload.include_deleted.unwrap_or(false);
-    if let Some(task_id) = payload.task_id {
-        return list_chat_sessions_by_task(&state.db, task_id, include_deleted)
-            .await
-            .map_err(|e| e.to_string());
+    if let Some(node_id) = payload.node_id {
+        return Ok(list_chat_sessions_by_node(&state.db, node_id, include_deleted).await?);
     }
+    Err("node_id is required".into())
+}
 
-    if let Some(topic_id) = payload.topic_id {
-        return list_chat_sessions_by_topic(&state.db, topic_id, include_deleted)
-            .await
-            .map_err(|e| e.to_string());
-    }
-
-    if let Some(resource_id) = payload.resource_id {
-        return list_chat_sessions_by_resource(&state.db, resource_id, include_deleted)
-            .await
-            .map_err(|e| e.to_string());
-    }
-
-    Err("task_id, topic_id, or resource_id is required".to_string())
+#[tauri::command]
+pub async fn get_chat_session(
+    state: State<'_, AppState>,
+    session_id: i64,
+) -> AppResult<crate::db::ChatSessionRecord> {
+    Ok(get_chat_session_by_id(&state.db, session_id).await?)
 }
 
 #[tauri::command]
 pub async fn update_chat_session_command(
     state: State<'_, AppState>,
     payload: UpdateChatSessionRequest,
-) -> Result<(), String> {
-    update_chat_session(
+) -> AppResult<()> {
+    Ok(update_chat_session(
         &state.db,
         payload.session_id,
         payload.title.as_deref(),
         payload.summary.as_deref(),
         payload.chat_model.as_deref(),
     )
-    .await
-    .map_err(|e| e.to_string())
+    .await?)
 }
 
 #[tauri::command]
-pub async fn delete_chat_session_command(
+pub async fn delete_chat_session(
     state: State<'_, AppState>,
     payload: DeleteChatSessionRequest,
-) -> Result<(), String> {
-    soft_delete_chat_session(&state.db, payload.session_id)
-        .await
-        .map_err(|e| e.to_string())
+) -> AppResult<()> {
+    Ok(soft_delete_chat_session(&state.db, payload.session_id).await?)
 }
 
 #[tauri::command]
 pub async fn create_chat_message(
     state: State<'_, AppState>,
     payload: CreateChatMessageRequest,
-) -> Result<CreateChatMessageResponse, String> {
+) -> AppResult<CreateChatMessageResponse> {
     let message_id = insert_chat_message(
         &state.db,
         NewChatMessage {
@@ -132,138 +107,109 @@ pub async fn create_chat_message(
             total_tokens: None,
         },
     )
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
 
-    if let Some(resource_ids) = payload.attachment_resource_ids {
-        let attachments: Vec<NewMessageAttachment> = resource_ids
+    if let Some(node_ids) = payload.attachment_node_ids {
+        let attachments: Vec<NewMessageAttachment> = node_ids
             .into_iter()
-            .map(|resource_id| NewMessageAttachment {
+            .map(|node_id| NewMessageAttachment {
                 message_id,
-                resource_id,
+                node_id,
             })
             .collect();
-        insert_message_attachments(&state.db, &attachments)
-            .await
-            .map_err(|e| e.to_string())?;
+        insert_message_attachments(&state.db, &attachments).await?;
     }
 
     Ok(CreateChatMessageResponse { message_id })
 }
 
 #[tauri::command]
-pub async fn list_chat_messages(
+pub async fn list_chat_messages_command(
     state: State<'_, AppState>,
     session_id: i64,
-) -> Result<Vec<ChatMessagePayload>, String> {
-    let messages = list_chat_messages_db(&state.db, session_id)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let attachments = list_message_attachments_with_resource(&state.db, session_id)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let mut attachment_map: HashMap<i64, Vec<ChatMessageAttachmentPayload>> = HashMap::new();
-    for attachment in attachments {
-        attachment_map
-            .entry(attachment.message_id)
-            .or_default()
-            .push(ChatMessageAttachmentPayload {
-                resource_id: attachment.resource_id,
-            });
-    }
-
-    let payloads = messages
-        .into_iter()
-        .map(|message| ChatMessagePayload {
-            message_id: message.message_id,
-            user_content: message.user_content,
-            assistant_content: message.assistant_content,
-            attachments: attachment_map.remove(&message.message_id).unwrap_or_default(),
-            usage: match (
-                message.input_tokens,
-                message.output_tokens,
-                message.reasoning_tokens,
-                message.total_tokens,
-            ) {
-                (Some(input_tokens), Some(output_tokens), Some(reasoning_tokens), Some(total_tokens)) => {
-                    Some(ChatUsagePayload {
-                        input_tokens,
-                        output_tokens,
-                        reasoning_tokens,
-                        total_tokens,
-                    })
-                }
-                _ => None,
-            },
-            created_at: message.created_at,
-        })
-        .collect();
-
-    Ok(payloads)
+) -> AppResult<Vec<crate::db::ChatMessageRecord>> {
+    Ok(list_chat_messages(&state.db, session_id).await?)
 }
 
 #[tauri::command]
-pub async fn update_chat_message_command(
+pub async fn list_message_attachments_command(
+    state: State<'_, AppState>,
+    session_id: i64,
+) -> AppResult<Vec<ChatMessageAttachmentPayload>> {
+    let attachments = list_message_attachments_with_node(&state.db, session_id).await?;
+    Ok(attachments
+        .into_iter()
+        .map(|attachment| ChatMessageAttachmentPayload {
+            node_id: attachment.node_id,
+        })
+        .collect())
+}
+
+#[tauri::command]
+pub async fn list_session_bound_resources_command(
+    state: State<'_, AppState>,
+    session_id: i64,
+) -> AppResult<Vec<crate::db::SessionBoundResourceRecord>> {
+    Ok(list_session_bound_resources(&state.db, session_id).await?)
+}
+
+#[tauri::command]
+pub async fn update_chat_message(
     state: State<'_, AppState>,
     payload: UpdateChatMessageRequest,
-) -> Result<(), String> {
-    update_chat_message_contents(
+) -> AppResult<()> {
+    Ok(update_chat_message_contents(
         &state.db,
         payload.message_id,
         payload.user_content.as_deref(),
         payload.assistant_content.as_deref(),
+        None,
     )
-    .await
-    .map_err(|e| e.to_string())
+    .await?)
 }
 
 #[tauri::command]
-pub async fn delete_chat_message_command(
+pub async fn delete_chat_message(
     state: State<'_, AppState>,
     payload: DeleteChatMessageRequest,
-) -> Result<(), String> {
-    delete_chat_message(&state.db, payload.message_id)
-        .await
-        .map_err(|e| e.to_string())
+) -> AppResult<()> {
+    Ok(delete_chat_message_record(&state.db, payload.message_id).await?)
 }
 
 #[tauri::command]
 pub async fn add_message_attachments(
     state: State<'_, AppState>,
     payload: AddMessageAttachmentsRequest,
-) -> Result<(), String> {
+) -> AppResult<()> {
     let attachments: Vec<NewMessageAttachment> = payload
-        .resource_ids
+        .node_ids
         .into_iter()
-        .map(|resource_id| NewMessageAttachment {
+        .map(|node_id| NewMessageAttachment {
             message_id: payload.message_id,
-            resource_id,
+            node_id,
         })
         .collect();
-
-    insert_message_attachments(&state.db, &attachments)
-        .await
-        .map_err(|e| e.to_string())
+    Ok(insert_message_attachments(&state.db, &attachments).await?)
 }
 
 #[tauri::command]
 pub async fn remove_message_attachment(
     state: State<'_, AppState>,
     payload: RemoveMessageAttachmentRequest,
-) -> Result<(), String> {
-    delete_message_attachment(&state.db, payload.message_id, payload.resource_id)
-        .await
-        .map_err(|e| e.to_string())
+) -> AppResult<()> {
+    Ok(delete_message_attachment(&state.db, payload.message_id, payload.node_id).await?)
 }
 
 #[tauri::command]
-pub async fn set_session_context_resources_command(
+pub async fn set_session_bindings_command(
     state: State<'_, AppState>,
-    payload: SetSessionContextResourcesRequest,
-) -> Result<(), String> {
-    set_session_context_resources(&state.db, payload.session_id, &payload.resource_ids)
-        .await
-        .map_err(|e| e.to_string())
+    payload: SetSessionBindingsRequest,
+) -> AppResult<()> {
+    Ok(set_session_bindings(
+        &state.db,
+        payload.session_id,
+        &payload.node_ids,
+        payload.binding_type,
+    )
+    .await?)
 }

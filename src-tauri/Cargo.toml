@@ -24,6 +24,7 @@ tauri-plugin-shell = "2"
 tauri-plugin-global-shortcut = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
 sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "macros", "migrate"] }
 uuid = { version = "1", features = ["v4"] }
 sha2 = "0.10"
@@ -40,6 +41,7 @@ pdf_oxide = "0.2.3"
 active-win-pos-rs = "0.9.1"
 ocr_rs = { git = "https://github.com/Asnly1/rust-paddle-ocr.git", rev = "ab7ac86", package = "ocr-rs" }
 pdfium-render = "0.8.37"
+image = "0.25"
 
 # 只有在目标平台是 Unix 系列（Linux / macOS / BSD 等）时，才会安装 libc
 [target.'cfg(unix)'.dependencies]

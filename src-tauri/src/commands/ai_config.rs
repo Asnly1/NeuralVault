@@ -9,11 +9,10 @@ use futures_util::StreamExt;
 use crate::{
     app_state::AppState,
     db::{
-        NewChatMessage, NewMessageAttachment, ResourceFileType,
+        NewChatMessage, NewMessageAttachment, ResourceSubtype,
         insert_chat_message, insert_message_attachments, list_chat_messages,
-        list_message_attachments_with_resource, list_session_context_resources,
-        update_chat_session,
-        update_chat_message_assistant,
+        list_message_attachments_with_node, list_session_bound_resources,
+        update_chat_session, update_chat_message_contents,
     },
     services::ProviderConfig,
     sidecar::PythonSidecar,
@@ -230,9 +229,9 @@ pub async fn send_chat_message(
     if !attachment_ids.is_empty() {
         let attachments: Vec<NewMessageAttachment> = attachment_ids
             .iter()
-            .map(|resource_id| NewMessageAttachment {
+            .map(|node_id| NewMessageAttachment {
                 message_id: user_message_id,
-                resource_id: *resource_id,
+                node_id: *node_id,
             })
             .collect();
         insert_message_attachments(&state.db, &attachments)
@@ -254,7 +253,7 @@ pub async fn send_chat_message(
     let messages = list_chat_messages(&state.db, request.session_id)
         .await
         .map_err(|e| e.to_string())?;
-    let attachments = list_message_attachments_with_resource(&state.db, request.session_id)
+    let attachments = list_message_attachments_with_node(&state.db, request.session_id)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -262,8 +261,8 @@ pub async fn send_chat_message(
     for attachment in attachments {
         let file_path = attachment.file_path.ok_or_else(|| {
             format!(
-                "resource {} missing file_path for attachment",
-                attachment.resource_id
+                "node {} missing file_path for attachment",
+                attachment.node_id
             )
         })?;
         let abs_path = resolve_file_path(&app, &file_path)?;
@@ -271,13 +270,13 @@ pub async fn send_chat_message(
         // 如果没有 → 插入一个默认值，再拿出来用
         // 默认值是 (Vec::new(), Vec::new())
         let entry = attachment_map.entry(attachment.message_id).or_default();
-        match attachment.file_type {
-            ResourceFileType::Image => entry.0.push(abs_path),
+        match attachment.resource_subtype {
+            Some(ResourceSubtype::Image) => entry.0.push(abs_path),
             _ => entry.1.push(abs_path),
         }
     }
 
-    let context_resources = list_session_context_resources(&state.db, request.session_id)
+    let context_resources = list_session_bound_resources(&state.db, request.session_id)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -286,18 +285,16 @@ pub async fn send_chat_message(
     let mut context_lines: Vec<String> = Vec::new();
 
     for resource in context_resources {
-        let display_name = resource
-            .display_name
-            .unwrap_or_else(|| format!("resource {}", resource.resource_id));
+        let display_name = resource.title.clone();
 
         if let Some(file_path) = resource.file_path {
             let abs_path = resolve_file_path(&app, &file_path)?;
-            match resource.file_type {
-                ResourceFileType::Image => context_images.push(abs_path),
+            match resource.resource_subtype {
+                Some(ResourceSubtype::Image) => context_images.push(abs_path),
                 _ => context_files.push(abs_path),
             }
             context_lines.push(format!("- [file] {}", display_name));
-        } else if let Some(content) = resource.content {
+        } else if let Some(content) = resource.file_content {
             context_lines.push(format!("- [text] {}: {}", display_name, content));
         } else {
             context_lines.push(format!("- [resource] {}", display_name));
@@ -471,21 +468,21 @@ pub async fn send_chat_message(
             }
         }
     };
-    let (input_tokens, output_tokens, reasoning_tokens, total_tokens) = match usage_tokens {
-        Some((input, output, reasoning, total)) => {
-            (Some(input), Some(output), Some(reasoning), Some(total))
-        }
-        None => (None, None, None, None),
+    let usage = match usage_tokens {
+        Some((input, output, reasoning, total)) => Some((input, output, reasoning, total)),
+        None => None,
     };
 
-    update_chat_message_assistant(
+    let usage_refs = usage
+        .as_ref()
+        .map(|(input, output, reasoning, total)| (input, output, reasoning, total));
+
+    update_chat_message_contents(
         &state.db,
         user_message_id,
+        None,
         final_assistant.as_deref(),
-        input_tokens,
-        output_tokens,
-        reasoning_tokens,
-        total_tokens,
+        usage_refs,
     )
     .await
     .map_err(|e| e.to_string())?;

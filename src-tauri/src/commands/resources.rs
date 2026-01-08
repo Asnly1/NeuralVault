@@ -1,110 +1,316 @@
-use std::{fs, path::Path};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
-use tauri::{AppHandle, State};
+use active_win_pos_rs::get_active_window;
+use image::DynamicImage;
+use ocr_rs::OcrEngine;
+use pdfium_render::prelude::*;
+use serde::Serialize;
+use sqlx::types::Json;
+use tauri::{AppHandle, Emitter, State};
 use uuid::Uuid;
 
 use crate::{
     app_state::AppState,
     db::{
-        link_resource_to_task, list_all_resources, list_resources_for_task,
-        unlink_resource_from_task, LinkResourceParams, NewResource,
-        ResourceFileType, ResourceProcessingStage, ResourceSyncStatus, SourceMeta,
-        ResourceRecord,
+        get_node_by_id, insert_node, list_all_resources, update_node_content,
+        update_node_summary, update_node_title, update_resource_sync_status, NewNode, NodeType,
+        ResourceProcessingStage, ResourceSubtype, ResourceSyncStatus, ReviewStatus, SourceMeta,
     },
-    utils::{
-        compute_sha256, get_assets_dir, get_extension, notify_python, parse_file_type,
-        resolve_file_path, IngestPayload, NotifyAction,
-    },
-    AppResult, AppError,
+    utils::{compute_sha256, get_assets_dir, get_extension, parse_file_type, resolve_file_path},
+    AppResult,
 };
 
-use super::{
-    CaptureRequest, CaptureResponse, LinkResourceRequest, LinkResourceResponse,
-    TaskResourcesResponse,
-};
-
-fn build_ingest_payload(
-    app: &AppHandle,
-    resource_id: i64,
-    action: NotifyAction,
-    file_hash: String,
-    file_type: ResourceFileType,
-    content: Option<String>,
-    file_path: Option<String>,
-) -> AppResult<IngestPayload> {
-    let resolved_path = match file_path {
-        Some(path) => Some(resolve_file_path(app, &path)?),
-        None => None,
-    };
-
-    Ok(IngestPayload::new(
-        resource_id,
-        action,
-        file_hash,
-        file_type,
-        content,
-        resolved_path,
-    ))
-}
+use super::{CaptureRequest, CaptureResponse};
 
 fn load_or_copy_file_for_capture(
     app: &AppHandle,
     source_path: &str,
     resource_uuid: &str,
 ) -> AppResult<(Vec<u8>, i64, String, Option<String>)> {
-    // 检查是否是从剪贴板粘贴的文件（已保存到 assets 目录）
-    // 相对路径格式: "assets/xxx.png"
     if source_path.starts_with("assets/") {
-        // 从剪贴板粘贴的图片，文件已经保存到 assets 目录
         let assets_dir = get_assets_dir(app)?;
         let file_name = source_path.strip_prefix("assets/").unwrap_or(source_path);
         let full_path = assets_dir.join(file_name);
 
-        // 读取文件内容
         let bytes = fs::read(&full_path)?;
         let size = bytes.len() as i64;
 
-        Ok((
-            bytes,
-            size,
-            source_path.to_string(),
-            Some(file_name.to_string()),
-        ))
+        Ok((bytes, size, source_path.to_string(), Some(file_name.to_string())))
     } else {
-        // 正常的外部文件，需要复制到 assets 目录
-        // 读取原始文件
         let bytes = fs::read(source_path)?;
         let size = bytes.len() as i64;
 
-        // 提取原始文件名
         let original_name = Path::new(source_path)
             .file_name()
             .map(|n| n.to_string_lossy().to_string());
 
-        // 获取文件扩展名
         let ext = get_extension(source_path);
-
-        // 构建目标文件名: {uuid}.{ext}
         let target_filename = match &ext {
             Some(e) => format!("{}.{}", resource_uuid, e),
             None => resource_uuid.to_string(),
         };
 
-        // 获取 assets 目录并复制文件
         let assets_dir = get_assets_dir(app)?;
         let target_path = assets_dir.join(&target_filename);
 
-        // 复制文件到应用目录
         fs::copy(source_path, &target_path)?;
 
-        // 存储相对路径
         let relative_path = format!("assets/{}", target_filename);
 
         Ok((bytes, size, relative_path, original_name))
     }
 }
 
-// 这个宏将 Rust 函数 capture_resource 标记为可供前端调用的命令
+#[derive(Debug, Clone, Serialize)]
+struct ParseProgressPayload {
+    node_id: i64,
+    status: String,
+    percentage: Option<u8>,
+    error: Option<String>,
+}
+
+fn emit_parse_progress(
+    app: Option<&AppHandle>,
+    node_id: Option<i64>,
+    status: &str,
+    percentage: Option<u8>,
+    error: Option<&str>,
+) {
+    let (app, node_id) = match (app, node_id) {
+        (Some(app), Some(node_id)) => (app, node_id),
+        _ => return,
+    };
+
+    let payload = ParseProgressPayload {
+        node_id,
+        status: status.to_string(),
+        percentage,
+        error: error.map(|message| message.to_string()),
+    };
+    let _ = app.emit("parse-progress", payload);
+}
+
+fn third_party_model_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("Missing project root")
+        .join("third_party_model")
+}
+
+fn build_ocr_engine() -> Result<OcrEngine, String> {
+    let model_dir = third_party_model_dir();
+    let det_path = model_dir.join("PP-OCRv5_mobile_det.mnn");
+    let rec_path = model_dir.join("PP-OCRv5_mobile_rec.mnn");
+    let charset_path = model_dir.join("ppocr_keys_v5.txt");
+
+    let det_path = det_path
+        .to_str()
+        .ok_or_else(|| "OCR 检测模型路径不可用".to_string())?;
+    let rec_path = rec_path
+        .to_str()
+        .ok_or_else(|| "OCR 识别模型路径不可用".to_string())?;
+    let charset_path = charset_path
+        .to_str()
+        .ok_or_else(|| "OCR 字符集路径不可用".to_string())?;
+
+    OcrEngine::new(det_path, rec_path, charset_path, None).map_err(|e| e.to_string())
+}
+
+fn build_pdfium() -> Result<Pdfium, String> {
+    let model_dir = third_party_model_dir();
+    let bindings = Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(
+        &model_dir,
+    ))
+    .or_else(|_| Pdfium::bind_to_system_library())
+    .map_err(|e| e.to_string())?;
+
+    Ok(Pdfium::new(bindings))
+}
+
+fn ocr_image_with_engine(engine: &OcrEngine, image: &DynamicImage) -> Result<String, String> {
+    let results = engine.recognize(image).map_err(|e| e.to_string())?;
+    let text = results
+        .into_iter()
+        .map(|result| result.text)
+        .filter(|line| !line.trim().is_empty())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    Ok(text)
+}
+
+fn parse_image_file(path: &str) -> Result<String, String> {
+    let image = image::open(path).map_err(|e| e.to_string())?;
+    let engine = build_ocr_engine()?;
+    let text = ocr_image_with_engine(&engine, &image)?;
+    if text.trim().is_empty() {
+        Err("OCR 未识别到文本".to_string())
+    } else {
+        Ok(text)
+    }
+}
+
+fn build_text_title(text: &str) -> String {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return "Untitled".to_string();
+    }
+    trimmed.chars().take(10).collect()
+}
+
+fn merge_source_meta(payload: Option<super::CaptureSourceMeta>) -> SourceMeta {
+    let mut meta = SourceMeta {
+        url: payload.as_ref().and_then(|m| m.url.clone()),
+        window_title: payload.as_ref().and_then(|m| m.window_title.clone()),
+        process_name: payload.as_ref().and_then(|m| m.process_name.clone()),
+        captured_at: payload.as_ref().and_then(|m| m.captured_at.clone()),
+    };
+
+    if meta.window_title.is_none() || meta.process_name.is_none() {
+        if let Ok(active) = get_active_window() {
+            if meta.window_title.is_none() {
+                meta.window_title = if active.title.is_empty() { None } else { Some(active.title) };
+            }
+            if meta.process_name.is_none() {
+                meta.process_name = if active.app_name.is_empty() { None } else { Some(active.app_name) };
+            }
+        }
+    }
+
+    if meta.captured_at.is_none() {
+        meta.captured_at = Some(chrono::Utc::now().to_rfc3339());
+    }
+
+    meta
+}
+
+fn parse_text_file(path: &str) -> Result<String, String> {
+    let bytes = fs::read(path).map_err(|e| e.to_string())?;
+    Ok(String::from_utf8_lossy(&bytes).to_string())
+}
+
+fn parse_pdf_text(path: &str) -> Result<String, String> {
+    let mut doc = pdf_oxide::PdfDocument::open(path).map_err(|e| e.to_string())?;
+    let mut output = String::new();
+    let page_count = doc.page_count().map_err(|e| e.to_string())?;
+    for page_index in 0..page_count {
+        let text = doc.extract_text(page_index).map_err(|e| e.to_string())?;
+        if !text.trim().is_empty() {
+            output.push_str(&format!("[Page {}]\n", page_index + 1));
+            output.push_str(&text);
+            output.push('\n');
+        }
+    }
+    if output.trim().is_empty() {
+        return Err("PDF 无可提取文本".to_string());
+    }
+    Ok(output)
+}
+
+fn parse_pdf_with_ocr(
+    path: &str,
+    app: Option<&AppHandle>,
+    node_id: Option<i64>,
+) -> Result<String, String> {
+    let pdfium = build_pdfium()?;
+    let document = pdfium
+        .load_pdf_from_file(path, None)
+        .map_err(|e| e.to_string())?;
+    let total_pages = document.pages().iter().count();
+    if total_pages == 0 {
+        return Err("PDF 没有可渲染页面".to_string());
+    }
+
+    emit_parse_progress(app, node_id, "ocr", Some(0), None);
+
+    let render_config = PdfRenderConfig::new()
+        .set_target_width(2000)
+        .set_maximum_height(2000);
+    let engine = build_ocr_engine()?;
+    let mut output = String::new();
+
+    for (index, page) in document.pages().iter().enumerate() {
+        let image = page
+            .render_with_config(&render_config)
+            .map_err(|e| e.to_string())?
+            .as_image();
+        let text = ocr_image_with_engine(&engine, &image)?;
+        if !text.trim().is_empty() {
+            output.push_str(&format!("[Page {}]\n", index + 1));
+            output.push_str(&text);
+            output.push('\n');
+        }
+
+        let percentage = ((index + 1) * 100 / total_pages) as u8;
+        emit_parse_progress(app, node_id, "ocr", Some(percentage), None);
+    }
+
+    if output.trim().is_empty() {
+        return Err("PDF OCR 未识别到文本".to_string());
+    }
+
+    Ok(output)
+}
+
+fn parse_pdf_file(
+    path: &str,
+    app: Option<&AppHandle>,
+    node_id: Option<i64>,
+) -> Result<String, String> {
+    let text_result = parse_pdf_text(path);
+    if let Ok(text) = &text_result {
+        if !text.trim().is_empty() {
+            return Ok(text.clone());
+        }
+    }
+
+    let ocr_result = parse_pdf_with_ocr(path, app, node_id);
+    match (text_result, ocr_result) {
+        (_, Ok(text)) => Ok(text),
+        (Err(text_err), Err(ocr_err)) => Err(format!(
+            "PDF 解析失败: {}; OCR 失败: {}",
+            text_err, ocr_err
+        )),
+        (Ok(_), Err(ocr_err)) => Err(ocr_err),
+    }
+}
+
+fn parse_resource_content(
+    app: Option<&AppHandle>,
+    node_id: Option<i64>,
+    subtype: ResourceSubtype,
+    content: Option<&str>,
+    file_path: Option<&str>,
+) -> Result<Option<String>, String> {
+    match subtype {
+        ResourceSubtype::Text => {
+            if let Some(text) = content {
+                Ok(Some(text.to_string()))
+            } else if let Some(path) = file_path {
+                Ok(Some(parse_text_file(path)?))
+            } else {
+                Err("缺少文本内容".to_string())
+            }
+        }
+        ResourceSubtype::Pdf => {
+            let path = file_path.ok_or_else(|| "缺少 PDF 路径".to_string())?;
+            Ok(Some(parse_pdf_file(path, app, node_id)?))
+        }
+        ResourceSubtype::Image => {
+            let path = file_path.ok_or_else(|| "缺少图片路径".to_string())?;
+            emit_parse_progress(app, node_id, "ocr", Some(0), None);
+            let text = parse_image_file(path)?;
+            emit_parse_progress(app, node_id, "ocr", Some(100), None);
+            Ok(Some(text))
+        }
+        ResourceSubtype::Url => Ok(content.map(|c| c.to_string())),
+        ResourceSubtype::Epub | ResourceSubtype::Other => Err("暂不支持该类型".to_string()),
+    }
+}
+
 #[tauri::command]
 pub async fn capture_resource(
     app: AppHandle,
@@ -113,350 +319,182 @@ pub async fn capture_resource(
 ) -> AppResult<CaptureResponse> {
     let CaptureRequest {
         mut content,
-        display_name,
         file_path,
         file_type,
         source_meta,
     } = payload;
 
-    // 生成资源 UUID（用于文件名和数据库记录）
     let resource_uuid = Uuid::new_v4().to_string();
+    let subtype = parse_file_type(file_type.as_deref());
 
-    // ========== 读取文件内容 ==========
-    // content_bytes: 用于计算 hash 的字节（文本+文件 或 单独文本 或 单独文件）
-    // content_for_db: 文本内容存入数据库
-    // file_size_bytes: 文件大小（仅文件有）
-    // stored_file_path: 存储在应用目录中的相对路径（如 "assets/abc123.pdf"）
-    // generated_display_name: 自动生成的显示名称
     let file_info = match file_path.as_deref() {
         Some(source_path) => Some(load_or_copy_file_for_capture(&app, source_path, &resource_uuid)?),
         None => None,
     };
 
-    let (content_bytes, content_for_db, file_size_bytes, stored_file_path, generated_display_name) =
-        // take() 会把 content: Option<String> 中的值取出来（变成 None 留在原地），并将所有权转移出来
-        match (content.take(), file_info) {
-            // ========== 情况1: 既有文本又有文件 ==========
-            (Some(text), Some((file_bytes, _file_size_bytes, stored_path, file_display_name))) => {
-                // 拼接文本和文件字节
-                let text_bytes = text.as_bytes();
-                let mut combined_bytes =
-                    Vec::with_capacity(text_bytes.len() + file_bytes.len());
-                combined_bytes.extend_from_slice(text_bytes);
-                combined_bytes.extend_from_slice(&file_bytes);
+    let (file_bytes, stored_file_path, file_display_name) = match &file_info {
+        Some((bytes, _size, stored_path, name)) => (Some(bytes.as_slice()), Some(stored_path.as_str()), name.clone()),
+        None => (None, None, None),
+    };
 
-                // 总大小 = 文本 + 文件
-                let combined_size = combined_bytes.len() as i64;
+    let resolved_path = match stored_file_path {
+        Some(path) => Some(resolve_file_path(&app, path)?),
+        None => None,
+    };
 
-                (
-                    combined_bytes,         // hash 用拼接后的字节
-                    Some(text),             // 文本存数据库
-                    Some(combined_size),    // 文本+文件 总大小
-                    Some(stored_path),      // 文件路径
-                    file_display_name,      // 文件名作为 display_name
-                )
-            }
+    let file_hash = if let Some(bytes) = file_bytes {
+        compute_sha256(bytes)
+    } else if let Some(text) = content.as_ref() {
+        compute_sha256(text.as_bytes())
+    } else {
+        return Err("content 或 file_path 至少提供一个".into());
+    };
 
-            // ========== 情况2: 只有文本 ==========
-            (Some(text), None) => {
-                let size = text.as_bytes().len() as i64;
+    let user_note = if file_info.is_some() { content.take() } else { None };
 
-                // 取文本前20个字符作为 display_name
-                let name = {
-                    let trimmed = text.trim();
-                    if trimmed.is_empty() {
-                        None
-                    } else {
-                        let chars: Vec<char> = trimmed.chars().take(21).collect();
-                        if chars.len() > 20 {
-                            let sample: String = chars.into_iter().take(20).collect();
-                            Some(format!("{sample}..."))
-                        } else {
-                            Some(chars.into_iter().collect())
-                        }
-                    }
-                };
+    let title = if let Some(name) = file_display_name.as_ref() {
+        name.clone()
+    } else if let Some(text) = content.as_ref() {
+        build_text_title(text)
+    } else {
+        "Untitled".to_string()
+    };
+    let title = if title.trim().is_empty() {
+        "Untitled".to_string()
+    } else {
+        title
+    };
 
-                (
-                    text.clone().into_bytes(), // hash 用文本字节
-                    Some(text),                // 文本存数据库
-                    Some(size),                // 文本大小
-                    None,                      // 无文件路径
-                    name,                      // 文本前20字符
-                )
-            }
+    let meta = merge_source_meta(source_meta);
 
-            // ========== 情况3: 只有文件 ==========
-            (None, Some((file_bytes, size, stored_path, file_display_name))) => (
-                file_bytes,             // hash 用文件字节
-                None,                   // 无文本
-                Some(size),             // 文件大小
-                Some(stored_path),      // 文件路径
-                file_display_name,      // 文件名
-            ),
-
-            // ========== 情况4: 什么都没有 ==========
-            (None, None) => return Err("content 或 file_path 至少提供一个".into()),
-        };
-
-    // ========== 生成 display_name ==========
-    // 优先级: 用户传入 > generated_display_name（已包含文件名或文本前20字符）
-    let display_name = display_name.or(generated_display_name);
-
-    // ========== 计算文件哈希 ==========
-    let file_hash = compute_sha256(&content_bytes);
-
-    // ========== 解析文件类型 ==========
-    let resource_type = parse_file_type(file_type.as_deref());
-
-    // ========== 解析来源元信息 ==========
-    let meta = source_meta.map(|m| SourceMeta {
-        url: m.url,
-        window_title: m.window_title,
-    });
-
-    // ========== 插入数据库 ==========
-    let pool = &state.db;
-    let resource_id = crate::db::insert_resource(
-        pool,
-        NewResource {
+    let node_id = insert_node(
+        &state.db,
+        NewNode {
             uuid: &resource_uuid,
-            source_meta: meta.as_ref(),
+            user_id: 1,
+            title: &title,
             summary: None,
-            file_hash: &file_hash,
-            file_type: resource_type,
-            // 文本内容存数据库，二进制文件不存
-            content: content_for_db.as_deref(),
-            display_name: display_name.as_deref(),
-            // 存储相对路径（如 "assets/abc123.pdf"）
-            file_path: stored_file_path.as_deref(),
-            file_size_bytes,
+            node_type: NodeType::Resource,
+            task_status: None,
+            priority: None,
+            due_date: None,
+            done_date: None,
+            file_hash: Some(&file_hash),
+            file_path: stored_file_path,
+            file_content: None,
+            user_note: user_note.as_deref(),
+            resource_subtype: Some(subtype),
+            source_meta: Some(Json(meta)),
             indexed_hash: None,
             processing_hash: None,
             sync_status: ResourceSyncStatus::Pending,
             last_indexed_at: None,
             last_error: None,
             processing_stage: ResourceProcessingStage::Todo,
-            user_id: 1,
+            review_status: ReviewStatus::Unreviewed,
         },
     )
     .await?;
 
-    // ========== 异步通知 Python ==========
-    // 捕获成功后立即通知 Python 后台处理
-    let ingest_payload = build_ingest_payload(
-        &app,
-        resource_id,
-        NotifyAction::Created,
-        file_hash,
-        resource_type,
-        content_for_db.clone(),
-        stored_file_path.clone(),
-    )?;
+    emit_parse_progress(Some(&app), Some(node_id), "parsing", Some(0), None);
 
-    let base_url = state.python.get_base_url();
-    let client = state.python.client.clone();
-    tauri::async_runtime::spawn(async move {
-        notify_python(&client, &base_url, &ingest_payload).await;
-    });
+    let file_content_result = parse_resource_content(
+        Some(&app),
+        Some(node_id),
+        subtype,
+        content.as_deref(),
+        resolved_path.as_deref(),
+    );
 
-    Ok(CaptureResponse {
-        resource_id,
-        resource_uuid,
-    })
-}
-
-/// 将资源关联到任务
-#[tauri::command]
-pub async fn link_resource(
-    state: State<'_, AppState>,
-    payload: LinkResourceRequest,
-) -> AppResult<LinkResourceResponse> {
-    link_resource_to_task(
-        &state.db,
-        LinkResourceParams {
-            task_id: payload.task_id,
-            resource_id: payload.resource_id,
-        },
-    )
-    .await?;
-
-    Ok(LinkResourceResponse { success: true })
-}
-
-/// 取消资源与任务的关联
-#[tauri::command]
-pub async fn unlink_resource(
-    state: State<'_, AppState>,
-    task_id: i64,
-    resource_id: i64,
-) -> AppResult<LinkResourceResponse> {
-    unlink_resource_from_task(&state.db, task_id, resource_id).await?;
-    Ok(LinkResourceResponse { success: true })
-}
-
-/// 获取任务关联的资源列表
-#[tauri::command]
-pub async fn get_task_resources(
-    state: State<'_, AppState>,
-    task_id: i64,
-) -> AppResult<TaskResourcesResponse> {
-    let resources = list_resources_for_task(&state.db, task_id).await?;
-    Ok(TaskResourcesResponse { resources })
-}
-
-/// 获取所有资源（未删除）
-#[tauri::command]
-pub async fn get_all_resources(
-    state: State<'_, AppState>,
-) -> AppResult<Vec<ResourceRecord>> {
-    Ok(list_all_resources(&state.db).await?)
-}
-
-/// 获取 assets 目录的完整路径
-/// 
-/// 用于前端将相对路径（如 "assets/xxx.png"）转换为完整路径
-#[tauri::command]
-pub fn get_assets_path(app: AppHandle) -> AppResult<String> {
-    let assets_dir = get_assets_dir(&app)?;
-    assets_dir
-        .to_str()
-        .ok_or_else(|| AppError::Custom("无法转换路径为字符串".to_string()))
-        .map(|s| s.to_string())
-}
-
-/// 软删除资源
-/// 
-/// 将资源标记为已删除（is_deleted = 1, deleted_at = 当前时间）
-/// 不会物理删除数据库记录和文件
-#[tauri::command]
-pub async fn soft_delete_resource_command(
-    state: State<'_, AppState>,
-    resource_id: i64,
-) -> AppResult<LinkResourceResponse> {
-    crate::db::soft_delete_resource(&state.db, resource_id).await?;
-    Ok(LinkResourceResponse { success: true })
-}
-
-/// 更新资源内容
-/// 
-/// 用于保存文本编辑器中的更改
-#[tauri::command]
-pub async fn update_resource_content_command(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    resource_id: i64,
-    content: String,
-) -> AppResult<()> {
-    let resource = crate::db::get_resource_by_id(&state.db, resource_id).await?;
-
-    let file_bytes = if let Some(file_path) = &resource.file_path {
-        let abs_path = resolve_file_path(&app, file_path)?;
-        fs::read(&abs_path)?
-    } else {
-        Vec::new()
-    };
-
-    let content_bytes = content.as_bytes();
-    let mut combined_bytes = Vec::with_capacity(content_bytes.len() + file_bytes.len());
-    combined_bytes.extend_from_slice(content_bytes);
-    combined_bytes.extend_from_slice(&file_bytes);
-
-    let file_hash = compute_sha256(&combined_bytes);
-    let file_size_bytes = combined_bytes.len() as i64;
-
-    crate::db::update_resource_content(&state.db, resource_id, &content, &file_hash, Some(file_size_bytes)).await?;
-
-    let ingest_payload = build_ingest_payload(
-        &app,
-        resource_id,
-        NotifyAction::Updated,
-        file_hash,
-        resource.file_type,
-        Some(content),
-        resource.file_path.clone(),
-    )?;
-
-    let base_url = state.python.get_base_url();
-    let client = state.python.client.clone();
-    tauri::async_runtime::spawn(async move {
-        notify_python(&client, &base_url, &ingest_payload).await;
-    });
-
-    Ok(())
-}
-
-/// 更新资源显示名称
-/// 
-/// 用于重命名资源
-#[tauri::command]
-pub async fn update_resource_display_name_command(
-    state: State<'_, AppState>,
-    resource_id: i64,
-    display_name: String,
-) -> AppResult<()> {
-    Ok(crate::db::update_resource_display_name(&state.db, resource_id, &display_name).await?)
-}
-
-/// 更新资源摘要 (AI 生成)
-#[tauri::command]
-pub async fn update_resource_summary_command(
-    state: State<'_, AppState>,
-    resource_id: i64,
-    summary: Option<String>,
-) -> AppResult<()> {
-    Ok(crate::db::update_resource_summary(&state.db, resource_id, summary.as_deref()).await?)
-}
-
-/// 硬删除资源（物理删除数据库记录、级联数据和文件）
-/// 
-/// 会删除：
-/// - 数据库记录和级联数据（task_resource_link, context_chunks）
-/// - assets 目录中的物理文件（如果存在）
-#[tauri::command]
-pub async fn hard_delete_resource_command(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    resource_id: i64,
-) -> AppResult<LinkResourceResponse> {
-    // 1. 先获取资源信息，以便删除物理文件
-    let resource = crate::db::get_resource_by_id(&state.db, resource_id).await?;
-
-    // 2. 删除数据库记录（会级联删除关联记录和分块）
-    crate::db::hard_delete_resource(&state.db, resource_id).await?;
-
-    // 3. 删除物理文件（如果存在）
-    if let Some(file_path) = &resource.file_path {
-        if file_path.starts_with("assets/") {
-            let assets_dir = get_assets_dir(&app)?;
-            let file_name = file_path.strip_prefix("assets/").unwrap_or(&file_path);
-            let full_path = assets_dir.join(file_name);
-
-            // 尝试删除文件，失败不影响主流程
-            if full_path.exists() {
-                if let Err(e) = fs::remove_file(&full_path) {
-                    eprintln!("删除文件失败（已删除数据库记录）: {}", e);
-                }
+    match file_content_result {
+        Ok(text) => {
+            if let Some(content) = text.as_deref() {
+                update_node_content(&state.db, node_id, Some(content), Some(&file_hash)).await?;
             }
+            emit_parse_progress(Some(&app), Some(node_id), "done", Some(100), None);
+        }
+        Err(err) => {
+            update_resource_sync_status(
+                &state.db,
+                node_id,
+                ResourceSyncStatus::Error,
+                None,
+                Some(&err),
+            )
+            .await?;
+            emit_parse_progress(Some(&app), Some(node_id), "error", None, Some(&err));
         }
     }
 
-    let ingest_payload = build_ingest_payload(
-        &app,
-        resource_id,
-        NotifyAction::Deleted,
-        resource.file_hash.clone(),
-        resource.file_type,
-        resource.content.clone(),
-        resource.file_path.clone(),
-    )?;
-
-    let base_url = state.python.get_base_url();
-    let client = state.python.client.clone();
-    tauri::async_runtime::spawn(async move {
-        notify_python(&client, &base_url, &ingest_payload).await;
-    });
-
-    Ok(LinkResourceResponse { success: true })
+    Ok(CaptureResponse {
+        node_id,
+        node_uuid: resource_uuid,
+    })
 }
 
+#[tauri::command]
+pub async fn get_all_resources(state: State<'_, AppState>) -> AppResult<Vec<crate::db::NodeRecord>> {
+    Ok(list_all_resources(&state.db).await?)
+}
+
+#[tauri::command]
+pub fn get_assets_path(app: AppHandle) -> AppResult<String> {
+    let path = get_assets_dir(&app)?;
+    Ok(path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub async fn update_resource_content_command(
+    state: State<'_, AppState>,
+    node_id: i64,
+    content: String,
+) -> AppResult<()> {
+    let file_hash = compute_sha256(content.as_bytes());
+    Ok(update_node_content(&state.db, node_id, Some(&content), Some(&file_hash)).await?)
+}
+
+#[tauri::command]
+pub async fn update_resource_title_command(
+    state: State<'_, AppState>,
+    node_id: i64,
+    title: String,
+) -> AppResult<()> {
+    let trimmed = title.trim();
+    if trimmed.is_empty() {
+        return Err("title 不能为空".into());
+    }
+    Ok(update_node_title(&state.db, node_id, trimmed).await?)
+}
+
+#[tauri::command]
+pub async fn update_resource_summary_command(
+    state: State<'_, AppState>,
+    node_id: i64,
+    summary: Option<String>,
+) -> AppResult<()> {
+    Ok(update_node_summary(&state.db, node_id, summary.as_deref()).await?)
+}
+
+#[tauri::command]
+pub async fn soft_delete_resource_command(
+    state: State<'_, AppState>,
+    node_id: i64,
+) -> AppResult<()> {
+    Ok(crate::db::soft_delete_node(&state.db, node_id).await?)
+}
+
+#[tauri::command]
+pub async fn hard_delete_resource_command(
+    state: State<'_, AppState>,
+    node_id: i64,
+) -> AppResult<()> {
+    Ok(crate::db::hard_delete_node(&state.db, node_id).await?)
+}
+
+#[tauri::command]
+pub async fn get_resource_by_id(
+    state: State<'_, AppState>,
+    node_id: i64,
+) -> AppResult<crate::db::NodeRecord> {
+    Ok(get_node_by_id(&state.db, node_id).await?)
+}

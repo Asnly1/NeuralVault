@@ -1,0 +1,102 @@
+use super::{DbPool, EdgeRecord, EdgeRelationType, NewEdge, NodeRecord};
+
+pub async fn insert_edge(pool: &DbPool, params: NewEdge) -> Result<i64, sqlx::Error> {
+    let result = sqlx::query(
+        "INSERT INTO edges (source_node_id, target_node_id, relation_type, confidence_score, is_manual) \
+         VALUES (?, ?, ?, ?, ?)",
+    )
+    .bind(params.source_node_id)
+    .bind(params.target_node_id)
+    .bind(params.relation_type)
+    .bind(params.confidence_score)
+    .bind(params.is_manual)
+    .execute(pool)
+    .await?;
+
+    Ok(result.last_insert_rowid())
+}
+
+pub async fn delete_edge(
+    pool: &DbPool,
+    source_node_id: i64,
+    target_node_id: i64,
+    relation_type: EdgeRelationType,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "DELETE FROM edges WHERE source_node_id = ? AND target_node_id = ? AND relation_type = ?",
+    )
+    .bind(source_node_id)
+    .bind(target_node_id)
+    .bind(relation_type)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn list_edges_from(
+    pool: &DbPool,
+    source_node_id: i64,
+    relation_type: EdgeRelationType,
+) -> Result<Vec<EdgeRecord>, sqlx::Error> {
+    sqlx::query_as::<_, EdgeRecord>(
+        "SELECT edge_id, source_node_id, target_node_id, relation_type, confidence_score, is_manual, created_at, updated_at, is_deleted, deleted_at \
+         FROM edges WHERE source_node_id = ? AND relation_type = ? AND is_deleted = 0",
+    )
+    .bind(source_node_id)
+    .bind(relation_type)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn list_edges_to(
+    pool: &DbPool,
+    target_node_id: i64,
+    relation_type: EdgeRelationType,
+) -> Result<Vec<EdgeRecord>, sqlx::Error> {
+    sqlx::query_as::<_, EdgeRecord>(
+        "SELECT edge_id, source_node_id, target_node_id, relation_type, confidence_score, is_manual, created_at, updated_at, is_deleted, deleted_at \
+         FROM edges WHERE target_node_id = ? AND relation_type = ? AND is_deleted = 0",
+    )
+    .bind(target_node_id)
+    .bind(relation_type)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn list_target_nodes(
+    pool: &DbPool,
+    source_node_id: i64,
+    relation_type: EdgeRelationType,
+) -> Result<Vec<NodeRecord>, sqlx::Error> {
+    sqlx::query_as::<_, NodeRecord>(
+        "SELECT n.node_id, n.uuid, n.user_id, n.title, n.summary, n.node_type, n.task_status, n.priority, n.due_date, n.done_date, \
+            n.file_hash, n.file_path, n.file_content, n.user_note, n.resource_subtype, n.source_meta, n.indexed_hash, n.processing_hash, n.sync_status, \
+            n.last_indexed_at, n.last_error, n.processing_stage, n.review_status, n.is_pinned, n.pinned_at, n.created_at, n.updated_at, n.is_deleted, n.deleted_at \
+         FROM edges e \
+         INNER JOIN nodes n ON n.node_id = e.target_node_id \
+         WHERE e.source_node_id = ? AND e.relation_type = ? AND e.is_deleted = 0 AND n.is_deleted = 0",
+    )
+    .bind(source_node_id)
+    .bind(relation_type)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn list_source_nodes(
+    pool: &DbPool,
+    target_node_id: i64,
+    relation_type: EdgeRelationType,
+) -> Result<Vec<NodeRecord>, sqlx::Error> {
+    sqlx::query_as::<_, NodeRecord>(
+        "SELECT n.node_id, n.uuid, n.user_id, n.title, n.summary, n.node_type, n.task_status, n.priority, n.due_date, n.done_date, \
+            n.file_hash, n.file_path, n.file_content, n.user_note, n.resource_subtype, n.source_meta, n.indexed_hash, n.processing_hash, n.sync_status, \
+            n.last_indexed_at, n.last_error, n.processing_stage, n.review_status, n.is_pinned, n.pinned_at, n.created_at, n.updated_at, n.is_deleted, n.deleted_at \
+         FROM edges e \
+         INNER JOIN nodes n ON n.node_id = e.source_node_id \
+         WHERE e.target_node_id = ? AND e.relation_type = ? AND e.is_deleted = 0 AND n.is_deleted = 0",
+    )
+    .bind(target_node_id)
+    .bind(relation_type)
+    .fetch_all(pool)
+    .await
+}

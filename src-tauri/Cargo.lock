@@ -3397,9 +3397,11 @@ version = "0.1.0"
 dependencies = [
  "active-win-pos-rs",
  "aes-gcm",
+ "chrono",
  "clipboard-rs",
  "directories",
  "futures-util",
+ "image 0.25.9",
  "libc",
  "ocr-rs",
  "pdf_oxide",

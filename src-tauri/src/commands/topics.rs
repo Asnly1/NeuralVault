@@ -4,30 +4,25 @@ use tauri::State;
 use crate::{
     app_state::AppState,
     db::{
-        get_topic_by_id, hard_delete_topic, insert_topic, link_resource_to_topic,
-        link_task_to_topic, list_resources_for_topic, list_tasks_for_topic, list_topics,
-        list_topics_for_resource, list_topics_for_task, unlink_resource_from_topic,
-        unlink_task_from_topic, update_topic_favourite, update_topic_resource_review_status, 
-        update_topic_summary, update_topic_title, NewTopic, NewTopicResourceLink, ResourceRecord, 
-        TaskRecord, TopicRecord, TopicReviewStatus,
+        delete_edge, insert_edge, list_nodes_by_type, list_source_nodes, list_target_nodes,
+        update_node_pinned, update_node_summary, update_node_title, update_resource_review_status,
+        EdgeRelationType, NewEdge, NodeRecord, NodeType, ReviewStatus,
     },
-    simple_void_command,
     AppResult,
 };
 
-// ========== Request/Response Types ==========
+use super::types::NodeListResponse;
 
 #[derive(Debug, Deserialize)]
 pub struct CreateTopicRequest {
     pub title: String,
     pub summary: Option<String>,
-    pub is_system_default: Option<bool>,
     pub is_favourite: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct CreateTopicResponse {
-    pub topic: TopicRecord,
+    pub node: NodeRecord,
 }
 
 #[derive(Debug, Deserialize)]
@@ -47,83 +42,73 @@ pub struct UpdateReviewStatusRequest {
 }
 
 #[derive(Debug, Serialize)]
-pub struct TopicResourcesResponse {
-    pub resources: Vec<ResourceRecord>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct TopicTasksResponse {
-    pub tasks: Vec<TaskRecord>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ResourceTopicsResponse {
-    pub topics: Vec<TopicRecord>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct TaskTopicsResponse {
-    pub topics: Vec<TopicRecord>,
-}
-
-#[derive(Debug, Serialize)]
 pub struct SuccessResponse {
     pub success: bool,
 }
 
-fn parse_review_status(s: Option<&str>) -> TopicReviewStatus {
+fn parse_review_status(s: Option<&str>) -> ReviewStatus {
     match s {
-        Some("approved") => TopicReviewStatus::Approved,
-        Some("rejected") => TopicReviewStatus::Rejected,
-        _ => TopicReviewStatus::Pending,
+        Some("approved") | Some("reviewed") => ReviewStatus::Reviewed,
+        Some("rejected") => ReviewStatus::Rejected,
+        _ => ReviewStatus::Unreviewed,
     }
 }
-
-// ========== Topic CRUD Commands ==========
 
 #[tauri::command]
 pub async fn create_topic(
     state: State<'_, AppState>,
     payload: CreateTopicRequest,
 ) -> AppResult<CreateTopicResponse> {
-    let pool = &state.db;
-    
-    let topic_id = insert_topic(
-        pool,
-        NewTopic {
+    let uuid = uuid::Uuid::new_v4().to_string();
+    let node_id = crate::db::insert_node(
+        &state.db,
+        crate::db::NewNode {
+            uuid: &uuid,
+            user_id: 1,
             title: &payload.title,
             summary: payload.summary.as_deref(),
-            is_system_default: payload.is_system_default.unwrap_or(false),
-            is_favourite: payload.is_favourite.unwrap_or(false),
-            user_id: 1,
+            node_type: NodeType::Topic,
+            task_status: None,
+            priority: None,
+            due_date: None,
+            done_date: None,
+            file_hash: None,
+            file_path: None,
+            file_content: None,
+            user_note: None,
+            resource_subtype: None,
+            source_meta: None,
+            indexed_hash: None,
+            processing_hash: None,
+            sync_status: crate::db::ResourceSyncStatus::Pending,
+            last_indexed_at: None,
+            last_error: None,
+            processing_stage: crate::db::ResourceProcessingStage::Todo,
+            review_status: ReviewStatus::Reviewed,
         },
     )
     .await?;
 
-    let topic = get_topic_by_id(pool, topic_id).await?;
-    Ok(CreateTopicResponse { topic })
+    if payload.is_favourite.unwrap_or(false) {
+        update_node_pinned(&state.db, node_id, true).await?;
+    }
+
+    let node = crate::db::get_node_by_id(&state.db, node_id).await?;
+    Ok(CreateTopicResponse { node })
 }
 
 #[tauri::command]
 pub async fn get_topic_command(
     state: State<'_, AppState>,
     topic_id: i64,
-) -> AppResult<TopicRecord> {
-    Ok(get_topic_by_id(&state.db, topic_id).await?)
+) -> AppResult<NodeRecord> {
+    Ok(crate::db::get_node_by_id(&state.db, topic_id).await?)
 }
 
 #[tauri::command]
-pub async fn list_topics_command(
-    state: State<'_, AppState>,
-) -> AppResult<Vec<TopicRecord>> {
-    Ok(list_topics(&state.db).await?)
+pub async fn list_topics_command(state: State<'_, AppState>) -> AppResult<Vec<NodeRecord>> {
+    Ok(list_nodes_by_type(&state.db, NodeType::Topic, false).await?)
 }
-
-// ========== 使用宏生成的简单命令 ==========
-
-simple_void_command!(hard_delete_topic_command, hard_delete_topic, topic_id: i64);
-
-// ========== 需要特殊处理的命令 ==========
 
 #[tauri::command]
 pub async fn update_topic_title_command(
@@ -131,7 +116,7 @@ pub async fn update_topic_title_command(
     topic_id: i64,
     title: String,
 ) -> AppResult<()> {
-    Ok(update_topic_title(&state.db, topic_id, &title).await?)
+    Ok(update_node_title(&state.db, topic_id, &title).await?)
 }
 
 #[tauri::command]
@@ -140,7 +125,7 @@ pub async fn update_topic_summary_command(
     topic_id: i64,
     summary: Option<String>,
 ) -> AppResult<()> {
-    Ok(update_topic_summary(&state.db, topic_id, summary.as_deref()).await?)
+    Ok(update_node_summary(&state.db, topic_id, summary.as_deref()).await?)
 }
 
 #[tauri::command]
@@ -149,10 +134,8 @@ pub async fn update_topic_favourite_command(
     topic_id: i64,
     is_favourite: bool,
 ) -> AppResult<()> {
-    Ok(update_topic_favourite(&state.db, topic_id, is_favourite).await?)
+    Ok(update_node_pinned(&state.db, topic_id, is_favourite).await?)
 }
-
-// ========== Topic-Resource Link Commands ==========
 
 #[tauri::command]
 pub async fn link_resource_to_topic_command(
@@ -161,17 +144,19 @@ pub async fn link_resource_to_topic_command(
 ) -> AppResult<SuccessResponse> {
     let review_status = parse_review_status(payload.review_status.as_deref());
 
-    link_resource_to_topic(
+    insert_edge(
         &state.db,
-        NewTopicResourceLink {
-            topic_id: payload.topic_id,
-            resource_id: payload.resource_id,
+        NewEdge {
+            source_node_id: payload.topic_id,
+            target_node_id: payload.resource_id,
+            relation_type: EdgeRelationType::Contains,
             confidence_score: payload.confidence_score,
-            is_auto_generated: payload.is_auto_generated.unwrap_or(false),
-            review_status,
+            is_manual: !payload.is_auto_generated.unwrap_or(false),
         },
     )
     .await?;
+
+    update_resource_review_status(&state.db, payload.resource_id, review_status).await?;
 
     Ok(SuccessResponse { success: true })
 }
@@ -182,7 +167,7 @@ pub async fn unlink_resource_from_topic_command(
     topic_id: i64,
     resource_id: i64,
 ) -> AppResult<SuccessResponse> {
-    unlink_resource_from_topic(&state.db, topic_id, resource_id).await?;
+    delete_edge(&state.db, topic_id, resource_id, EdgeRelationType::Contains).await?;
     Ok(SuccessResponse { success: true })
 }
 
@@ -192,28 +177,26 @@ pub async fn update_topic_resource_review_status_command(
     payload: UpdateReviewStatusRequest,
 ) -> AppResult<()> {
     let review_status = parse_review_status(Some(&payload.review_status));
-    Ok(update_topic_resource_review_status(&state.db, payload.topic_id, payload.resource_id, review_status).await?)
+    Ok(update_resource_review_status(&state.db, payload.resource_id, review_status).await?)
 }
 
 #[tauri::command]
 pub async fn get_topic_resources_command(
     state: State<'_, AppState>,
     topic_id: i64,
-) -> AppResult<TopicResourcesResponse> {
-    let resources = list_resources_for_topic(&state.db, topic_id).await?;
-    Ok(TopicResourcesResponse { resources })
+) -> AppResult<NodeListResponse> {
+    let nodes = list_target_nodes(&state.db, topic_id, EdgeRelationType::Contains).await?;
+    Ok(NodeListResponse { nodes })
 }
 
 #[tauri::command]
 pub async fn get_resource_topics_command(
     state: State<'_, AppState>,
     resource_id: i64,
-) -> AppResult<ResourceTopicsResponse> {
-    let topics = list_topics_for_resource(&state.db, resource_id).await?;
-    Ok(ResourceTopicsResponse { topics })
+) -> AppResult<NodeListResponse> {
+    let nodes = list_source_nodes(&state.db, resource_id, EdgeRelationType::Contains).await?;
+    Ok(NodeListResponse { nodes })
 }
-
-// ========== Task-Topic Link Commands ==========
 
 #[tauri::command]
 pub async fn link_task_to_topic_command(
@@ -221,7 +204,17 @@ pub async fn link_task_to_topic_command(
     task_id: i64,
     topic_id: i64,
 ) -> AppResult<SuccessResponse> {
-    link_task_to_topic(&state.db, task_id, topic_id).await?;
+    insert_edge(
+        &state.db,
+        NewEdge {
+            source_node_id: topic_id,
+            target_node_id: task_id,
+            relation_type: EdgeRelationType::Contains,
+            confidence_score: None,
+            is_manual: true,
+        },
+    )
+    .await?;
     Ok(SuccessResponse { success: true })
 }
 
@@ -231,7 +224,7 @@ pub async fn unlink_task_from_topic_command(
     task_id: i64,
     topic_id: i64,
 ) -> AppResult<SuccessResponse> {
-    unlink_task_from_topic(&state.db, task_id, topic_id).await?;
+    delete_edge(&state.db, topic_id, task_id, EdgeRelationType::Contains).await?;
     Ok(SuccessResponse { success: true })
 }
 
@@ -239,16 +232,16 @@ pub async fn unlink_task_from_topic_command(
 pub async fn get_topic_tasks_command(
     state: State<'_, AppState>,
     topic_id: i64,
-) -> AppResult<TopicTasksResponse> {
-    let tasks = list_tasks_for_topic(&state.db, topic_id).await?;
-    Ok(TopicTasksResponse { tasks })
+) -> AppResult<NodeListResponse> {
+    let nodes = list_target_nodes(&state.db, topic_id, EdgeRelationType::Contains).await?;
+    Ok(NodeListResponse { nodes })
 }
 
 #[tauri::command]
 pub async fn get_task_topics_command(
     state: State<'_, AppState>,
     task_id: i64,
-) -> AppResult<TaskTopicsResponse> {
-    let topics = list_topics_for_task(&state.db, task_id).await?;
-    Ok(TaskTopicsResponse { topics })
+) -> AppResult<NodeListResponse> {
+    let nodes = list_source_nodes(&state.db, task_id, EdgeRelationType::Contains).await?;
+    Ok(NodeListResponse { nodes })
 }

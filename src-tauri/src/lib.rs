@@ -16,24 +16,26 @@ use tokio::sync::Mutex;
 pub use app_state::AppState;
 pub use error::{AppError, AppResult};
 pub use commands::{
-    capture_resource, create_task, soft_delete_resource_command, soft_delete_task_command,
-    get_assets_path, get_dashboard, get_task_resources, hard_delete_resource_command,
-    hard_delete_task_command, link_resource, read_clipboard, unlink_resource,
-    mark_task_as_done_command, mark_task_as_todo_command, update_task_priority_command,
-    update_task_due_date_command, update_task_title_command, update_task_description_command,
-    update_task_summary_command, update_resource_summary_command,
-    get_tasks_by_date, get_all_tasks, get_all_resources, update_resource_content_command, update_resource_display_name_command,
-    check_python_health, is_python_running, get_ai_config_status, save_api_key, remove_api_key, set_default_model, send_chat_message,
-    create_chat_session, get_chat_session, list_chat_sessions, update_chat_session_command, delete_chat_session_command,
-    create_chat_message, list_chat_messages, update_chat_message_command, delete_chat_message_command,
-    add_message_attachments, remove_message_attachment, set_session_context_resources_command,
+    capture_resource, get_all_resources, get_resource_by_id, get_assets_path, get_dashboard,
+    create_task, soft_delete_task_command, hard_delete_task_command, mark_task_as_done_command,
+    mark_task_as_todo_command, update_task_priority_command, update_task_due_date_command,
+    update_task_title_command, update_task_description_command, update_task_summary_command,
+    get_tasks_by_date, get_all_tasks, get_active_tasks,
+    update_resource_content_command, update_resource_title_command, update_resource_summary_command,
+    soft_delete_resource_command, hard_delete_resource_command,
+    link_nodes_command, unlink_nodes_command, list_target_nodes_command, list_source_nodes_command,
+    read_clipboard, check_python_health, is_python_running, get_ai_config_status, save_api_key,
+    remove_api_key, set_default_model, send_chat_message, create_chat_session, get_chat_session,
+    list_chat_sessions, update_chat_session_command, delete_chat_session, create_chat_message,
+    list_chat_messages_command, list_message_attachments_command, list_session_bound_resources_command,
+    update_chat_message, delete_chat_message, add_message_attachments, remove_message_attachment,
+    set_session_bindings_command,
     // Topic commands
     create_topic, get_topic_command, list_topics_command,
-    update_topic_title_command, update_topic_summary_command, update_topic_favourite_command, hard_delete_topic_command,
+    update_topic_title_command, update_topic_summary_command, update_topic_favourite_command,
     link_resource_to_topic_command, unlink_resource_from_topic_command,
     update_topic_resource_review_status_command, get_topic_resources_command, get_resource_topics_command,
-    link_task_to_topic_command, unlink_task_from_topic_command,
-    get_topic_tasks_command, get_task_topics_command,
+    link_task_to_topic_command, unlink_task_from_topic_command, get_topic_tasks_command, get_task_topics_command,
 };
 pub use sidecar::PythonSidecar;
 pub use window::{hide_hud, toggle_hud};
@@ -86,7 +88,6 @@ pub fn run() {
             // 需要先 clone pool，因为下面会把 pool 移动到 AppState 中
             let python_for_health = python_sidecar.clone();
             let app_handle = app.handle().clone();
-            let db_pool_for_stream = pool.clone();
 
             // 初始化好的 AppState（包含数据库连接池、Python sidecar 和 AI 配置服务）注入到 Tauri 的全局管理器中
             // 注意：此时不等待 Python 健康检查，让 UI 先显示
@@ -129,17 +130,6 @@ pub fn run() {
                             }
                         }
 
-                        // 启动全局进度流连接
-                        // 通过 HTTP StreamingResponse + NDJSON 接收 Python 的处理进度和结果，
-                        // 进度消息通过 Tauri Events 转发给前端，
-                        // 结果消息由 Rust 统一写入数据库
-                        python_for_health.start_progress_stream(app_handle.clone(), db_pool_for_stream.clone());
-                        if let Err(e) = python_for_health
-                            .rebuild_pending_queue(app_handle.clone(), db_pool_for_stream)
-                            .await
-                        {
-                            eprintln!("[Tauri] Failed to rebuild pending queue: {}", e);
-                        }
                     }
                     Err(e) => {
                         eprintln!("[Tauri] Python backend failed to start: {}", e);
@@ -173,10 +163,12 @@ pub fn run() {
             soft_delete_resource_command,
             hard_delete_resource_command,
             get_dashboard,
-            get_task_resources,
             get_all_resources,
-            link_resource,
-            unlink_resource,
+            get_resource_by_id,
+            link_nodes_command,
+            unlink_nodes_command,
+            list_target_nodes_command,
+            list_source_nodes_command,
             toggle_hud,
             hide_hud,
             read_clipboard,
@@ -191,8 +183,9 @@ pub fn run() {
             update_resource_summary_command,
             get_tasks_by_date,
             get_all_tasks,
+            get_active_tasks,
             update_resource_content_command,
-            update_resource_display_name_command,
+            update_resource_title_command,
             check_python_health,
             is_python_running,
             get_ai_config_status,
@@ -204,14 +197,16 @@ pub fn run() {
             get_chat_session,
             list_chat_sessions,
             update_chat_session_command,
-            delete_chat_session_command,
+            delete_chat_session,
             create_chat_message,
-            list_chat_messages,
-            update_chat_message_command,
-            delete_chat_message_command,
+            list_chat_messages_command,
+            list_message_attachments_command,
+            list_session_bound_resources_command,
+            update_chat_message,
+            delete_chat_message,
             add_message_attachments,
             remove_message_attachment,
-            set_session_context_resources_command,
+            set_session_bindings_command,
             // Topic commands
             create_topic,
             get_topic_command,
@@ -219,7 +214,6 @@ pub fn run() {
             update_topic_title_command,
             update_topic_summary_command,
             update_topic_favourite_command,
-            hard_delete_topic_command,
             link_resource_to_topic_command,
             unlink_resource_from_topic_command,
             update_topic_resource_review_status_command,

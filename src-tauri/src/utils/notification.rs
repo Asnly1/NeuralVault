@@ -1,18 +1,17 @@
 use serde::Serialize;
 
-use crate::db::ResourceFileType;
+use crate::db::ResourceSubtype;
 
 #[derive(Debug, Serialize)]
 pub struct IngestPayload {
-    pub resource_id: i64,
+    pub node_id: i64,
     pub action: String,
     pub file_hash: String,
-    pub file_type: ResourceFileType,
+    pub resource_subtype: ResourceSubtype,
     pub content: Option<String>,
     pub file_path: Option<String>,
 }
 
-/// 通知动作
 pub enum NotifyAction {
     Created,
     Updated,
@@ -31,30 +30,24 @@ impl NotifyAction {
 
 impl IngestPayload {
     pub fn new(
-        resource_id: i64,
+        node_id: i64,
         action: NotifyAction,
         file_hash: String,
-        file_type: ResourceFileType,
+        resource_subtype: ResourceSubtype,
         content: Option<String>,
         file_path: Option<String>,
     ) -> Self {
         Self {
-            resource_id,
+            node_id,
             action: action.as_str().to_string(),
             file_hash,
-            file_type,
+            resource_subtype,
             content,
             file_path,
         }
     }
 }
 
-/// 通知 Python 后端处理资源或任务
-/// 
-/// # 参数
-/// - `client`: 复用的 HTTP Client（建议复用 PythonSidecar.client）
-/// - `base_url`: Python 后端的基础 URL，从 PythonSidecar.get_base_url() 获取
-/// - `payload`: Ingest 请求体
 pub async fn notify_python(client: &reqwest::Client, base_url: &str, payload: &IngestPayload) {
     if let Err(err) = client
         .post(&format!("{}/ingest", base_url))
