@@ -1,6 +1,5 @@
 mod file;
 mod hash;
-mod notification;
 pub mod crypto;
 
 pub use file::*;
