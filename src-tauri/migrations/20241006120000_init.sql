@@ -1,4 +1,3 @@
--- Initial schema aligned with docs/database.sql
 PRAGMA foreign_keys = ON;
 
 -- ==========================================
@@ -10,81 +9,36 @@ CREATE TABLE users (
 );
 
 -- ==========================================
--- 核心存储表：Tasks
+-- 核心表：Nodes (万物皆节点)
 -- ==========================================
-CREATE TABLE tasks (
-    task_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    uuid TEXT NOT NULL UNIQUE, -- 方便前端路由和唯一标识
-
-    -- 基础内容
-    title TEXT,
-    description TEXT,
-    summary TEXT,
-
-    -- 任务状态管理
-    status TEXT DEFAULT 'todo' CHECK (status IN ('todo','done')),
-    done_date DATETIME,
-    priority TEXT DEFAULT 'medium' CHECK (priority IN ('high','medium','low')),
-    due_date DATETIME,
-
-    -- 时间戳
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-
-    is_deleted BOOLEAN DEFAULT 0, -- 用户是否删除（前端展示与否）
-    deleted_at DATETIME,
-
+CREATE TABLE nodes (
+    node_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    uuid TEXT NOT NULL UNIQUE,
     user_id INTEGER NOT NULL DEFAULT 1, -- 预留 user_id
 
-    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
-);
-
-CREATE INDEX idx_tasks_due_date ON tasks(due_date);
-CREATE INDEX idx_tasks_status ON tasks(status);
-CREATE INDEX idx_tasks_status_due ON tasks(status, due_date);
-CREATE INDEX idx_tasks_created_at ON tasks(created_at DESC);
-CREATE INDEX idx_tasks_updated_at ON tasks(updated_at DESC);
-
--- ==========================================
--- Topics 表
--- ==========================================
-CREATE TABLE topics (
-    topic_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL UNIQUE, -- Topic 名称应当唯一，方便精准匹配
-    summary TEXT,               -- AI 生成的 Topic Summary (不断迭代)
+    -- 1. 基础属性 (所有节点都有)
+    title TEXT NOT NULL,         -- 标题 / 文件名 / 任务名
+    summary TEXT,                -- Topic/Task/Resource Summary
     
-    is_system_default BOOLEAN DEFAULT 0, -- 用于标记 "Unsorted/Inbox" 这种特殊 Topic
-    is_favourite BOOLEAN DEFAULT 0, -- 用于标记是否收藏（显示在Sidebar）
-    
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, -- Summary 更新时修改此时间
-    
-    user_id INTEGER NOT NULL DEFAULT 1,
-    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
-);
+    -- 2. 类型标识 (用于 UI 渲染区分，但支持流转)
+    -- 'topic': 概念, 容器
+    -- 'task': 待办
+    -- 'resource': 文件, 链接
+    node_type TEXT NOT NULL CHECK (node_type IN ('topic', 'task', 'resource')),
 
--- 索引：经常需要根据名字查找（为了防止重复创建）
-CREATE INDEX idx_topics_title ON topics(title);
-CREATE INDEX idx_topics_updated_at ON topics(updated_at DESC);
+    -- 3. 任务组件 (Task Component) - 仅 node_type='task' 时有值，但允许赋予任何节点
+    task_status TEXT CHECK (task_status IN ('todo', 'done', 'cancelled')),
+    priority TEXT CHECK (priority IN ('high', 'medium', 'low')),
+    due_date DATETIME,
+    done_date DATETIME,
 
--- ==========================================
--- 资源表 (独立于任务)
--- ==========================================
-CREATE TABLE resources (
-    resource_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    uuid TEXT NOT NULL UNIQUE, -- 方便前端路由和唯一标识
-    source_meta JSON,  -- 存 { url, window_title, chat_title, sender, etc. }
-    summary TEXT, -- AI 生成的 Resource Summary
-
-    -- 核心身份标识
-    file_hash TEXT NOT NULL, -- SHA-256，防止重复存储
-    file_type TEXT NOT NULL CHECK (file_type IN ('text', 'image','pdf','url','epub','other')),
-    content TEXT, -- 如果是 text 直接存
-
-    -- 物理存储
-    display_name TEXT,   -- UI 显示的名称，如 "需求文档.pdf"
-    file_path TEXT,      -- ./assets/{uuid}.pdf
-    file_size_bytes INTEGER,
+    -- 4. 资源组件 (Resource Component) - 仅 node_type='resource' 时有值
+    file_hash TEXT,              -- SHA-256
+    file_path TEXT,              -- 本地存储路径
+    file_content TEXT,           -- 文件内容(文字/图片OCR/PDF解析)
+    user_note TEXT,              -- 用户备注(仅在上传非文本时保存)
+    resource_subtype TEXT CHECK (resource_subtype IN ('text', 'pdf', 'image', 'url', 'epub', 'other')),
+    source_meta JSON,            -- { url, window_title, process_name, captured_at }
 
     -- 向量化状态 (针对资源本身)
     indexed_hash TEXT,
@@ -92,10 +46,122 @@ CREATE TABLE resources (
     sync_status TEXT DEFAULT 'pending' CHECK (sync_status IN ('pending', 'synced', 'dirty', 'error')),
     last_indexed_at DATETIME,
     last_error TEXT,
-
-    -- 资源处理状态（暴露给后端 API）
+    
+    -- 资源处理状态 (Rust 后台使用)
     processing_stage TEXT DEFAULT 'todo' CHECK(processing_stage IN ('todo','chunking','embedding','done')),
+    -- 用户侧的状态 (Inbox 功能核心)
+    -- 'unreviewed': AI 刚抓取，在 Inbox 等待确认
+    -- 'reviewed': 用户已确认/已归档
+    -- 'rejected': 用户认为无效
+    review_status TEXT DEFAULT 'reviewed'
+        CHECK (
+            (node_type = 'resource' AND review_status IN ('unreviewed', 'reviewed', 'rejected'))
+            OR (node_type != 'resource' AND review_status = 'reviewed')
+        ),
 
+    -- 5. 系统/管理属性
+    is_pinned BOOLEAN DEFAULT 0, -- 是否出现在Sidebar的收藏
+    pinned_at DATETIME, -- 收藏时间,用来排序
+
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    is_deleted BOOLEAN DEFAULT 0,
+    deleted_at DATETIME,
+
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+-- 索引优化
+CREATE INDEX idx_nodes_type ON nodes(node_type);
+CREATE INDEX idx_nodes_uuid ON nodes(uuid);
+CREATE INDEX idx_nodes_task_status ON nodes(task_status) WHERE task_status IS NOT NULL; -- 快速查任务
+CREATE INDEX idx_nodes_file_hash ON nodes(file_hash) WHERE file_hash IS NOT NULL; -- 资源去重
+CREATE INDEX idx_nodes_title ON nodes(title); -- 简单的标题搜索
+CREATE INDEX idx_nodes_user_note ON nodes(user_note);
+CREATE INDEX idx_nodes_due_date ON nodes(due_date) WHERE due_date IS NOT NULL;
+CREATE INDEX idx_nodes_review_status ON nodes(review_status);
+CREATE UNIQUE INDEX idx_nodes_topic_title_unique ON nodes(user_id, title)
+    WHERE node_type = 'topic' AND is_deleted = 0;
+
+-- ==========================================
+-- 统一关联表：Edges (图关系)
+-- 替代所有 _link 表
+-- ==========================================
+CREATE TABLE edges (
+    edge_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_node_id INTEGER NOT NULL,
+    target_node_id INTEGER NOT NULL,
+
+    -- 关系类型
+    -- contains: Source (Parent) -> Target (Child)
+        -- topic -> resource
+        -- topic -> topic
+        -- task -> resource
+        -- task -> task
+        -- 用于构建目录树
+    -- related_to: Source <-> Target
+        -- topic <-> topic
+        -- resource <-> resource
+        -- 用于构建知识图谱
+    relation_type TEXT NOT NULL CHECK (relation_type IN ('contains', 'related_to')),
+
+    -- AI 辅助元数据
+    confidence_score REAL DEFAULT 1.0, -- AI 自动关联的置信度
+    is_manual BOOLEAN DEFAULT 1,       -- 是否人工确认过
+    
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    is_deleted BOOLEAN DEFAULT 0,
+    deleted_at DATETIME,
+
+    FOREIGN KEY (source_node_id) REFERENCES nodes(node_id) ON DELETE CASCADE,
+    FOREIGN KEY (target_node_id) REFERENCES nodes(node_id) ON DELETE CASCADE,
+    CHECK (relation_type != 'related_to' OR source_node_id < target_node_id),
+    UNIQUE(source_node_id, target_node_id, relation_type) -- 防止重复连线
+);
+
+CREATE INDEX idx_edges_source ON edges(source_node_id);
+CREATE INDEX idx_edges_target ON edges(target_node_id);
+CREATE INDEX idx_edges_relation_type ON edges(relation_type);
+
+-- ==========================================
+-- 向量切片 (Context Chunks)
+-- 只需要把 resource_id 改成 node_id
+-- ==========================================
+CREATE TABLE context_chunks (
+    chunk_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    node_id INTEGER NOT NULL, -- 指向 nodes 表 (通常是 type='resource' 的节点)
+
+    chunk_text TEXT NOT NULL,
+    chunk_index INTEGER,
+    page_number INTEGER,
+    
+    qdrant_uuid TEXT UNIQUE,
+    embedding_hash TEXT,
+    embedding_model TEXT,
+    embedding_at DATETIME,
+    chunk_meta JSON,
+    token_count INTEGER,
+    
+    FOREIGN KEY(node_id) REFERENCES nodes(node_id) ON DELETE CASCADE
+);
+
+-- ==========================================
+-- 聊天记录 (Chats)
+-- session 可以关联到 nodes (Context)
+-- ==========================================
+CREATE TABLE chat_sessions (
+    session_id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    title TEXT,
+    summary TEXT,
+    chat_model TEXT,
+
+    -- 生命周期状态
+    -- 'temporary': HUD/Dashboard 临时上传，尚未归档。用户可以自行删除
+    -- 'persistent': 正式资源（在Workspace中创建的）。
+    session_type TEXT NOT NULL CHECK (session_type IN ('temporary', 'persistent')),
+    
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
@@ -107,133 +173,30 @@ CREATE TABLE resources (
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_resources_sync_status ON resources(sync_status);
-CREATE UNIQUE INDEX idx_resources_hash_alive ON resources(file_hash, user_id) WHERE is_deleted = 0;
-CREATE INDEX idx_resources_updated_at ON resources(updated_at DESC);
-
 -- ==========================================
--- Task <-> Resource 关联表 (多对多映射)
+-- 会话上下文绑定表 (Many-to-Many)
 -- ==========================================
-CREATE TABLE task_resource_link (
-    task_id INTEGER NOT NULL,
-    resource_id INTEGER NOT NULL,
-
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-
-    PRIMARY KEY (task_id, resource_id),
-    FOREIGN KEY(task_id) REFERENCES tasks(task_id) ON DELETE CASCADE,
-    FOREIGN KEY(resource_id) REFERENCES resources(resource_id) ON DELETE CASCADE
-);
-
--- ==========================================
--- Resource <-> Topic 关联表 (核心分类逻辑)
--- ==========================================
-CREATE TABLE topic_resource_link (
-    topic_id INTEGER NOT NULL,
-    resource_id INTEGER NOT NULL,
-    
-    -- AI 分类逻辑
-    confidence_score REAL DEFAULT 0.0, -- 0.0 - 1.0，用于 UI 排序和过滤
-    is_auto_generated BOOLEAN DEFAULT 0, -- 区分是 AI 猜的还是用户拖拽的
-    
-    -- 园丁模式状态机
-    -- 'pending': AI 建议放入此 Topic，等待用户确认 (Confidence < 0.9 or explicit gardener mode)
-    -- 'approved': 用户已确认 (或者 Confidence 极高自动确认)
-    -- 'rejected': 用户拒绝了 AI 的这个建议 (防止 AI 反复推荐同一个错的)
-    review_status TEXT DEFAULT 'pending' CHECK (review_status IN ('pending', 'approved', 'rejected')),
-
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-
-    PRIMARY KEY (topic_id, resource_id),
-    FOREIGN KEY(topic_id) REFERENCES topics(topic_id) ON DELETE CASCADE,
-    FOREIGN KEY(resource_id) REFERENCES resources(resource_id) ON DELETE CASCADE
-);
-
--- 索引：查找某个 Topic 下的所有 Approved 资源用于 RAG
-CREATE INDEX idx_topic_res_rag ON topic_resource_link(topic_id, review_status);
-
--- 索引：查找某个 Resource 下的所有 Topic
-CREATE INDEX idx_topic_res_reverse ON topic_resource_link(resource_id, topic_id);
-
--- ==========================================
--- Task <-> Topic 关联表
--- ==========================================
-CREATE TABLE task_topic_link (
-    task_id INTEGER NOT NULL,
-    topic_id INTEGER NOT NULL,
-    
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    
-    PRIMARY KEY (task_id, topic_id),
-    FOREIGN KEY(task_id) REFERENCES tasks(task_id) ON DELETE CASCADE,
-    FOREIGN KEY(topic_id) REFERENCES topics(topic_id) ON DELETE CASCADE
-);
-
--- ==========================================
--- Context Chunks (向量子表)
--- ==========================================
-CREATE TABLE context_chunks (
-    chunk_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    resource_id INTEGER NOT NULL,
-
-    chunk_text TEXT NOT NULL,
-    chunk_index INTEGER,
-    page_number INTEGER,
-    bbox TEXT,
-
-    qdrant_uuid TEXT UNIQUE,
-    embedding_hash TEXT,
-    embedding_model TEXT,
-    embedding_at DATETIME,
-    chunk_meta JSON,
-    token_count INTEGER,
-
-    FOREIGN KEY(resource_id) REFERENCES resources(resource_id) ON DELETE CASCADE
-);
-
-CREATE INDEX idx_chunks_resource_order ON context_chunks(resource_id, chunk_index);
-CREATE INDEX idx_chunks_embedding_hash ON context_chunks(embedding_hash);
-
--- ==========================================
--- 聊天记录表
--- ==========================================
-CREATE TABLE chat_sessions (
-    session_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    task_id INTEGER, -- 任务可以为空或者对应单一任务
-    topic_id INTEGER, -- Topic可以为空或者对应单一Topic
-
-    title TEXT,
-    summary TEXT,
-    chat_model TEXT,
-
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-
-    is_deleted BOOLEAN DEFAULT 0,
-    deleted_at DATETIME,
-
-    user_id INTEGER NOT NULL DEFAULT 1,
-
-    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-    FOREIGN KEY (task_id) REFERENCES tasks(task_id) ON DELETE SET NULL,
-    FOREIGN KEY (topic_id) REFERENCES topics(topic_id) ON DELETE SET NULL
-);
-
-CREATE INDEX idx_session_task_created_at ON chat_sessions(task_id, created_at);
-CREATE INDEX idx_session_task_updated_at ON chat_sessions(task_id, updated_at);
-
-CREATE TABLE session_context_resources (
+CREATE TABLE session_bindings (
     session_id INTEGER NOT NULL,
-    resource_id INTEGER NOT NULL,
+    node_id INTEGER NOT NULL, -- 这一场对话关联了哪些 Node (Topic/Task/Resource)
+    
+    -- 绑定类型
+    -- 'primary': 用户明确选中的
+    -- 'implicit': AI 自动搜索出来的相关上下文
+    binding_type TEXT DEFAULT 'primary' CHECK (binding_type IN ('primary', 'implicit')),
 
-    PRIMARY KEY (session_id, resource_id),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (session_id, node_id),
     FOREIGN KEY (session_id) REFERENCES chat_sessions(session_id) ON DELETE CASCADE,
-    FOREIGN KEY (resource_id) REFERENCES resources(resource_id) ON DELETE CASCADE
+    FOREIGN KEY (node_id) REFERENCES nodes(node_id) ON DELETE CASCADE
 );
 
+CREATE INDEX idx_session_bindings_node ON session_bindings(node_id);
+
+-- ==========================================
+-- 聊天消息 (Messages)
+-- ==========================================
 CREATE TABLE chat_messages (
     message_id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id INTEGER NOT NULL,
@@ -247,27 +210,26 @@ CREATE TABLE chat_messages (
     total_tokens INTEGER,
 
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-
     FOREIGN KEY(session_id) REFERENCES chat_sessions(session_id) ON DELETE CASCADE
 );
 
 CREATE TABLE message_attachments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     message_id INTEGER NOT NULL,
-    resource_id INTEGER NOT NULL,
+    node_id INTEGER NOT NULL,
 
     FOREIGN KEY(message_id) REFERENCES chat_messages(message_id) ON DELETE CASCADE,
-    FOREIGN KEY(resource_id) REFERENCES resources(resource_id) ON DELETE CASCADE
+    FOREIGN KEY(node_id) REFERENCES nodes(node_id) ON DELETE CASCADE
 );
 
 CREATE TABLE message_citations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     message_id INTEGER NOT NULL,       -- 关联到 AI 的那条回复
-    resource_id INTEGER NOT NULL,      -- 引用的资源
+    node_id INTEGER NOT NULL,          -- 引用的资源
     chunk_id INTEGER,                  -- 引用的具体切片
     score REAL,                        -- 可选：存相似度分数
 
     FOREIGN KEY(message_id) REFERENCES chat_messages(message_id) ON DELETE CASCADE,
-    FOREIGN KEY(resource_id) REFERENCES resources(resource_id) ON DELETE CASCADE,
+    FOREIGN KEY(node_id) REFERENCES nodes(node_id) ON DELETE CASCADE,
     FOREIGN KEY(chunk_id) REFERENCES context_chunks(chunk_id) ON DELETE SET NULL
 );
