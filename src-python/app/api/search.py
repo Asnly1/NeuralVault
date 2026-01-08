@@ -5,7 +5,7 @@ POST /search/hybrid: 执行混合检索（dense + sparse）
 """
 from fastapi import APIRouter
 
-from app.core.db import get_qdrant_client
+from app.core.db import DatabaseManager
 from app.schemas import SearchRequest, SearchResponse, SearchResultItem
 from app.services.vector_service import vector_service
 
@@ -24,7 +24,8 @@ async def search_hybrid(req: SearchRequest) -> SearchResponse:
 
     返回匹配的 chunk 列表，按相关性排序
     """
-    qdrant_client = get_qdrant_client()
+    db_manager = DatabaseManager.get_instance()
+    qdrant_client = db_manager.get_qdrant()
 
     results = await vector_service.search_hybrid(
         query=req.query,

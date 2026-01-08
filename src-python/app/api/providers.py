@@ -1,8 +1,6 @@
 """
 Provider config endpoints for LLM service.
 """
-from typing import Optional
-
 from fastapi import APIRouter
 from app.schemas import ProviderConfigRequest
 from app.services.llm_service import llm_service

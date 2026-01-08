@@ -72,8 +72,6 @@ pub struct AppState {
 - `check_health()` / `wait_for_health()` 进行健康检查。
 - 主窗口销毁时调用 `shutdown()` 关闭进程。
 
-不再使用 `/ingest/stream` 进度流。
-
 ---
 
 ## 资源捕获与解析（`commands/resources.rs`）
