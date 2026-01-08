@@ -1,14 +1,14 @@
-Resource：文字/PDF/EPUB/图片/网页链接（最好效果是用户直接从网页复制一段话，就能解析出对应的网址和网址内容）
-Resource不会单一存在，一定会至少关联到某一个Topic/Task（Many to Many）。通过HUD/Dashboard上传Resource时，AI会自动关联到Topic。只有在ChatPanel临时上传的Resource，才会直接关联到Task
-Topic：多个Resource + title
-Task：Option(多个Resource) + Option(多个Topic) + title + DDL。允许Task不关联Resource，不关联Topic,单纯作为一个Todo List
+Everything is a Node: 
+    1. Resource
+    2. Topic
+    3. Task
 
 技术栈（尽量轻量化）：
     1. 前端： React + Typescript
     2. 后端： Tauri(Rust) + FastAPI(Python)（处理AI相关，无状态微服务）+ Llamaindex + FastEmbed
     3. 数据库：SQLite + Qdrant
 
-平台依赖：
+平台依赖（只考虑MacOS + Windows）：
     1. pdfium
     2. libc
 
@@ -29,18 +29,22 @@ Python依赖：
         "xai-sdk>=1.5.0",
     ]
 
-    
 页面：
-    1. HUD：一键唤醒+捕获Resource。同时捕获 Window Title 和 Process Name (如 "Chrome") 作为 Context
-    2. Dashboard：上传Resource + 显示未完成Task + 未分类 Resource + 添加一个AI对话框，用户可以问一些General的问题（上个月做了什么？）
-    3. Workspace（参考Cursor）：
-        - 左侧：Task模式（即点击Task进入）：显示当前Task关联Topic + Resource / Topic模式（点击Topic进入）：显示当前Topic关联Resource
+    1. HUD：一键唤醒（类似Raycast）+ 捕获Resource。同时捕获 Window Title 和 Process Name (如 "Chrome") 和 当前时间 作为 Context
+    2. Dashboard：上传Resource + 显示未完成Task + 显示临时Chat
+        Dashboard和HUD共用一个捕获逻辑，使用Tab切换Chat Mode / Capture Mode，使用不同颜色提醒用户
+            1. Chat Mode: 弹出ChatPanel进行AI Chat:把文字/图片/文件发送给AI,默认不进行本地RAG。图片/文件只进行解析，不进行Summary / Embedding /分类。把Chat归类为临时Session，放到Dashboard中显示。在Dashboard中提供一个按钮把这个Session转成Persistent Session：图片/文件进行Summary / Embedding /分类，并把Session关联到对应的Node(Resource/Topic/Task)
+            2. Capture Mode: 
+                1. 默认创建Resource：如果输入框内容是纯文本，直接存入content；如果输入框内容是文本+图片/文件，把文本存入user_note，图片/文本解析内容存入content
+                2. 如果检测到@time/@todo，创建Task，附上同时在UI显示Toast：Task Created: [Title] Due: [Date] Priority: [Priority]
+    3. Workspace（参考Cursor,三个部分都支持折叠）：
+        - 左侧：相关资源：显示当前Node contains 的Nodes
         - 中间：文本编辑
-        - 右侧：对话框。可以上传图片/文件/文字。如果上传了图片/文件，自动添加到左侧的关联Resource。添加一个“Pin to Context”按钮，如果 AI 说了一段很好的解释，可以一键把它转成一个 Resource 固定在左侧
-    4. Sidebar：搜索框 + 跳转到不同页面。
-        1. 语义匹配（99%情况）：使用Hybrid Search，优先显示精确匹配的 Topic/Task，然后显示语义相关的 Resource Chunk（Qdrant完成）
-        2. 精确匹配（1%情况）： SQL LIKE
-    5. Warehouse：显示所有Topic / Task
+        - 右侧：对话框。可以上传图片/文件/文字。如果上传了图片/文件，自动添加到左侧的Contains Nodes。添加一个“Pin to Context”按钮：如果 AI 说了一段很好的解释，可以一键把它转成一个 Resource 固定在左侧。
+    4. Sidebar：搜索框（用户选择不同搜索模式） + 跳转到不同页面 + Favourite Node
+        1. 语义匹配（99%情况）：使用Hybrid Search
+        2. 精确匹配（1%情况）： SQL LIKE（不需要FTS5, 个人知识库数据量不大，且FTS5对中文分词支持不好）
+    5. Warehouse：显示所有Node
     6. Calendar：显示日程，即每个Task的DDL
     7. Settings：颜色/语言/ API Key/ 快捷键
 
@@ -49,45 +53,63 @@ Python依赖：
         1. 用户上传Resource
         2. 对Resource进行分析
             1. 提取，解析内容
-                1. 图片：rust-paddle-ocr
-                2. PDF：pdf_oxide + pdfium-render + rust-paddle-ocr
-                3. EPUB：epub + html2text（暂时不做）
-                4. 网页：
+                1. 文字：无需处理
+                2. 图片：rust-paddle-ocr
+                3. PDF：pdf_oxide + pdfium-render + rust-paddle-ocr
+                4. EPUB：epub + html2text（暂时不做）
+                5. 网页：
                     1. 在剪贴板里用正则匹配出SourceURL
                     2. 使用active-win获取当前Window Title（Google Chrome: Rust 语言圣经 - Google Chrome）
                     3. 构造https://example.com/page.html#:~:text=复制的文字（"Scroll to Text Fragment" (滚动到文本片段)）
                     4. 在前端渲染时点击url就可以打开浏览器并跳转到对应位置
-                5. Word/Excel/PowerPoint：extractous（暂时不做）
-            2. FastEmbed向量化存入Qdrant ; 调用使用 LlamaIndex 的 PropertyGraphIndex提取知识图谱（暂时不做）
-            3. 调用LLM，分析Resource内容，生成Summary（暂时不做）
+                6.. Word/Excel/PowerPoint：extractous（暂时不做）
+            2. 调用LLM，分析Resource内容，生成Summary(少于100字)
+                1. 输入：Resource的Content + Resource的User Note（如果有）
+                2. 逻辑： 如果存在 User Note，Prompt 必须强制 LLM 围绕 User Note 的意图来生成 Summary。
+                3. 输出：Summary
+            3. FastEmbed向量化存入Qdrant（Payload注意区分type:"summary"和type:"content"）
+            4. 调用使用 LlamaIndex 的 PropertyGraphIndex提取知识图谱（暂时不做）
         3. AI根据分析结果，查找过去已存在的相关的Resource，把新Resource关联到一起，加入原有Topic。如果没有找到合适的Topic，就新建一个Topic。保留记录，用户可以手动撤回
-            1. 调用LLM：”这是新文章，这是用户现有的 50 个 Topic 列表，它属于哪一个？如果都不属于，请生成一个新的 Topic 名称。请返回 JSON 格式：{"topic_name": "New Topic Name", "confidence_score": 0.9}“
-            2. "Inbox" (收件箱) ： 任何 LLM 拿不准（Confidence Score < 0.8）的 Resource，不要新建 Topic，而是直接扔进一个叫 Unsorted (未分类) 的默认 Topic。
-            3. 定期“园丁”模式： 每周提醒用户一次：“你 Unsorted 里有 10 个新资源，AI 建议将它们归档到 A, B, C，是否同意？”
-            4. 强制模糊匹配： 在让 LLM 新建 Topic 之前，必须先用 Embedding 检索现有的 Topic Title。只有相似度极低时，才允许新建。
-        4. 对于每一个Topic/Task，AI自动生成一个Summary，基于每个Resource的Summary(Topic Summary (New) = LLM( Topic Summary (Old) + New Resource Summary ))（暂时不做）
-        5. 用户手动创建Task，AI建议/手动关联Resource / Topic
+            1. 用新Resource的Summary的Embedding，Qdrant搜索其他Resource的Summary的Embedding，找最近的Top20
+            2. 获取这Top20 Resource的Topic，去重
+            3. 把topic发给LLM，让LLM判断是否应该生成新的topic。
+                Prompt：
+                    """New Resource Summary: "..."
+
+                    Candidate Topics:
+                    1. React: (Summary...)
+                    2. Rust: (Summary...)
+                    3. System Design: (Summary...)
+
+                    Task: Does the resource belong to any of above? If not, create a new topic.
+                    Output JSON: {"topic_name": "...", "confidence": float}"""
+            激进模式：
+                4. 如果置信度低于0.8，先把Resource关联到LLM提出的topic_name，但是要加上一个视觉标记（提示用户“AI 不确定，请复核”）
+                5. 保留AI关联的记录，用户可以手动撤回
+            手动模式：
+                4. 在Warehouse Page中引入 Inbox 区域： 所有 AI 处理过的、未被用户确认的 Resource，先进入 Inbox，并带上 AI 建议的 Tag/Topic。
+                5. 用户进入 Warehouse Page，看到 Inbox 区域和 AI 的建议，点击“Approve All”或者手动拖拽微调。
+        4. 对于每一个Topic/Task，AI自动生成一个Summary，基于每个Resource的Summary(Topic Summary (New) = LLM( Topic Summary (Old) + New Resource Summary ))
     
     AI Chat：
-    1. 在开始对话时，自动把Topic/Task的Summary添加到聊天记录（暂时不做）
+    1. 在开始对话时，自动把Node的Summary添加到聊天记录
     2. 用户可以手动上传图片/文件，同样会添加到聊天记录（这个时候上传完整图片/文件）
     3. 除了Summary和用户上传的图片/文件，使用RAG在全局搜索相关Resource Chunk（Qdrant），添加到聊天记录（除了正常的语义分析，还要构建知识图谱，通过图谱搜索相关Resource Chunk。知识图谱暂时不做）
-        1. Scoping:
-            1. Level 1： 如果用户在 Workspace 里打开了 "Topic: React"，那么 RAG 优先且仅 检索该 Topic 下的 Resource。
-            2. Level 2： 只有当用户问的问题在当前 Topic 找不到答案，或者用户明确说“搜索一下我的知识库”，才触发 Global Search
+        1. Scoping:在Chat输入框上方，显示胶囊标签：[Scope: Current Node] 或 [Scope: Global]，用户可以通过Cmd+S切换Scope
+            1. Local： 仅检索当前 Node 下的 Resource。
+            2. Global： 检索所有Node下的Resource
         2.  启动时的Context组装逻辑：
             1. System Prompt: 设定 Agent 人格。
-            2. Active Task/Topic Metadata: 当前所在的 Topic/Task 名字，描述
-            3. Retrieval Context (动态填充):
+            2. Active Node Metadata: 当前所在的 Node 名字，描述
+            3. Retrieval Context (动态填充，并向用户显示):
                 1. 用户提问后，先去 Qdrant 搜。
-                2. Scope Level 1 (当前 Topic): 权重 x 1.5。
-                3. Scope Level 2 (全局，如果需要): 权重 x 1.0。
+                2. Scope Local (当前 Node): 权重 x 1.5。
+                3. Scope Global (全局，如果需要): 权重 x 1.0。
                 4. 取 Top-5 Chunks。
         3. 每次用户发起对话时的Context组装逻辑：
             1. 用户的文字/图片/文件
             2. Retrieval Context
-            
-    4. 在本地手动管理聊天记录，用户可以
-        1. 删除之前的某一点聊天记录
-        2. 把之前的聊天记录发给不同的LLM
+        4. 在本地手动管理聊天记录，用户可以（暂时不做）
+            1. 删除之前的某一点聊天记录
+            2. 把之前的聊天记录发给不同的LLM
     
