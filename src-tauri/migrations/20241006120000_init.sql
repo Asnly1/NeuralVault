@@ -131,6 +131,7 @@ CREATE INDEX idx_edges_relation_type ON edges(relation_type);
 CREATE TABLE context_chunks (
     chunk_id INTEGER PRIMARY KEY AUTOINCREMENT,
     node_id INTEGER NOT NULL, -- 指向 nodes 表 (通常是 type='resource' 的节点)
+    embedding_type TEXT NOT NULL CHECK (embedding_type IN ('summary', 'content')),
 
     chunk_text TEXT NOT NULL,
     chunk_index INTEGER,
@@ -142,9 +143,11 @@ CREATE TABLE context_chunks (
     embedding_at DATETIME,
     chunk_meta JSON,
     token_count INTEGER,
-    
+
     FOREIGN KEY(node_id) REFERENCES nodes(node_id) ON DELETE CASCADE
 );
+
+CREATE INDEX idx_context_chunks_node_type ON context_chunks(node_id, embedding_type);
 
 -- ==========================================
 -- 聊天记录 (Chats)

@@ -91,10 +91,18 @@ pub fn run() {
 
             // 初始化好的 AppState（包含数据库连接池、Python sidecar 和 AI 配置服务）注入到 Tauri 的全局管理器中
             // 注意：此时不等待 Python 健康检查，让 UI 先显示
+            let ai_config = Arc::new(Mutex::new(ai_config_service));
+            let ai_pipeline = Arc::new(services::AiPipeline::new(
+                pool.clone(),
+                python_sidecar.clone(),
+                ai_config.clone(),
+            ));
+
             app.manage(AppState {
                 db: pool,
                 python: python_sidecar.clone(),
-                ai_config: Arc::new(Mutex::new(ai_config_service)),
+                ai_config,
+                ai_pipeline,
             });
             // move 关键字强制将该闭包（closure）内部使用到的外部变量（如 client, url, app_handle）的所有权（Ownership） 从外部环境"移动"到这个异步任务内部
             tauri::async_runtime::spawn(async move {

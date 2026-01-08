@@ -48,6 +48,14 @@ pub enum ResourceSubtype {
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Type, Serialize, Deserialize)]
 #[sqlx(rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
+pub enum EmbeddingType {
+    Summary,
+    Content,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Type, Serialize, Deserialize)]
+#[sqlx(rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum ResourceSyncStatus {
     Pending,
     Synced,

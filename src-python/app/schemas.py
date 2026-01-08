@@ -2,102 +2,15 @@
 Shared schemas and enums for the Python service.
 """
 from enum import Enum
-from typing import Optional, List, Literal, Callable, Awaitable
+from typing import Optional, List
 
-from pydantic import BaseModel
-
-
-class FileType(str, Enum):
-    text = "text"
-    image = "image"
-    pdf = "pdf"
-    url = "url"
-    epub = "epub"
-    other = "other"
-
-
-class ProcessingStage(str, Enum):
-    todo = "todo"
-    chunking = "chunking"
-    embedding = "embedding"
-    done = "done"
+from pydantic import BaseModel, Field
 
 
 class MessageRole(str, Enum):
     user = "user"
     assistant = "assistant"
     system = "system"
-
-
-# 进度回调类型
-# 函数类型，接受参数：int, ProcessingStage, Optional[int]，返回值为 Awaitable[None]
-ProgressCallback = Callable[[int, ProcessingStage, Optional[int]], Awaitable[None]]
-
-
-class JobType(str, Enum):
-    """任务类型"""
-    INGEST_RESOURCE = "ingest_resource"
-    DELETE_RESOURCE = "delete_resource"
-
-
-class JobAction(str, Enum):
-    """触发动作"""
-    CREATED = "created"
-    UPDATED = "updated"
-    DELETED = "deleted"
-
-
-class IngestionJob(BaseModel):
-    job_type: JobType
-    source_id: int  # resource_id
-    action: JobAction
-    file_hash: str
-    file_type: FileType
-    content: Optional[str] = None
-    file_path: Optional[str] = None
-    retry_count: int = 0
-    max_retries: int = 3
-
-
-class IngestRequest(BaseModel):
-    resource_id: int
-    action: Literal["created", "updated", "deleted"]
-    file_hash: str
-    file_type: FileType
-    content: Optional[str] = None
-    file_path: Optional[str] = None
-
-
-class IngestResponse(BaseModel):
-    status: Literal["accepted", "rejected"]
-    message: Optional[str] = None
-
-
-class IngestProgress(BaseModel):
-    type: Literal["progress"] = "progress"
-    resource_id: int
-    status: ProcessingStage
-    percentage: Optional[int] = None
-    error: Optional[str] = None
-
-
-class ChunkResult(BaseModel):
-    chunk_text: str
-    chunk_index: int
-    page_number: Optional[int] = None
-    qdrant_uuid: str
-    embedding_hash: str
-    token_count: Optional[int] = None
-
-
-class IngestionResult(BaseModel):
-    type: Literal["result"] = "result"
-    resource_id: int
-    success: bool
-    chunks: Optional[List["ChunkResult"]] = None
-    embedding_model: Optional[str] = None
-    indexed_hash: Optional[str] = None
-    error: Optional[str] = None
 
 
 class ChatMessage(BaseModel):
@@ -120,6 +33,70 @@ class ChatResponse(BaseModel):
     content: str
     usage: Optional[dict] = None
 
+
 class ProviderConfigRequest(BaseModel):
     api_key: str
     base_url: Optional[str] = None
+
+
+class EmbeddingType(str, Enum):
+    summary = "summary"
+    content = "content"
+
+
+class SummaryRequest(BaseModel):
+    provider: str
+    model: str
+    content: str
+    user_note: Optional[str] = None
+    max_length: int = 100
+
+
+class SummaryResponse(BaseModel):
+    summary: str
+
+
+class EmbedRequest(BaseModel):
+    node_id: int
+    text: str
+    embedding_type: EmbeddingType = EmbeddingType.content
+    replace: bool = True
+    chunk: bool = True
+
+
+class EmbedChunkResult(BaseModel):
+    chunk_text: str
+    chunk_index: int
+    page_number: Optional[int] = None
+    qdrant_uuid: str
+    embedding_hash: str
+    token_count: Optional[int] = None
+
+
+class EmbedResponse(BaseModel):
+    node_id: int
+    embedding_type: EmbeddingType
+    chunks: List[EmbedChunkResult] = Field(default_factory=list)
+    embedding_model: Optional[str] = None
+
+
+class DeleteEmbeddingRequest(BaseModel):
+    node_id: int
+    embedding_type: Optional[EmbeddingType] = None
+
+
+class TopicCandidate(BaseModel):
+    title: str
+    summary: Optional[str] = None
+
+
+class ClassifyTopicRequest(BaseModel):
+    provider: str
+    model: str
+    resource_summary: str
+    candidates: List[TopicCandidate] = Field(default_factory=list)
+
+
+class ClassifyTopicResponse(BaseModel):
+    topic_name: str
+    confidence: float

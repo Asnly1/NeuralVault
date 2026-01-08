@@ -22,6 +22,8 @@ logger = get_logger("LLMService")
 
 SYSTEM_PROMPTS: dict[str, str] = {
     "chat": "这是CHAT的Prompt, 临时占位符",
+    "summary": "你是知识库助手，请根据用户提供的内容生成简洁摘要。",
+    "topic_classify": "你是知识库主题分类助手，根据候选主题判断归属或创建新主题。",
 }
 
 TEXT_ONLY_PROVIDERS = {"deepseek", "qwen"}
@@ -131,6 +133,36 @@ class LLMService:
             return
 
         raise ValueError(f"Unknown provider: {provider}")
+
+    async def complete_text(
+        self,
+        provider: str,
+        model: str,
+        task_type: str,
+        messages: list[ChatMessage],
+        thinking_effort: Optional[str] = None,
+    ) -> str:
+        fragments: list[str] = []
+        final_text: Optional[str] = None
+
+        async for event in self.stream_chat(
+            provider=provider,
+            model=model,
+            task_type=task_type,
+            messages=messages,
+            thinking_effort=thinking_effort,
+        ):
+            event_type = event.get("type")
+            if event_type == "delta":
+                delta = event.get("delta") or ""
+                fragments.append(delta)
+            elif event_type == "done_text":
+                final_text = event.get("done_text") or ""
+
+        if final_text is None:
+            final_text = "".join(fragments)
+
+        return final_text.strip()
 
     @staticmethod
     def _ensure_text_only(provider: str, messages: list[ChatMessage]) -> None:

@@ -16,6 +16,25 @@ pub async fn insert_edge(pool: &DbPool, params: NewEdge) -> Result<i64, sqlx::Er
     Ok(result.last_insert_rowid())
 }
 
+pub async fn insert_edge_if_missing(
+    pool: &DbPool,
+    params: NewEdge,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "INSERT OR IGNORE INTO edges (source_node_id, target_node_id, relation_type, confidence_score, is_manual) \
+         VALUES (?, ?, ?, ?, ?)",
+    )
+    .bind(params.source_node_id)
+    .bind(params.target_node_id)
+    .bind(params.relation_type)
+    .bind(params.confidence_score)
+    .bind(params.is_manual)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
 pub async fn delete_edge(
     pool: &DbPool,
     source_node_id: i64,

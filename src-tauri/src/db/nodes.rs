@@ -1,6 +1,6 @@
 use super::{
-    DbPool, NewNode, NodeRecord, NodeType, ResourceProcessingStage, ResourceSyncStatus,
-    ReviewStatus, TaskPriority, TaskStatus,
+    DbPool, EmbeddingType, NewNode, NodeRecord, NodeType, ResourceProcessingStage,
+    ResourceSyncStatus, ReviewStatus, TaskPriority, TaskStatus,
 };
 
 const NODE_FIELDS: &str = "node_id, uuid, user_id, title, summary, node_type, task_status, priority, due_date, done_date, \
@@ -48,6 +48,22 @@ pub async fn get_node_by_id(pool: &DbPool, node_id: i64) -> Result<NodeRecord, s
     sqlx::query_as::<_, NodeRecord>(&sql)
         .bind(node_id)
         .fetch_one(pool)
+        .await
+}
+
+pub async fn get_node_by_title(
+    pool: &DbPool,
+    node_type: NodeType,
+    title: &str,
+) -> Result<Option<NodeRecord>, sqlx::Error> {
+    let sql = format!(
+        "SELECT {} FROM nodes WHERE node_type = ? AND title = ? AND is_deleted = 0",
+        NODE_FIELDS
+    );
+    sqlx::query_as::<_, NodeRecord>(&sql)
+        .bind(node_type)
+        .bind(title)
+        .fetch_optional(pool)
         .await
 }
 
@@ -294,11 +310,15 @@ pub async fn update_resource_sync_status(
     last_error: Option<&str>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "UPDATE nodes SET sync_status = ?, indexed_hash = ?, last_error = ?, last_indexed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE node_id = ? AND node_type = 'resource'",
+        "UPDATE nodes SET sync_status = ?, indexed_hash = ?, last_error = ?, \
+         last_indexed_at = CASE WHEN ? = 'synced' THEN CURRENT_TIMESTAMP ELSE last_indexed_at END, \
+         updated_at = CURRENT_TIMESTAMP \
+         WHERE node_id = ? AND node_type = 'resource'",
     )
     .bind(status)
     .bind(indexed_hash)
     .bind(last_error)
+    .bind(status)
     .bind(node_id)
     .execute(pool)
     .await?;
@@ -323,16 +343,18 @@ pub async fn update_resource_review_status(
 pub async fn insert_context_chunks(
     pool: &DbPool,
     node_id: i64,
+    embedding_type: EmbeddingType,
     chunks: &[super::ChunkData],
     embedding_model: Option<&str>,
 ) -> Result<(), sqlx::Error> {
     for chunk in chunks {
         sqlx::query(
             "INSERT INTO context_chunks \
-             (node_id, chunk_text, chunk_index, page_number, qdrant_uuid, embedding_hash, embedding_model, embedding_at, token_count) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)",
+             (node_id, embedding_type, chunk_text, chunk_index, page_number, qdrant_uuid, embedding_hash, embedding_model, embedding_at, token_count) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)",
         )
         .bind(node_id)
+        .bind(embedding_type)
         .bind(&chunk.chunk_text)
         .bind(chunk.chunk_index)
         .bind(chunk.page_number)
@@ -350,6 +372,19 @@ pub async fn insert_context_chunks(
 pub async fn delete_context_chunks(pool: &DbPool, node_id: i64) -> Result<(), sqlx::Error> {
     sqlx::query("DELETE FROM context_chunks WHERE node_id = ?")
         .bind(node_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+pub async fn delete_context_chunks_by_type(
+    pool: &DbPool,
+    node_id: i64,
+    embedding_type: EmbeddingType,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM context_chunks WHERE node_id = ? AND embedding_type = ?")
+        .bind(node_id)
+        .bind(embedding_type)
         .execute(pool)
         .await?;
     Ok(())

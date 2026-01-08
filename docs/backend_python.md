@@ -2,9 +2,9 @@
 
 ## 运行约束
 
-> **必须使用单进程模式 (workers=1)**
+> **建议使用单进程模式 (workers=1)**
 >
-> IngestionQueue、ProgressBroadcaster、VectorService 使用内存状态，多进程会导致状态不共享。
+> Qdrant 采用 embedded mode，且 Embedding 模型预热成本较高，多进程会重复加载并可能带来并发风险。
 
 ---
 
@@ -20,32 +20,29 @@ src-python/
 │   │   ├── events.py          # 启动/关闭钩子 + 心跳监控
 │   │   └── logging.py         # 日志配置
 │   ├── api/
-│   │   ├── ingest.py          # /ingest 端点
 │   │   ├── chat.py            # /chat/completions
 │   │   ├── search.py          # 预留: 搜索接口
-│   │   ├── agent.py           # 预留: 任务型 AI 接口
+│   │   ├── agent.py           # 摘要/Embedding/主题分类接口
 │   │   └── example.py         # SDK/Provider 示例 (未注册路由)
 │   ├── schemas.py             # API DTO + 枚举
 │   ├── services/
-│   │   ├── file_service.py    # 文件解析
 │   │   ├── vector_service.py  # 切分 + 向量化 + Qdrant
 │   │   ├── llm_service.py     # LLM Provider 路由 + 流式封装
-│   │   └── agent_service.py   # 预留
-│   └── workers/
-│       ├── queue_manager.py   # asyncio.Queue + 进度广播
-│       └── processors.py      # Ingestion Worker
+│   │   └── agent_service.py   # 摘要/主题分类
 ```
 
 ---
 
 ## 已实现端点
 
-### /ingest
+### /agent
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/ingest` | Rust 通知数据变更，立即返回，后台处理 |
-| GET | `/ingest/stream` | NDJSON 进度流，Rust 长连接读取 |
+| POST | `/agent/summary` | 生成摘要（content + user_note -> summary） |
+| POST | `/agent/embedding` | 生成并写入向量（summary/content） |
+| POST | `/agent/embedding/delete` | 删除 Node 的向量 |
+| POST | `/agent/classify` | 主题分类（候选主题 + 新摘要） |
 
 ### /chat
 
@@ -71,54 +68,95 @@ src-python/
 
 ---
 
-## Ingestion 流水线
+## 摘要 / Embedding / 主题分类
 
-```
-/ingest -> IngestionQueue -> Worker
-                                   |
-                     Payload -> Parse -> Chunk -> Embed -> Upsert(Qdrant)
-                                   |
-                        NDJSON Progress/Result -> /ingest/stream (Rust)
-```
+### /agent/summary
 
-- `action=deleted` 仅执行 Qdrant 删除，不做解析与切分。
-
-### /ingest 请求
+输入：
 
 ```json
 {
-  "resource_id": 1,
-  "action": "created",
-  "file_hash": "hash-xxx",
-  "file_type": "pdf",
-  "content": null,
-  "file_path": "/abs/path/to/file.pdf"
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "content": "资源内容...",
+  "user_note": "用户备注（可选）",
+  "max_length": 100
 }
 ```
 
-`action` 可选: `created` | `updated` | `deleted`
-
-### /ingest/stream 消息 (NDJSON, application/x-ndjson)
-
-Progress:
+输出：
 
 ```json
-{"type":"progress","resource_id":1,"status":"chunking","percentage":30}
+{ "summary": "不超过 100 字的摘要" }
 ```
 
-Result:
+### /agent/embedding
+
+输入：
 
 ```json
-{"type":"result","resource_id":1,"success":true,"chunks":[...],"embedding_model":"BAAI/bge-small-zh-v1.5","indexed_hash":"..."}
+{
+  "node_id": 1,
+  "text": "需要向量化的文本",
+  "embedding_type": "content",
+  "replace": true,
+  "chunk": true
+}
 ```
 
-Error:
+- `embedding_type`: `summary` | `content`
+- `content` 会使用 SentenceSplitter 进行切分；`summary` 作为单段写入。
+- Payload 会写入 `type` 字段区分 summary/content。
+
+输出（截断示例）：
 
 ```json
-{"type":"result","resource_id":1,"success":false,"error":"File not found: ..."}
+{
+  "node_id": 1,
+  "embedding_type": "content",
+  "embedding_model": "BAAI/bge-small-zh-v1.5",
+  "chunks": [
+    {
+      "chunk_text": "...",
+      "chunk_index": 0,
+      "page_number": null,
+      "qdrant_uuid": "...",
+      "embedding_hash": "...",
+      "token_count": 42
+    }
+  ]
+}
 ```
 
-> 进度与结果都通过同一条流发送；Rust 负责将结果落库。
+### /agent/embedding/delete
+
+输入：
+
+```json
+{ "node_id": 1, "embedding_type": "summary" }
+```
+
+### /agent/classify
+
+输入：
+
+```json
+{
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "resource_summary": "新资源摘要...",
+  "candidates": [
+    { "title": "Rust", "summary": "..." },
+    { "title": "React", "summary": "..." }
+  ]
+}
+```
+
+输出：
+
+```json
+{ "topic_name": "Rust", "confidence": 0.86 }
+```
 
 ---
 
@@ -186,14 +224,13 @@ data: {"type":"error","message":"错误信息"}
 
 ## 文件解析与切分
 
-- 支持 `pdf` 和 `text` 类型，`epub`/`image`/`url` 目前未实现或仅支持 content 字段。
-- `file_path` 需要传入绝对路径。
-- 解析文件时带有重试，避免 Rust 写入文件的竞态。
+- 文件解析已移到 Rust，Python 不再解析文件。
+- Python 仅对传入文本进行切分与向量化。
 
 Chunking:
 
 - 使用 LlamaIndex `SentenceSplitter`，`chunk_size=512`，`chunk_overlap=50`。
-- PDF 解析会插入 `[Page N]` 标记，用于提取页码。
+- 如果文本中存在 `[Page N]` 标记，将用于提取页码。
 
 ---
 
@@ -207,7 +244,7 @@ Chunking:
 
 - 使用 Qdrant embedded 模式 (`qdrant_path`)，collection 使用 named vectors: `dense` + `sparse`。
 - 更新资源时先删除旧向量，再 upsert 新向量。
-- Qdrant payload 包含 `resource_id`, `chunk_index`, `page_number`, `text`, `token_count`。
+- Qdrant payload 包含 `node_id`, `type`(summary/content), `chunk_index`, `page_number`, `text`, `token_count`。
 
 ---
 
@@ -217,15 +254,15 @@ Chunking:
 |------|--------|
 | Qdrant vectors | Python |
 | `resources`/`context_chunks` 等 SQLite 表 | Rust |
-| 进度与结果 | Python 通过 /ingest/stream 推送 |
+| 进度与结果 | 由 Rust 内部管线处理并发事件 |
 
 ---
 
 ## 生命周期
 
-**启动**: Qdrant 初始化 -> VectorService -> IngestionQueue -> 心跳监控  
-待处理队列由 Rust 在 Python 健康后触发重建。
+**启动**: Qdrant 初始化 -> VectorService -> 心跳监控  
+Python 仅提供无状态接口，不维护本地任务队列。
 
-**关闭**: 停止心跳 -> 停止 Worker -> 关闭 Qdrant
+**关闭**: 停止心跳 -> 关闭 Qdrant
 
 > 心跳监控通过 stdin 判断父进程是否退出，若关闭则触发 SIGINT 优雅退出。

@@ -69,6 +69,7 @@
    - 分类：Topic 建议 + 置信度。
    - Chat：流式回复。
 3. Qdrant 操作仍由 Python 执行，Rust 负责调度与落库。
+4. Rust 负责队列，Python 负责 Qdrant 操作。
 
 ## Phase 4：向量与搜索策略
 1. Qdrant 写入两类向量：

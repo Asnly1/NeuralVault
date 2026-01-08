@@ -406,10 +406,12 @@ pub async fn capture_resource(
         resolved_path.as_deref(),
     );
 
+    let mut should_enqueue = false;
     match file_content_result {
         Ok(text) => {
             if let Some(content) = text.as_deref() {
                 update_node_content(&state.db, node_id, Some(content), Some(&file_hash)).await?;
+                should_enqueue = !content.trim().is_empty();
             }
             emit_parse_progress(Some(&app), Some(node_id), "done", Some(100), None);
         }
@@ -424,6 +426,10 @@ pub async fn capture_resource(
             .await?;
             emit_parse_progress(Some(&app), Some(node_id), "error", None, Some(&err));
         }
+    }
+
+    if should_enqueue {
+        state.ai_pipeline.enqueue_resource(node_id).await?;
     }
 
     Ok(CaptureResponse {
@@ -450,7 +456,9 @@ pub async fn update_resource_content_command(
     content: String,
 ) -> AppResult<()> {
     let file_hash = compute_sha256(content.as_bytes());
-    Ok(update_node_content(&state.db, node_id, Some(&content), Some(&file_hash)).await?)
+    update_node_content(&state.db, node_id, Some(&content), Some(&file_hash)).await?;
+    state.ai_pipeline.enqueue_resource(node_id).await?;
+    Ok(())
 }
 
 #[tauri::command]

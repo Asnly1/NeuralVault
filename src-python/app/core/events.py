@@ -28,18 +28,6 @@ async def startup_handler():
         from app.services.vector_service import vector_service
         vector_service.initialize()
     
-    # 初始化 Ingestion Queue
-    from app.workers.queue_manager import ingestion_queue, progress_broadcaster
-    from app.workers.processors import process_ingestion_job
-
-    # 设置处理器和进度回调
-    # 使用 ProgressBroadcaster 替代 WebSocket，通过 HTTP StreamingResponse 推送进度
-    ingestion_queue.set_processor(process_ingestion_job)
-    ingestion_queue.set_progress_callback(progress_broadcaster.broadcast)
-    
-    # 启动 Worker
-    await ingestion_queue.start_worker()
-    
     # 启动心跳监控（监听 stdin）
     global _heartbeat_task
     _heartbeat_task = asyncio.create_task(monitor_parent_process())
@@ -59,10 +47,6 @@ async def shutdown_handler():
             await _heartbeat_task
         except asyncio.CancelledError:
             pass
-    
-    # 停止 Ingestion Worker
-    from app.workers.queue_manager import ingestion_queue
-    await ingestion_queue.stop_worker()
     
     # 关闭 Qdrant 连接
     db_manager = await DatabaseManager.get_instance()

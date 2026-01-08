@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core import events
-from app.api import ingest, chat, agent, search, providers
+from app.api import chat, agent, search, providers
 
 
 @asynccontextmanager
@@ -38,7 +38,6 @@ app.add_middleware(
 )
 
 # 注册路由
-app.include_router(ingest.router, prefix="/ingest", tags=["ingest"])
 app.include_router(chat.router, prefix="/chat", tags=["chat"])
 app.include_router(agent.router, prefix="/agent", tags=["agent"])
 app.include_router(search.router, prefix="/search", tags=["search"])
@@ -99,12 +98,10 @@ if __name__ == "__main__":
     
     logger.info(f"Starting server on port {args.port}")
     
-    # IMPORTANT: 必须使用单进程模式 (workers=1)
+    # IMPORTANT: 建议使用单进程模式 (workers=1)
     # 原因：
-    # 1. ProgressBroadcaster 使用内存状态管理 HTTP 流订阅者
-    # 2. IngestionQueue 使用 asyncio.Queue 内存队列
-    # 3. VectorService 单例持有 Embedding 模型
-    # 多进程会导致状态不共享，进度推送和任务队列无法正常工作
+    # 1. Qdrant embedded mode 使用本地存储，避免多进程并发访问
+    # 2. Embedding 模型初始化成本高，多进程会重复加载
     uvicorn.run(
         app, 
         host="127.0.0.1", 

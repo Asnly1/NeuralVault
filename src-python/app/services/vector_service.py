@@ -150,18 +150,20 @@ class VectorService:
         return hashlib.sha256(text.encode()).hexdigest()[:16]
     
     async def upsert_chunks(
-        self, 
-        resource_id: int, 
+        self,
+        node_id: int,
         chunks: list[TextChunk],
-        qdrant_client: QdrantClient
+        qdrant_client: QdrantClient,
+        embedding_type: str,
     ) -> list[dict]:
         """
         将 chunks 向量化并写入 Qdrant
         
         Args:
-            resource_id: 资源 ID
+            node_id: Node ID
             chunks: TextChunk 列表
             qdrant_client: Qdrant 客户端
+            embedding_type: summary / content
             
         Returns:
             包含 qdrant_uuid 和 embedding_hash 的字典列表（用于写入 SQLite）
@@ -191,7 +193,8 @@ class VectorService:
                     "sparse": sparse_vectors[i]
                 },
                 payload={
-                    "resource_id": resource_id,
+                    "node_id": node_id,
+                    "type": embedding_type,
                     "chunk_index": chunk.chunk_index,
                     "page_number": chunk.page_number,
                     "text": chunk.text,
@@ -203,6 +206,7 @@ class VectorService:
             chunk_metadata.append({
                 "qdrant_uuid": point_id,
                 "embedding_hash": embedding_hash,
+                "embedding_type": embedding_type,
                 "chunk_index": chunk.chunk_index,
                 "page_number": chunk.page_number,
                 "token_count": chunk.token_count,
@@ -217,31 +221,47 @@ class VectorService:
         
         return chunk_metadata
     
-    async def delete_by_resource(
-        self, 
-        resource_id: int,
-        qdrant_client: QdrantClient
+    async def delete_by_node(
+        self,
+        node_id: int,
+        qdrant_client: QdrantClient,
+        embedding_type: Optional[str] = None,
     ):
         """
-        删除某个资源的所有向量
+        删除某个 Node 的向量
         
         Args:
-            resource_id: 资源 ID
+            node_id: Node ID
             qdrant_client: Qdrant 客户端
+            embedding_type: summary / content（可选）
         """
         from qdrant_client.models import Filter, FieldCondition, MatchValue
-        
+
+        conditions = [
+            FieldCondition(
+                key="node_id",
+                match=MatchValue(value=node_id),
+            )
+        ]
+        if embedding_type:
+            conditions.append(
+                FieldCondition(
+                    key="type",
+                    match=MatchValue(value=embedding_type),
+                )
+            )
+
         qdrant_client.delete(
             collection_name=settings.qdrant_collection_name,
             points_selector=Filter(
-                must=[
-                    FieldCondition(
-                        key="resource_id",
-                        match=MatchValue(value=resource_id)
-                    )
-                ]
+                must=conditions
             )
         )
+
+    def get_dense_model_name(self) -> Optional[str]:
+        if not self._dense_model:
+            return None
+        return self._dense_model.model_name
 
 
 # 全局单例

@@ -1,1214 +1,169 @@
-# 后端项目结构 (Rust + Tauri)
+# Rust 后端实现文档（Node/Edge + Rust 解析 + AI Pipeline）
 
-## 目录总览
+## 总览
+
+- Rust 负责 SQLite、Node/Edge、文件解析与 AI Pipeline 调度。
+- Python Sidecar 无状态：摘要、Embedding、主题分类、Qdrant 写入。
+- 统一数据模型：`nodes` + `edges`，覆盖 topic/task/resource。
+
+---
+
+## 目录结构（关键）
 
 ```
 src-tauri/
 ├── src/
-│   ├── main.rs              # 应用入口
-│   ├── lib.rs               # 库入口，Tauri 应用设置与初始化
-│   ├── app_state.rs         # 全局应用状态定义
-│   ├── sidecar.rs           # Python Sidecar 进程管理
-│   ├── db/                  # 数据库模块
-│   │   ├── mod.rs          # 模块导出
-│   │   ├── types.rs        # 数据库类型定义（枚举、结构体）
-│   │   ├── pool.rs         # 数据库连接池初始化
-│   │   ├── tasks.rs        # 任务相关数据库操作
-│   │   ├── resources.rs    # 资源相关数据库操作
-│   │   ├── topics.rs       # Topic 相关数据库操作
-│   │   └── chat.rs         # 聊天相关数据库操作
-│   ├── commands/            # Tauri 命令模块
-│   │   ├── mod.rs          # 模块导出
-│   │   ├── types.rs        # 请求/响应类型定义
-│   │   ├── tasks.rs        # 任务相关命令
-│   │   ├── resources.rs    # 资源捕获相关命令
-│   │   ├── clipboard.rs    # 剪贴板相关命令
-│   │   ├── dashboard.rs    # Dashboard 相关命令
-│   │   ├── python.rs       # Python Sidecar 相关命令
-│   │   ├── topics.rs       # Topic 相关命令
-│   │   ├── chat.rs         # 聊天相关命令
-│   │   └── ai_config.rs    # AI 配置相关命令（API Key 管理）
-│   ├── services/            # 服务层模块
-│   │   ├── mod.rs          # 模块导出
-│   │   └── ai_config.rs    # AI 配置服务（加密存储 API Key）
-│   ├── utils/               # 工具函数模块
-│   │   ├── mod.rs          # 模块导出
-│   │   ├── crypto.rs       # AES-256-GCM 加密模块
-│   │   ├── hash.rs         # 哈希计算工具
-│   │   ├── file.rs         # 文件操作工具
-│   │   └── notification.rs # Python 后端通知
-│   └── window/              # 窗口管理模块
-│       ├── mod.rs          # 模块导出
-│       └── hud.rs          # HUD 窗口管理
-├── migrations/
-│   └── 20241006120000_init.sql  # 数据库初始化 SQL 脚本
-├── capabilities/
-│   ├── default.json         # 默认权限配置
-│   └── desktop.json         # 桌面平台权限配置
-├── target/                  # 编译产物目录（由 Cargo 生成）
-├── gen/                     # 生成的代码和 Schema
-├── icons/                   # 应用图标资源
-├── Cargo.toml               # 依赖配置与构建选项
-├── tauri.conf.json          # Tauri 应用配置（窗口、插件等）
-├── build.rs                 # 构建脚本
-└── .gitignore               # Git 忽略规则
+│   ├── lib.rs               # 应用组装与启动
+│   ├── app_state.rs         # 全局状态
+│   ├── sidecar.rs           # Python Sidecar
+│   ├── services/
+│   │   ├── ai_config.rs     # API Key 配置
+│   │   └── ai_pipeline.rs   # Rust AI 队列与管线
+│   ├── db/
+│   │   ├── pool.rs          # SQLx 连接池
+│   │   ├── types.rs         # 节点/边/枚举/结构体
+│   │   ├── nodes.rs         # Node CRUD
+│   │   ├── edges.rs         # Edge CRUD
+│   │   └── chat.rs          # Chat 相关
+│   └── commands/
+│       ├── resources.rs     # 资源捕获/解析
+│       ├── tasks.rs         # 任务节点
+│       ├── topics.rs        # 主题节点
+│       ├── edges.rs         # 关系连接
+│       ├── chat.rs          # 会话/消息/绑定
+│       └── ai_config.rs     # AI 配置与聊天
+└── migrations/
+    └── 20241006120000_init.sql
 ```
 
 ---
 
-## 文件说明
+## 启动流程（`lib.rs`）
 
-### `Cargo.toml`
+1. 初始化应用数据目录与 SQLite 连接池。
+2. 初始化 `AIConfigService`（加密存储 API Key）。
+3. 启动 Python Sidecar，并在后台等待健康检查结果。
+4. 初始化 `AiPipeline` 队列并写入 `AppState`。
+5. 注册 Tauri 命令与窗口事件。
 
-项目依赖配置与编译选项。
-
-#### 主要依赖
-
-| 依赖项                         | 版本  | 功能说明                                              |
-| ------------------------------ | ----- | ----------------------------------------------------- |
-| `tauri`                        | 2.0.0 | Tauri 核心框架（protocol-asset, tray-icon）           |
-| `tauri-plugin-opener`          | 2     | 用系统默认程序打开文件/URL                            |
-| `tauri-plugin-shell`           | 2     | 执行 Shell 命令                                       |
-| `tauri-plugin-global-shortcut` | 2     | 注册全局快捷键（Option+Space 唤起 HUD）               |
-| `tauri-plugin-dialog`          | 2     | 文件选择对话框                                        |
-| `serde` / `serde_json`         | 1     | 序列化/反序列化（与前端 JSON 通信）                   |
-| `sqlx`                         | 0.7   | 异步 SQLite 数据库驱动（含迁移支持）                  |
-| `uuid`                         | 1     | 生成唯一标识符                                        |
-| `sha2`                         | 0.10  | SHA-256 哈希（资源去重）                              |
-| `reqwest`                      | 0.12  | HTTP 客户端（Python 健康检查/聊天/进度流）            |
-| `futures-util`                 | 0.3   | 流处理（读取 NDJSON 进度流）                          |
-| `tokio`                        | 1     | 异步运行时与定时（健康检查/延迟/测试）                |
-| `clipboard-rs`                 | 0.2   | 跨平台剪贴板访问（读取图片/文件/文本）                |
-| `aes-gcm`                      | 0.10  | AES-256-GCM 加密（API Key 加密存储）                  |
-| `rand`                         | 0.8   | 随机数生成（加密密钥生成）                            |
-| `directories`                  | 5     | 跨平台应用数据目录（密钥文件存储）                    |
-| `libc`                         | 0.2   | Unix 进程组终止（仅 Unix 平台）                       |
-
-#### 编译优化
-
-- **开发模式**：增量编译加速构建
-- **发布模式**：LTO、strip、单代码生成单元，最小化二进制体积
+关键事件：
+- `python-status`：Sidecar ready / error。
 
 ---
 
-### `tauri.conf.json`
-
-Tauri 应用配置文件，定义窗口、权限、构建流程。
-
-#### 窗口配置
-
-| 窗口标签 | 标题          | 尺寸     | 特性                                       | 说明                       |
-| -------- | ------------- | -------- | ------------------------------------------ | -------------------------- |
-| `main`   | NeuralVault   | 1200x800 | 默认主窗口                                 | 主界面（看板/工作台/设置） |
-| `hud`    | Quick Capture | 680x220  | 无边框、透明、置顶、默认隐藏、不显示任务栏、固定大小、无阴影 | 快速捕获悬浮窗 |
-
-- **HUD 路由**：`index.html#/hud`（窗口 `url`）
-
-#### 构建配置
-
-- **开发命令**：`npm run dev`（前端开发服务器，`devUrl: http://localhost:1420`）
-- **构建命令**：`npm run build`（构建前端到 `dist/`）
-- **前端目录**：`../dist`
-
-#### 安全策略
-
-- **CSP**：关闭（`null`），允许灵活的前端资源加载
-- **Asset 协议**：启用 `assetProtocol`，作用域为 `$APPDATA/**`，允许前端通过 `convertFileSrc` 访问应用数据目录中的文件（如图片预览）
-
----
-
-### `src/`
-
-#### `main.rs`
-
-应用程序入口，极简设计。
-
-- **功能**：调用 `neuralvault_lib::run()` 启动应用
-- **Windows 兼容**：发布模式下隐藏控制台窗口（`windows_subsystem = "windows"`）
+## AppState
 
 ```rust
-fn main() {
-    neuralvault_lib::run()
-}
-```
-
----
-
-#### `lib.rs`
-
-库入口，简化后只负责应用的组装和启动，具体功能委托给各个子模块。
-
-##### 核心功能
-
-1. **数据库初始化**
-
-   - 获取 `app_data_dir` 并确保目录存在
-   - 调用 `db::init_pool()` 初始化连接池、运行迁移并写入默认用户
-
-2. **AI 配置服务初始化**
-
-   - 创建 `AIConfigService`，注入到 `AppState`
-
-3. **Python Sidecar 初始化**
-
-   - 启动 Python 进程（开发模式使用 `uv run`）
-   - 后台健康检查，发出 `python-status` 事件并启动 `/ingest/stream` 进度流
-   - 主窗口销毁时触发 `shutdown()` 清理进程
-
-4. **HUD 窗口设置**
-
-   - 调用 `window::setup_hud()` 设置全局快捷键和事件监听
-
-5. **插件初始化**
-
-   - Shell、Opener、Dialog、Global Shortcut 插件
-
-6. **命令注册**
-   - 注册所有可供前端调用的 Tauri 命令
-
-##### 模块组织
-
-- 从 `commands/` 导入所有命令函数
-- 从 `window/` 导入 HUD 管理函数
-- 从 `app_state` 导入 `AppState`
-
----
-
-#### `app_state.rs`
-
-全局应用状态定义，通过 Tauri 的状态管理在所有命令间共享。
-
-```rust
-use crate::db::DbPool;
-use crate::sidecar::PythonSidecar;
-use crate::services::AIConfigService;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-
-#[derive(Clone)]
 pub struct AppState {
-    pub db: DbPool,                              // SQLx 数据库连接池
-    pub python: Arc<PythonSidecar>,              // Python Sidecar 管理器
-    pub ai_config: Arc<Mutex<AIConfigService>>,  // AI 配置服务（加密存储）
-}
-```
-
-通过 `State<AppState>` 在命令间共享数据库连接、Python Sidecar 和 AI 配置服务。
-
----
-
-#### `sidecar.rs`
-
-Python Sidecar 进程管理模块，负责启动、监控和关闭 Python 后端服务。
-
-##### 核心结构
-
-```rust
-pub struct PythonSidecar {
-    process: Arc<Mutex<Option<Child>>>,  // 子进程句柄
-    client: reqwest::Client,              // 通用 HTTP 客户端（复用连接池）
-    stream_client: reqwest::Client,       // Streaming 专用客户端（更长超时）
-    port: Mutex<u16>,                     // 动态分配的端口号
-}
-```
-
-##### 主要功能
-
-| 方法 | 参数 | 返回值 | 说明 |
-| --- | --- | --- | --- |
-| `new()` | - | `Self` | 创建新的 Sidecar 实例，初始化 HTTP 客户端 |
-| `find_available_port()` | - | `Result<u16, String>` | 让 OS 自动分配可用端口 |
-| `get_base_url()` | `&self` | `String` | 返回 Python 后端的基础 URL（如 `http://127.0.0.1:8123`） |
-| `get_port()` | `&self` | `u16` | 获取当前分配的端口号 |
-| `get_python_dir()` | - | `PathBuf` | 获取 Python 项目目录（开发模式：`src-python`） |
-| `start()` | `&self, app: &mut App` | `Result<(), String>` | 启动 Python 进程，传递端口和 Qdrant 路径（需可转 UTF-8） |
-| `is_running()` | `&self` | `bool` | 检查 Python 进程是否存活 |
-| `wait_for_health()` | `&self, max_retries: u32` | `Result<(), String>` | 等待 Python 服务健康检查通过 |
-| `check_health()` | `&self` | `Result<Value, String>` | 调用 `/health` 接口检查服务状态 |
-| `shutdown()` | `&self` | `Result<(), String>` | 优雅关闭 Python 进程 |
-| `call_shutdown_endpoint()` | `&self` | `Result<(), String>` | 调用 `/shutdown` 接口 |
-| `start_progress_stream()` | `app_handle, db_pool` | `()` | 连接 `/ingest/stream`，转发进度并写入结果 |
-
-##### 设计要点
-
-1. **动态端口分配**：通过 `TcpListener::bind("127.0.0.1:0")` 让操作系统分配可用端口，避免端口冲突
-2. **HTTP 客户端复用**：创建 `client + stream_client` 并复用，分别用于普通请求和长连接流
-3. **线程安全**：使用 `Arc<Mutex<...>>` 保护进程句柄，支持多线程访问
-4. **开发/生产模式**：开发模式使用 `uv run` 直接运行 Python，生产模式预留打包二进制支持
-5. **优雅关闭**：先调用 shutdown 接口，等待 1 秒后如仍运行则强制终止
-6. **Drop 实现**：析构时自动清理子进程，防止僵尸进程
-7. **进度流处理**：连接 `/ingest/stream` NDJSON；progress 更新处理阶段并 emit，result 写入分块并更新同步状态
-8. **断线重连**：进度流断开后自动重连
-9. **生产模式**：release 构建目前返回错误（待打包 sidecar）
-
-##### 启动流程
-
-```
-lib.rs setup()
-  ↓
-PythonSidecar::new() - 创建实例
-  ↓
-PythonSidecar::start() - 启动进程
-  ├─ find_available_port() - 分配端口
-  ├─ Command::new("uv").args([...]) - 构建命令
-  └─ spawn() - 派生子进程
-  ↓
-app.manage(AppState { db, python }) - 注入状态
-  ↓
-后台任务：
-  wait_for_health(20) - 等待服务就绪（最多 10 秒）
-  ├─ emit "python-status" ready/error
-  └─ start_progress_stream() - 连接 /ingest/stream
-```
-
----
-
-### `db/` 模块
-
-数据库层，按功能拆分为多个子模块，清晰组织数据库相关代码。
-
-#### 模块结构
-
-- **`types.rs`**: 所有数据库类型定义（枚举、结构体、类型别名）
-- **`pool.rs`**: 数据库连接池初始化和配置
-- **`tasks.rs`**: 任务相关的数据库操作
-- **`resources.rs`**: 资源相关的数据库操作
-- **`topics.rs`**: Topic 相关的数据库操作（CRUD + 关联表）
-- **`chat.rs`**: 聊天相关的数据库操作
-- **`mod.rs`**: 导出所有公共接口
-
-#### `db/types.rs`
-
-定义所有数据库相关的类型，包括枚举和结构体。
-
-##### 类型定义
-
-**枚举类型**（均实现 `Type`、`Serialize`、`Deserialize`）
-
-| 枚举类型                       | 可选值                                | 说明             |
-| ------------------------------ | ------------------------------------- | ---------------- |
-| `TaskStatus`                   | Todo/Done                             | 任务状态         |
-| `TaskPriority`                 | High/Medium/Low                       | 任务优先级       |
-| `ResourceSyncStatus`           | Pending/Synced/Dirty/Error            | 资源同步状态     |
-| `ResourceProcessingStage`      | Todo/Chunking/Embedding/Done          | 资源处理阶段     |
-| `ResourceFileType`             | Text/Image/Pdf/Url/Epub/Other         | 资源文件类型     |
-| `TopicReviewStatus`            | Pending/Approved/Rejected             | Topic-资源关联审核状态 |
-
-**数据结构**
-
-| 结构体                   | 功能                        | 关键字段                                                         |
-| ------------------------ | --------------------------- | ---------------------------------------------------------------- |
-| `TaskRecord`             | 任务表记录                  | task_id, uuid, title, description, summary, status, priority, due_date, done_date, updated_at, is_deleted |
-| `NewTask<'a>`            | 插入任务的参数              | 生命周期借用，避免字符串复制                                     |
-| `ResourceRecord`         | 资源表记录                  | resource_id, uuid, file_hash, file_type, content, summary, display_name, file_path, file_size_bytes, sync_status, processing_stage, indexed_hash, processing_hash, last_indexed_at, last_error, updated_at, is_deleted |
-| `NewResource<'a>`        | 插入资源的参数              | 生命周期借用                                                     |
-| `SourceMeta`             | 资源来源元信息（存为 JSON） | url, window_title                                                |
-| `LinkResourceParams`     | 关联资源到任务的参数        | task_id, resource_id                                             |
-| `TopicRecord`            | Topic表记录                 | topic_id, title, summary, is_system_default, is_favourite, updated_at          |
-| `NewTopic<'a>`           | 插入Topic的参数             | title, summary, is_system_default, is_favourite, user_id                       |
-| `TopicResourceLinkRecord`| Topic-资源关联记录          | topic_id, resource_id, confidence_score, is_auto_generated, review_status |
-| `NewTopicResourceLink`   | 创建Topic-资源关联的参数     | topic_id, resource_id, confidence_score, is_auto_generated, review_status |
-| `ChunkData`              | Python 分块结果             | chunk_text, chunk_index, page_number, qdrant_uuid, embedding_hash, token_count |
-| `IngestionResultData`    | Python 处理结果             | resource_id, success, chunks, embedding_model, indexed_hash, error |
-
-##### 核心函数
-
-| 函数                            | 参数                         | 返回值                        | 说明                                               |
-| ------------------------------- | ---------------------------- | ----------------------------- | -------------------------------------------------- |
-| `init_pool()`                   | `db_path: impl AsRef<Path>`  | `Result<SqlitePool>`          | 初始化连接池、运行迁移并写入默认用户               |
-| `insert_task()`                 | `pool, NewTask<'_>`          | `Result<i64>`                 | 插入任务并返回 `task_id`                           |
-| `get_task_by_id()`              | `pool, task_id`              | `Result<TaskRecord>`          | 根据 ID 查询任务                                   |
-| `list_active_tasks()`           | `pool`                       | `Result<Vec<TaskRecord>>`     | 查询活跃任务（todo）                               |
-| `soft_delete_task()`            | `pool, task_id`              | `Result<()>`                  | 软删除任务（设置 is_deleted = 1）                  |
-| `hard_delete_task()`            | `pool, task_id`              | `Result<()>`                  | 硬删除任务（物理删除及级联数据）                   |
-| `mark_task_as_done()`           | `pool, task_id`              | `Result<()>`                  | 将任务状态从 'todo' 转换为 'done'，设置 done_date  |
-| `mark_task_as_todo()`           | `pool, task_id`              | `Result<()>`                  | 将任务状态从 'done' 转换为 'todo'，清空 done_date  |
-| `update_task_priority()`        | `pool, task_id, priority`    | `Result<()>`                  | 更新任务优先级                                     |
-| `update_task_due_date()`        | `pool, task_id, due_date`    | `Result<()>`                  | 更新任务截止日期                                   |
-| `update_task_title()`           | `pool, task_id, title`       | `Result<()>`                  | 更新任务标题                                       |
-| `update_task_description()`     | `pool, task_id, description` | `Result<()>`                  | 更新任务描述                                       |
-| `update_task_summary()`         | `pool, task_id, summary`     | `Result<()>`                  | 更新任务摘要（AI 生成）                            |
-| `list_tasks_by_date()`          | `pool, date: &str`           | `Result<Vec<TaskRecord>>`     | 查询指定日期的所有任务（根据 due_date）            |
-| `list_all_tasks()`              | `pool`                       | `Result<Vec<TaskRecord>>`     | 查询所有任务（包括 todo 和 done），用于 Calendar   |
-| `insert_resource()`             | `pool, NewResource<'_>`      | `Result<i64>`                 | 插入资源并返回 `resource_id`                       |
-| `get_resource_by_id()`          | `pool, resource_id`          | `Result<ResourceRecord>`      | 根据 ID 查询资源                                   |
-| `list_all_resources()`          | `pool`                       | `Result<Vec<ResourceRecord>>` | 查询所有未删除资源                                 |
-| `soft_delete_resource()`        | `pool, resource_id`          | `Result<()>`                  | 软删除资源（设置 is_deleted/deleted_at）           |
-| `hard_delete_resource()`        | `pool, resource_id`          | `Result<()>`                  | 硬删除资源（级联删除关联与分块）                   |
-| `update_resource_content()`     | `pool, resource_id, content` | `Result<()>`                  | 更新资源内容（保存编辑器修改）                     |
-| `update_resource_display_name()` | `pool, resource_id, display_name` | `Result<()>`            | 更新资源显示名称（重命名资源）                     |
-| `update_resource_summary()`     | `pool, resource_id, summary` | `Result<()>`                  | 更新资源摘要（AI 生成）                            |
-| `link_resource_to_task()`       | `pool, LinkResourceParams`   | `Result<()>`                  | 关联资源到任务                                     |
-| `unlink_resource_from_task()`   | `pool, task_id, resource_id` | `Result<()>`                  | 取消资源与任务的关联                               |
-| `list_resources_for_task()`     | `pool, task_id`              | `Result<Vec<ResourceRecord>>` | 查询任务的所有关联资源                             |
-| `insert_topic()`                | `pool, NewTopic<'_>`         | `Result<i64>`                 | 插入Topic并返回 `topic_id`                         |
-| `get_topic_by_id()`             | `pool, topic_id`             | `Result<TopicRecord>`         | 根据 ID 查询Topic                                  |
-| `list_topics()`                 | `pool`                       | `Result<Vec<TopicRecord>>`    | 查询所有Topic                                      |
-| `update_topic_title()`          | `pool, topic_id, title`      | `Result<()>`                  | 更新Topic标题                                      |
-| `update_topic_summary()`        | `pool, topic_id, summary`    | `Result<()>`                  | 更新Topic摘要                                      |
-| `update_topic_favourite()`      | `pool, topic_id, is_favourite` | `Result<()>`                | 更新Topic收藏状态（显示在Sidebar）                 |
-| `hard_delete_topic()`           | `pool, topic_id`             | `Result<()>`                  | 硬删除Topic                                        |
-| `link_resource_to_topic()`      | `pool, NewTopicResourceLink` | `Result<()>`                  | 关联资源到Topic                                    |
-| `unlink_resource_from_topic()`  | `pool, topic_id, resource_id`| `Result<()>`                  | 取消资源与Topic的关联                              |
-| `list_resources_for_topic()`    | `pool, topic_id`             | `Result<Vec<ResourceRecord>>` | 查询Topic的所有关联资源                            |
-| `list_topics_for_resource()`    | `pool, resource_id`          | `Result<Vec<TopicRecord>>`    | 查询资源关联的所有Topic                            |
-| `link_task_to_topic()`          | `pool, task_id, topic_id`    | `Result<()>`                  | 关联任务到Topic                                    |
-| `unlink_task_from_topic()`      | `pool, task_id, topic_id`    | `Result<()>`                  | 取消任务与Topic的关联                              |
-| `list_topics_for_task()`        | `pool, task_id`              | `Result<Vec<TopicRecord>>`    | 查询任务关联的所有Topic                            |
-| `list_tasks_for_topic()`        | `pool, topic_id`             | `Result<Vec<TaskRecord>>`     | 查询Topic关联的所有任务                            |
-| `insert_context_chunks()`       | `pool, resource_id, chunks, embedding_model`  | `Result<()>`       | 写入 Python 处理后的分块结果                        |
-| `update_resource_embedding_status()` | `pool, resource_id, sync_status, processing_stage, indexed_hash, last_error` | `Result<()>` | 更新向量化同步/处理状态（仅在 synced 时更新 last_indexed_at） |
-| `delete_context_chunks()`       | `pool, resource_id`          | `Result<()>`                  | 删除资源分块（更新前清理旧数据）                    |
-
-##### 数据库配置
-
-- **模式**：WAL（Write-Ahead Logging）
-- **同步**：Normal（平衡性能与安全）
-- **外键**：启用（`PRAGMA foreign_keys = ON`）
-- **超时**：5 秒（避免长时间阻塞）
-
----
-
-#### `commands/`
-
-定义所有 Tauri 命令，前端通过 `invoke` 调用这些函数。
-
-##### 请求/响应类型
-
-| 类型                    | 用途               | 关键字段                                                 |
-| ----------------------- | ------------------ | -------------------------------------------------------- |
-| `CaptureRequest`        | 快速捕获请求       | content, display_name, file_path, file_type, source_meta |
-| `CaptureResponse`       | 捕获响应           | resource_id, resource_uuid                               |
-| `CreateTaskRequest`     | 创建任务请求       | title (必填), description, status, priority, due_date    |
-| `CreateTaskResponse`    | 创建任务响应       | task                                                     |
-| `DashboardData`         | 看板数据           | tasks, resources                                         |
-| `LinkResourceRequest`   | 关联资源请求       | task_id, resource_id, visibility_scope, local_alias      |
-| `LinkResourceResponse`  | 关联/取消关联响应  | success                                                  |
-| `TaskResourcesResponse` | 任务资源列表响应   | resources                                                |
-| `ClipboardContent`      | 剪贴板内容（枚举） | Image/Files/Text/Html/Empty                              |
-| `ReadClipboardResponse` | 读取剪贴板响应     | content                                                  |
-| `SetApiKeyRequest`      | 设置 API Key       | provider, api_key, base_url                              |
-| `SetDefaultModelRequest`| 设置默认模型       | provider, model                                          |
-| `AIProviderStatus`      | Provider 状态      | has_key, enabled, base_url                               |
-| `AIConfigStatusResponse`| AI 配置状态        | providers, default_provider, default_model               |
-| `ChatMessagePayload`    | 聊天消息（按轮次） | message_id, user_content, assistant_content, attachments, usage |
-| `SendChatRequest`       | 发送聊天请求       | session_id, provider, model, task_type, content, images, files, thinking_effort |
-| `ChatStreamAck`         | 发送聊天响应       | ok                                                       |
-| `SetSessionContextResourcesRequest` | 会话上下文更新 | session_id, resource_ids |
-
-##### 命令列表
-
-| 命令                              | 参数                          | 返回值                          | 说明                                     |
-| --------------------------------- | ----------------------------- | ------------------------------- | ---------------------------------------- |
-| `capture_resource`                | `app, state, CaptureRequest`  | `Result<CaptureResponse>`       | 快速捕获文本/文件，计算 hash，存入数据库 |
-| `create_task`                     | `state, CreateTaskRequest`    | `Result<CreateTaskResponse>`    | 创建任务                                 |
-| `soft_delete_task_command`        | `state, task_id`              | `Result<()>`                    | 软删除任务（设置 is_deleted = 1）        |
-| `hard_delete_task_command`        | `state, task_id`              | `Result<()>`                    | 硬删除任务（物理删除及级联数据）         |
-| `mark_task_as_done_command`       | `state, task_id`              | `Result<()>`                    | 将任务状态从 'todo' 转换为 'done'        |
-| `mark_task_as_todo_command`       | `state, task_id`              | `Result<()>`                    | 将任务状态从 'done' 转换为 'todo'        |
-| `update_task_priority_command`    | `state, task_id, priority`    | `Result<()>`                    | 更新任务优先级（用户自由选择）           |
-| `update_task_due_date_command`    | `state, task_id, due_date`    | `Result<()>`                    | 更新任务截止日期                         |
-| `update_task_title_command`       | `state, task_id, title`       | `Result<()>`                    | 更新任务标题                             |
-| `update_task_description_command` | `state, task_id, description` | `Result<()>`                    | 更新任务描述                             |
-| `get_tasks_by_date`               | `state, date`                 | `Result<Vec<TaskRecord>>`       | 获取指定日期（due_date）的所有任务       |
-| `get_all_tasks`                   | `state`                       | `Result<Vec<TaskRecord>>`       | 获取所有任务，用于 Calendar 视图         |
-| `get_dashboard`                   | `state`                       | `Result<DashboardData>`         | 返回活跃任务 + 所有资源                  |
-| `link_resource`                   | `state, LinkResourceRequest`  | `Result<LinkResourceResponse>`  | 关联资源到任务                           |
-| `unlink_resource`                 | `state, task_id, resource_id` | `Result<LinkResourceResponse>`  | 取消关联                                 |
-| `get_task_resources`              | `state, task_id`              | `Result<TaskResourcesResponse>` | 获取任务关联的资源列表                   |
-| `get_all_resources`               | `state`                       | `Result<Vec<ResourceRecord>>`  | 获取全部资源（用于上下文选择）          |
-| `soft_delete_resource_command`    | `state, resource_id`          | `Result<LinkResourceResponse>`  | 软删除资源（设置 is_deleted = 1，不删除数据库记录） |
-| `hard_delete_resource_command`    | `app, state, resource_id`     | `Result<LinkResourceResponse>`  | 硬删除资源（数据库记录 + 级联数据） |
-| `update_resource_content_command` | `state, resource_id, content` | `Result<()>`                    | 更新资源内容（保存编辑器修改）           |
-| `update_resource_display_name_command` | `state, resource_id, display_name` | `Result<()>`           | 更新资源显示名称（重命名资源）           |
-| `check_python_health`             | `state`                       | `Result<serde_json::Value>`     | 检查 Python 后端健康状态                 |
-| `is_python_running`               | `state`                       | `Result<bool>`                  | 检查 Python 进程是否存活                 |
-| `read_clipboard`                  | `app`                         | `Result<ReadClipboardResponse>` | 读取系统剪贴板（图片/文件/HTML/文本）    |
-| `get_assets_path`                 | `app`                         | `Result<String>`                | 获取 assets 目录的完整路径               |
-| `get_ai_config_status`            | `state`                       | `Result<AIConfigStatusResponse>`| 获取 AI 配置状态（各 Provider 是否已配置）|
-| `save_api_key`                    | `state, SetApiKeyRequest`     | `Result<()>`                    | 保存 API Key 到加密配置                  |
-| `remove_api_key`                  | `state, provider`             | `Result<()>`                    | 删除指定 Provider 的 API Key            |
-| `set_default_model`               | `state, SetDefaultModelRequest`| `Result<()>`                   | 设置默认模型                             |
-| `send_chat_message`               | `state, SendChatRequest`      | `Result<ChatStreamAck>`         | 发送聊天消息（通过 Python 调用 LLM）     |
-| `create_chat_session`             | `state, CreateChatSessionRequest` | `Result<CreateChatSessionResponse>` | 创建聊天会话                          |
-| `get_chat_session`                | `state, session_id`           | `Result<ChatSession>`           | 获取聊天会话详情                         |
-| `list_chat_sessions`              | `state, ListChatSessionsRequest` | `Result<Vec<ChatSession>>`    | 获取聊天会话列表                         |
-| `set_session_context_resources_command` | `state, SetSessionContextResourcesRequest` | `Result<()>` | 更新会话上下文资源                 |
-| `update_chat_session_command`     | `state, UpdateChatSessionRequest` | `Result<()>`                 | 更新聊天会话                             |
-| `delete_chat_session_command`     | `state, DeleteChatSessionRequest` | `Result<()>`                 | 删除聊天会话（软删除）                   |
-| `create_chat_message`             | `state, CreateChatMessageRequest` | `Result<CreateChatMessageResponse>` | 创建聊天消息                      |
-| `list_chat_messages`              | `state, session_id`           | `Result<Vec<ChatMessagePayload>>` | 获取聊天消息列表                     |
-| `update_chat_message_command`     | `state, UpdateChatMessageRequest` | `Result<()>`                 | 更新聊天消息内容                         |
-| `delete_chat_message_command`     | `state, DeleteChatMessageRequest` | `Result<()>`                 | 删除聊天消息                             |
-| `add_message_attachments`         | `state, AddMessageAttachmentsRequest` | `Result<()>`               | 添加消息附件                             |
-| `remove_message_attachment`       | `state, RemoveMessageAttachmentRequest` | `Result<()>`               | 移除消息附件                             |
-| `update_task_summary_command`     | `state, task_id, summary`     | `Result<()>`                    | 更新任务摘要（AI 生成）                  |
-| `update_resource_summary_command` | `state, resource_id, summary` | `Result<()>`                    | 更新资源摘要（AI 生成）                  |
-| `create_topic`                    | `state, CreateTopicRequest`   | `Result<CreateTopicResponse>`   | 创建 Topic                               |
-| `get_topic_command`               | `state, topic_id`             | `Result<TopicRecord>`           | 获取 Topic 详情                          |
-| `list_topics_command`             | `state`                       | `Result<Vec<TopicRecord>>`      | 获取所有 Topic 列表                      |
-| `update_topic_title_command`      | `state, topic_id, title`      | `Result<()>`                    | 更新 Topic 标题                          |
-| `update_topic_summary_command`    | `state, topic_id, summary`    | `Result<()>`                    | 更新 Topic 摘要                          |
-| `update_topic_favourite_command`  | `state, topic_id, is_favourite` | `Result<()>`                  | 更新 Topic 收藏状态（控制是否显示在Sidebar） |
-| `hard_delete_topic_command`       | `state, topic_id`             | `Result<()>`                    | 硬删除 Topic                             |
-| `link_resource_to_topic_command`  | `state, LinkResourceToTopicRequest` | `Result<SuccessResponse>` | 关联资源到 Topic                         |
-| `unlink_resource_from_topic_command` | `state, topic_id, resource_id` | `Result<SuccessResponse>`   | 取消资源与 Topic 的关联                  |
-| `update_topic_resource_review_status_command` | `state, UpdateReviewStatusRequest` | `Result<()>`      | 更新 Topic-资源关联的审核状态            |
-| `get_topic_resources_command`     | `state, topic_id`             | `Result<TopicResourcesResponse>`| 获取 Topic 关联的资源列表                |
-| `get_resource_topics_command`     | `state, resource_id`          | `Result<ResourceTopicsResponse>`| 获取资源关联的 Topic 列表                |
-| `link_task_to_topic_command`      | `state, task_id, topic_id`    | `Result<SuccessResponse>`       | 关联任务到 Topic                         |
-| `unlink_task_from_topic_command`  | `state, task_id, topic_id`    | `Result<SuccessResponse>`       | 取消任务与 Topic 的关联                  |
-| `get_topic_tasks_command`         | `state, topic_id`             | `Result<TopicTasksResponse>`    | 获取 Topic 关联的任务列表                |
-| `get_task_topics_command`         | `state, task_id`              | `Result<TaskTopicsResponse>`    | 获取任务关联的 Topic 列表                |
-
-##### 核心逻辑详解
-
-###### `capture_resource`
-
-快速捕获的核心命令，支持：
-
-1. **文本 + 文件**：拼接字节计算 hash，文本存数据库，文件复制到 `assets/`
-2. **仅文本**：存数据库，取前 20 字符作为 `display_name`
-3. **仅文件**：
-   - 外部文件：复制到 `assets/{uuid}.{ext}`，存相对路径
-   - 剪贴板文件（`assets/` 开头）：直接使用已保存的路径
-
-**文件管理**：
-
-- 所有文件统一存储在 `{app_data_dir}/assets/` 目录
-- 文件名格式：`{uuid}.{ext}`（UUID 确保唯一性）
-- 数据库存储相对路径：`assets/xxx.png`
-
-**哈希计算**：使用 SHA-256 对文本/文件字节计算 hash，用于去重
-
-**异步通知 Python**：捕获成功后通过 `PythonSidecar.get_base_url()` 获取动态端口的 URL，异步调用 `/ingest`，失败不影响主流程
-
-###### `get_tasks_by_date`
-
-获取指定日期的所有任务，用于日历外面显示和任务列表对话框。
-
-**查询逻辑**：
-
-- 筛选条件：`DATE(due_date) = DATE(?)`
-- 排序：按 `due_date ASC, priority DESC`（最早截止且最高优先级在前）
-- 支持查询任意日期，不只限于今天
-
-**使用场景**：
-
-- Calendar 页面显示每天的任务
-- 查看具体日期的所有任务列表
-- Dashboard 页面显示今天已完成的任务（传入今天日期，前端过滤 done 状态）
-
-###### `get_all_tasks`
-
-获取所有任务（包括 todo 和 done 状态），主要用于 Calendar 视图展示。
-
-**查询逻辑**：
-
-- 筛选条件：`is_deleted = 0 AND due_date IS NOT NULL`
-- 排序：按 `due_date ASC, priority DESC`
-
-**使用场景**：
-
-- Calendar 页面需要一次性获取所有任务进行日期分组显示
-
-###### `read_clipboard`
-
-跨平台剪贴板读取，优先级：**文件 > 图片 > HTML > 文本**
-
-- **文件**：返回文件路径列表
-- **图片**：保存到 `assets/{uuid}.png`，返回相对路径
-- **HTML**：返回 HTML 内容 + 可选的纯文本版本
-- **文本**：返回纯文本内容
-- **空**：返回 `ClipboardContent::Empty`
-
-> **注意**：文件优先于图片，因为 macOS 复制文件时会同时生成预览图片
-
-###### `send_chat_message`
-
-发送聊天消息到 AI，通过 Python 后端调用 LLM API。
-
-**流程**：
-
-1. 从加密配置获取 API Key
-2. 写入本轮 `user_content` 与附件，读取 `session_context_resources` 并插入首条 user 消息（含附件路径），再组装历史（按轮次拆分 user/assistant）并发送给 Python `/chat/completions`
-3. Python 调用 OpenAI Responses API（当前前端仅开放 OpenAI）
-4. Rust 读取 Python SSE 流并通过 `chat-stream` 事件转发给前端
-5. Rust 使用 `done_text`（或累积的 delta 兜底）更新同一条 chat_messages 的 `assistant_content`，同时保存 `usage`（含 `reasoning_tokens`）
-
-**请求格式**（Rust -> Python）：
-
-```json
-{
-  "provider": "openai",
-  "model": "gpt-4o",
-  "task_type": "chat",
-  "thinking_effort": "low",
-  "messages": [
-    {"role": "user", "content": "Hello", "images": ["/abs/path/img.png"], "files": ["/abs/path/doc.pdf"]}
-  ]
-}
-```
-
-> `thinking_effort` 可选，仅支持 `none` / `low` / `high`，映射为 OpenAI Responses API 的 `reasoning.effort`。
-
-**流式事件**（Rust -> Frontend via Tauri Events）：
-
-```json
-{ "session_id": 1, "type": "delta", "delta": "Hello" }
-{ "session_id": 1, "type": "usage", "usage": { "input_tokens": 10, "output_tokens": 20, "reasoning_tokens": 5, "total_tokens": 35 } }
-```
-
-> `done_text` 仅用于 Rust 写库，不会转发给前端。
->
-> `total_tokens` 已包含 `reasoning_tokens`；收到 `usage` 后即可视为流结束。
-
-**支持的 Provider**（实现保留，但当前前端仅开放 OpenAI）：
-
-| Provider | SDK | 模型示例 |
-| --- | --- | --- |
-| openai | OpenAI | gpt-4o, gpt-4o-mini |
-| anthropic | Anthropic | claude-sonnet-4-20250514 |
-| gemini | google-genai | gemini-2.0-flash |
-| grok | xAI SDK | grok-4 |
-| deepseek | OpenAI 兼容 (文本-only) | deepseek-chat |
-| qwen | OpenAI 兼容 (文本-only) | qwen-plus |
-
-**适配细节**：
-- OpenAI 使用 Responses API，system 消息合并为 `instructions`。
-- OpenAI 兼容 Provider 仍走 Chat Completions。
-- Gemini 将 system 消息映射为 `system_instruction`，assistant 角色映射为 `model`。
-
-###### `get_assets_path`
-
-获取 assets 目录的完整路径，用于前端将相对路径（如 `assets/xxx.png`）转换为可访问的完整路径。
-
-- **返回值**：assets 目录的绝对路径字符串（例如：`/Users/xxx/Library/Application Support/com.hovsco.neuralvault/assets`）
-- **用途**：图片预览等功能需要将数据库中的相对路径转换为完整路径，再通过 Tauri 的 `convertFileSrc` API 转换为浏览器可访问的 URL
-
-###### `update_resource_content_command`
-
-保存文本编辑器中的资源内容修改。
-
-**功能**：
-- 更新指定资源的 `content` 字段
-- 用于 Workspace 中 TiptapEditor 的保存功能
-- 支持 Ctrl+S / Command+S 快捷键触发
-
-**实现**：
-```rust
-pub async fn update_resource_content(
-    pool: &DbPool,
-    resource_id: i64,
-    content: &str,
-) -> Result<(), sqlx::Error>
-```
-
-###### `update_resource_display_name_command`
-
-重命名资源（修改显示名称）。
-
-**功能**：
-- 更新指定资源的 `display_name` 字段
-- 用于 Workspace 中的内联编辑功能
-- 支持点击名称编辑、Enter 保存、Esc 取消
-
-**实现**：
-```rust
-pub async fn update_resource_display_name(
-    pool: &DbPool,
-    resource_id: i64,
-    display_name: &str,
-) -> Result<(), sqlx::Error>
-```
-
-**设计理念**：
-- 将内容更新和名称更新拆分为两个独立函数，符合单一职责原则
-- 前端根据修改类型分别调用对应的 API
-- 如果同时修改内容和名称，依次调用两个函数
-
----
-
-### `services/` 模块
-
-服务层模块，封装核心业务逻辑。
-
-#### 模块结构
-
-- **`ai_config.rs`**: AI 配置服务（加密存储 API Key）
-- **`mod.rs`**: 导出服务
-
-#### `services/ai_config.rs`
-
-AI 配置服务，负责加密存储和读取 API Key 配置。
-
-##### 数据结构
-
-| 结构体 | 功能 | 关键字段 |
-| --- | --- | --- |
-| `ProviderConfig` | 单个 Provider 配置 | api_key, base_url, enabled |
-| `AIConfigData` | 完整配置数据 | version, providers, default_provider, default_model |
-| `AIConfigService` | 配置服务实例 | config_path, crypto |
-
-##### 核心方法
-
-| 方法 | 参数 | 返回值 | 说明 |
-| --- | --- | --- | --- |
-| `new()` | `app_data_dir` | `Result<Self>` | 创建配置服务实例 |
-| `load()` | - | `Result<AIConfigData>` | 加载配置（解密） |
-| `save()` | `&AIConfigData` | `Result<()>` | 保存配置（加密） |
-| `set_api_key()` | `provider, api_key, base_url` | `Result<()>` | 设置 API Key |
-| `remove_provider()` | `provider` | `Result<()>` | 删除 Provider 配置 |
-| `get_api_key()` | `provider` | `Result<Option<String>>` | 获取 API Key |
-| `has_api_key()` | `provider` | `Result<bool>` | 检查 provider 是否已配置 |
-| `get_provider_config()` | `provider` | `Result<Option<ProviderConfig>>` | 获取完整配置 |
-| `set_default_model()` | `provider, model` | `Result<()>` | 设置默认模型 |
-
-##### 存储位置
-
-- **配置文件**: `{app_data_dir}/ai_config.enc`（AES-256-GCM 加密）
-- **密钥文件**: 由 `utils/crypto.rs` 管理
-
----
-
-### `utils/` 模块
-
-工具函数模块，提供通用的辅助功能。
-
-#### 模块结构
-
-- **`crypto.rs`**: AES-256-GCM 加密模块
-- **`hash.rs`**: SHA-256 哈希计算
-- **`file.rs`**: 文件操作相关工具函数
-- **`notification.rs`**: Python 后端异步通知
-- **`mod.rs`**: 导出所有工具函数
-
-#### `utils/crypto.rs`
-
-AES-256-GCM 加密模块，用于加密存储 API Key 等敏感配置。
-
-##### 核心结构
-
-```rust
-pub struct CryptoService {
-    cipher: Aes256Gcm,
-}
-```
-
-##### 主要方法
-
-| 方法 | 参数 | 返回值 | 说明 |
-| --- | --- | --- | --- |
-| `new()` | - | `Result<Self>` | 初始化加密服务（自动加载或生成密钥） |
-| `encrypt()` | `plaintext: &[u8]` | `Result<Vec<u8>>` | 加密数据，返回 [nonce][ciphertext][tag] |
-| `decrypt()` | `encrypted: &[u8]` | `Result<Vec<u8>>` | 解密数据 |
-
-##### 密钥管理
-
-- **密钥生成**: 使用 `OsRng` 生成 32 字节随机密钥
-- **密钥存储**:
-  - macOS: `~/Library/Application Support/com.hovsco.neuralvault/master.key`
-  - Windows: `C:\Users\<用户名>\AppData\Roaming\com.hovsco.neuralvault\master.key`
-  - Linux: `~/.local/share/com.hovsco.neuralvault/master.key`
-- **权限控制**:
-  - Unix: `chmod 600`（仅所有者可读写）
-  - Windows: `icacls` 移除继承权限，仅当前用户完全控制
-
-##### 安全特性
-
-- **AES-256-GCM**: 认证加密，提供机密性和完整性保护
-- **随机 Nonce**: 每次加密使用 12 字节随机 nonce
-- **文件权限**: 密钥文件仅当前用户可访问
-
-#### `utils/hash.rs`
-
-哈希计算工具。
-
-**函数**：
-
-- `compute_sha256(bytes: &[u8]) -> String`: 计算 SHA-256 哈希值
-
-#### `utils/file.rs`
-
-文件操作相关的工具函数。
-
-**函数**：
-
-- `parse_file_type(raw: Option<&str>) -> ResourceFileType`: 解析文件类型字符串
-- `get_extension(path: &str) -> Option<String>`: 从文件路径提取扩展名
-- `get_assets_dir(app: &AppHandle) -> Result<PathBuf, String>`: 获取 assets 目录路径，如果不存在则创建
-- `resolve_file_path(app: &AppHandle, file_path: &str) -> Result<String, String>`: 将资源路径解析为绝对路径
-
-#### `utils/notification.rs`
-
-Python 后端通知，使用动态端口与 Python 后端通信，复用 HTTP Client。
-
-**枚举类型**：
-
-| 枚举类型 | 可选值 | 说明 |
-| --- | --- | --- |
-| `NotifyAction` | Created/Updated/Deleted | 通知的动作类型 |
-
-**函数**：
-
-- `notify_python(client: &reqwest::Client, base_url: &str, payload: &IngestPayload)`: 异步通知 Python 后端处理资源或任务（POST `{base_url}/ingest`）
-  - `client`: 复用的 HTTP Client（建议使用 `PythonSidecar.client`）
-  - `base_url`: 从 `PythonSidecar.get_base_url()` 获取的动态 URL
-  - `payload`: 资源变更信息（包含 action、file_hash、file_type 等）
-
-**请求格式**（匹配 Python 的 `IngestRequest`）：
-
-```json
-{
-  "resource_id": 123,
-  "action": "created",
-  "file_hash": "hash-xxx",
-  "file_type": "pdf",
-  "content": null,
-  "file_path": "/abs/path/to/file.pdf"
+    pub db: DbPool,
+    pub python: Arc<PythonSidecar>,
+    pub ai_config: Arc<Mutex<AIConfigService>>,
+    pub ai_pipeline: Arc<AiPipeline>,
 }
 ```
 
 ---
 
-### `window/` 模块
+## Python Sidecar（`sidecar.rs`）
 
-窗口管理模块，处理 HUD 窗口的显示、隐藏和快捷键。
+- 启动命令：`uv run python -m app.main --port <port> --qdrant-path <path>`
+- 动态分配端口，`get_base_url()` 提供给 Rust 请求。
+- `check_health()` / `wait_for_health()` 进行健康检查。
+- 主窗口销毁时调用 `shutdown()` 关闭进程。
 
-#### 模块结构
-
-- **`hud.rs`**: HUD 窗口管理逻辑
-- **`mod.rs`**: 导出窗口管理功能
-
-#### `window/hud.rs`
-
-HUD 窗口管理实现。
-
-**命令**：
-
-- `toggle_hud()`: 切换 HUD 窗口显示/隐藏
-- `hide_hud()`: 隐藏 HUD 窗口
-
-**设置函数**：
-
-- `setup_hud(app: &App)`: 设置 HUD 窗口的全局快捷键和事件监听
-  - 注册 `Option + Space` (macOS) / `Alt + Space` (Windows/Linux) 快捷键
-  - 监听 `hud-blur` 事件自动隐藏窗口
-  - 发送 `hud-focus` 事件通知前端
+不再使用 `/ingest/stream` 进度流。
 
 ---
 
-### `migrations/`
+## 资源捕获与解析（`commands/resources.rs`）
 
-#### `20241006120000_init.sql`
+### capture_resource 流程
 
-数据库初始化脚本，由 SQLx 自动管理迁移。
+1. 复制文件到 `assets/`（如有 file）。
+2. 计算 `file_hash`。
+3. 生成 title（文件名或文本前 10 字）。
+4. 合并 `source_meta`（window_title/process_name/captured_at）。
+5. Rust 解析内容：
+   - 文本：直接读取。
+   - 图片：OCR。
+   - PDF：文本优先，失败后 PDFium + OCR。
+6. 写入 `nodes.file_content` / `nodes.file_hash`。
+7. 触发 `parse-progress` 事件。
+8. 内容存在则入队 AI Pipeline。
 
-##### 表结构
+### update_resource_content_command
 
-| 表名                 | 说明                      | 关键字段                                                                           |
-| -------------------- | ------------------------- | ---------------------------------------------------------------------------------- |
-| `users`              | 用户表（预留多用户）      | user_id, user_name                                                                 |
-| `tasks`              | 任务表                    | task_id, uuid, title, summary, status, priority, due_date, updated_at, is_deleted  |
-| `topics`             | Topic表                   | topic_id, title, summary, is_system_default, updated_at                            |
-| `resources`          | 资源表                    | resource_id, uuid, file_hash, file_type, content, summary, display_name, file_path, file_size_bytes, sync_status, processing_stage, indexed_hash, processing_hash, updated_at, is_deleted |
-| `task_resource_link` | 任务-资源关联表（多对多） | task_id, resource_id                                                               |
-| `topic_resource_link`| Topic-资源关联表         | topic_id, resource_id, confidence_score, is_auto_generated, review_status          |
-| `task_topic_link`    | 任务-Topic关联表          | task_id, topic_id                                                                  |
-| `context_chunks`     | 向量化分块表              | chunk_id, resource_id, chunk_text, chunk_index, page_number, qdrant_uuid, embedding_hash, embedding_model, embedding_at, token_count |
-| `chat_sessions`      | 聊天会话表                | session_id, task_id, topic_id, title, summary, chat_model, created_at, updated_at, is_deleted |
-| `session_context_resources` | 会话上下文资源关系表 | session_id, resource_id |
-| `chat_messages`      | 聊天消息表（按轮次）       | message_id, session_id, user_content, assistant_content, input_tokens, output_tokens, reasoning_tokens, total_tokens |
-| `message_attachments` | 消息附件表               | id, message_id, resource_id |
-| `message_citations`  | 消息引用表                | id, message_id, resource_id, chunk_id, score |
-
-##### 索引
-
-- **任务表**：`due_date`、`status`、`status + due_date`、`created_at DESC`、`updated_at DESC`
-- **Topic表**：`title`、`updated_at DESC`
-- **资源表**：`sync_status`、`updated_at DESC`、唯一索引 `(file_hash, user_id)` WHERE `is_deleted = 0`（防止重复上传）
-- **Topic-资源关联表**：`topic_id + review_status`（用于 RAG 查询）、`resource_id + topic_id`
-- **分块表**：`resource_id + chunk_index`、`embedding_hash`、`qdrant_uuid`（唯一）
-- **会话表**：`task_id + created_at`、`task_id + updated_at`
-
-##### 外键约束
-
-- `PRAGMA foreign_keys = ON`：启用外键约束
-- 级联删除：删除任务/资源时自动删除关联记录和分块
-- 软删除：`is_deleted` + `deleted_at` 字段，前端控制展示
+- 更新 `file_content` + `file_hash`。
+- 重新入队 AI Pipeline。
 
 ---
 
-### `capabilities/`
+## AI Pipeline（`services/ai_pipeline.rs`）
 
-Tauri 2.0 权限配置，基于最小权限原则。
+- 内存队列（`mpsc`）+ inflight 去重。
+- 只处理 `node_type = resource` 的节点。
 
-#### `default.json`
+### 处理步骤
 
-默认权限配置，应用于 `main` 和 `hud` 窗口。
+1. `sync_status = pending`，`processing_stage = chunking`。
+2. 调用 `/agent/summary` 更新 `nodes.summary`。
+3. `processing_stage = embedding`。
+4. 调用 `/agent/embedding` 两次：
+   - `summary`：不切分（chunk=false）。
+   - `content`：按 SentenceSplitter 切分（chunk=true）。
+   - 先按 `embedding_type` 清理旧 `context_chunks`。
+   - 写入新的 `context_chunks`（含 `embedding_type`）。
+5. `sync_status = synced`，`processing_stage = done`。
+6. 调用 `/agent/classify`：
+   - 需要时创建 Topic 节点。
+   - 插入 `contains` 边，写入 `confidence_score`。
 
-**允许的权限**：
+### 错误处理
 
-- `core:default`：核心功能（窗口管理、事件等）
-- `opener:default`：打开文件/URL
-- `shell:default`：执行 Shell 命令
-- `global-shortcut:allow-*`：注册/注销/查询全局快捷键
-- `dialog:allow-*`：文件选择对话框
-
-#### `desktop.json`
-
-桌面平台特定权限（macOS/Windows/Linux）。
-
-**应用于**：`main` 窗口
-
-**允许的权限**：
-
-- `global-shortcut:default`：全局快捷键功能
+- 失败时写入 `last_error`，`sync_status = error`，`processing_stage = done`。
 
 ---
 
-### `build.rs`
+## 数据模型（SQLite）
 
-Tauri 构建脚本，在编译前运行。
+### nodes
+- `node_type`: topic / task / resource
+- `title` 必填；资源默认文件名或前 10 字。
+- `review_status`：仅资源可为 `unreviewed/reviewed/rejected`，其余强制 `reviewed`。
 
-```rust
-fn main() {
-    tauri_build::build()
-}
-```
+### edges
+- `relation_type`: contains / related_to
+- `related_to` 存单边，规范化 `source_node_id < target_node_id`。
 
-功能：
+### context_chunks
+- `node_id` + `embedding_type`（summary/content）。
+- 每个 chunk 记录 `qdrant_uuid`、`embedding_hash`、`embedding_model` 等。
 
-- 生成 Tauri 运行时所需的代码
-- 处理 `tauri.conf.json` 配置
-- 嵌入应用图标和元数据
-
----
-
-## 数据流
-
-```
-前端 (TypeScript)
-  ↓ invoke("command_name", payload)
-Tauri IPC 层
-  ↓
-命令路由 (lib.rs)
-  ↓
-commands/* (业务逻辑)
-  ├─→ utils/* (工具函数)
-  └─→ db/* (数据访问)
-       ↓
-   SQLite 数据库
-       ↓
-返回 Result<Response, String>
-  ↓
-前端接收 Promise
-```
-
-### HUD 窗口工作流
-
-```
-用户按 Option+Space
-  ↓
-全局快捷键触发 (window/hud.rs)
-  ↓
-切换 HUD 窗口显示
-  ↓
-发送 hud-focus 事件
-  ↓
-前端聚焦输入框
-  ↓
-用户输入并捕获
-  ↓
-调用 capture_resource (commands/resources.rs)
-  ↓
-存入数据库 (db/resources.rs)
-  ↓
-异步通知 Python (utils/notification.rs)
-  ↓
-前端发送 hud-blur 事件
-  ↓
-后端隐藏 HUD 窗口 (window/hud.rs)
-```
-
-### 文件捕获流程
-
-```
-前端选择文件/粘贴图片
-  ↓
-调用 capture_resource (commands/resources.rs)
-  ↓
-读取文件字节 (utils/file.rs)
-  ↓
-计算 SHA-256 hash (utils/hash.rs)
-  ↓
-复制文件到 assets/{uuid}.{ext}
-  ↓
-插入 resources 表（存相对路径） (db/resources.rs)
-  ↓
-异步通知 Python (utils/notification.rs)
-  ↓
-返回 resource_id 和 resource_uuid
-```
-
-### Python 进度流/入库流程
-
-```
-Python /ingest/stream (NDJSON)
-  ↓
-sidecar.rs 解析流
-  ├─ progress: 更新 resources.processing_stage + emit ingest-progress
-  └─ result: 写入 context_chunks + 更新 resources.sync_status/indexed_hash/last_error + emit ingest-progress(done)
-```
-
-### 资源关联流程
-
-```
-前端调用 link_resource (commands/resources.rs)
-  ↓
-插入 task_resource_link 表 (db/resources.rs)
-  ↓
-更新 resources.classification_status = 'linked'
-  ↓
-返回 success: true
-  ↓
-前端刷新看板（资源从"未分类"消失）
-```
+### chat_sessions / session_bindings
+- `binding_type`: primary / implicit（持久化）。
 
 ---
 
-## 关键设计决策
+## Tauri Commands（概览）
 
-### 1. 数据库设计
-
-- **软删除**：`is_deleted` + `deleted_at`，保留数据历史
-- **级联删除**：删除任务自动删除关联资源和分块
-- **唯一性约束**：`(file_hash, user_id)` 防止重复上传相同文件
-- **WAL 模式**：提高并发性能，减少写阻塞
-
-### 2. 文件管理
-
-- **集中存储**：所有文件统一存储在 `{app_data_dir}/assets/`
-- **UUID 命名**：确保文件名唯一，避免冲突
-- **相对路径**：数据库存储相对路径，便于迁移和备份
-- **哈希去重**：SHA-256 计算内容哈希，避免重复存储
-
-### 3. 异步通知
-
-- **非阻塞**：使用 `tauri::async_runtime::spawn` 异步通知 Python
-- **容错性**：Python 后端失败不影响本地存储，仅记录错误
-- **进度流写库**：通过 `/ingest/stream` 回传进度，Rust 统一写入 `context_chunks` 并更新资源状态
-
-### 4. 剪贴板优先级
-
-- **文件优先于图片**：macOS 复制文件时会同时生成预览图片，需要优先检测文件
-- **多格式支持**：图片、文件、HTML、纯文本
-
-### 5. 生命周期优化
-
-- **借用而非拷贝**：`NewTask<'a>` 和 `NewResource<'a>` 使用生命周期参数，避免不必要的字符串分配
-
-### 6. 错误处理
-
-- **统一错误类型**：所有命令返回 `Result<T, String>`，便于前端处理
-- **详细错误信息**：使用 `.map_err(|e| e.to_string())` 转换错误，提供可读的错误消息
-
-### 7. 模块化设计
-
-- **按功能分离**：db、commands、utils、window 各司其职
-- **清晰的边界**：每个模块通过 mod.rs 明确导出的公共接口
-- **易于维护**：新增功能时只需修改对应模块
-- **代码复用**：utils 模块提供可复用的工具函数
-
-### 8. Asset 协议配置
-
-- **用途**：允许前端通过 `convertFileSrc` API 访问应用数据目录中的文件
-- **配置位置**：`tauri.conf.json` 的 `app.security.assetProtocol`
-- **作用域**：`$APPDATA/**` 表示允许访问整个应用数据目录
-- **使用场景**：图片预览、PDF 预览等需要加载本地文件的功能
-- **URL 格式**：`asset://localhost/<encoded_path>`（由 `convertFileSrc` 自动生成）
+- `resources.rs`：捕获、更新内容/标题/摘要、删除资源。
+- `tasks.rs`：创建任务与状态更新。
+- `topics.rs`：创建 topic、更新、收藏、关联资源/任务。
+- `edges.rs`：通用节点连接（`related_to` 自动规范化）。
+- `chat.rs`：会话、消息、附件、绑定。
+- `ai_config.rs`：API Key 管理与 chat 调用。
 
 ---
 
-## 开发建议
+## 事件
 
-### 1. 新增命令
-
-1. 根据功能选择合适的模块（tasks/resources/clipboard/dashboard）
-2. 在对应的 `commands/*.rs` 中定义新命令函数
-3. 添加 `#[tauri::command]` 宏
-4. 在 `commands/mod.rs` 中导出（如果是新文件）
-5. 在 `lib.rs` 的 `invoke_handler` 中注册命令
-6. 在前端 `api/index.ts` 中添加对应的 TypeScript 封装
-
-### 2. 新增数据库操作
-
-1. 根据操作类型选择 `db/tasks.rs` 或 `db/resources.rs`
-2. 定义新的数据库操作函数
-3. 在 `db/mod.rs` 中确保已导出（通过 `pub use`）
-4. 在对应的命令模块中调用
-5. 更新 `db/tests.rs` 添加测试用例
-
-### 3. 新增数据库字段
-
-1. 在 `migrations/` 中创建新的迁移文件（格式：`YYYYMMDDHHMMSS_description.sql`）
-2. 在 `db/types.rs` 中更新结构体定义
-3. 在 `db/tasks.rs` 或 `db/resources.rs` 中更新相关的查询和插入函数
-4. 运行测试确保迁移正确
-
-### 4. 新增枚举类型
-
-1. 在 `db/types.rs` 中定义枚举，添加 `#[sqlx(rename_all = "...")]` 和 `#[serde(rename_all = "...")]`
-2. 在数据库迁移中添加 `CHECK` 约束
-3. 在前端 `types/index.ts` 中同步添加类型定义
-
-### 5. 新增工具函数
-
-1. 根据功能选择 `utils/` 下的合适模块或创建新模块
-2. 实现工具函数
-3. 在 `utils/mod.rs` 中导出
-4. 在需要的命令中导入使用
-
-### 4. 调试技巧
-
-- **查看 SQL 日志**：设置环境变量 `RUST_LOG=sqlx=debug`
-- **查看 Tauri 日志**：开发模式下查看终端输出
-- **测试数据库操作**：使用 `cargo test` 运行集成测试
-
-### 5. 性能优化
-
-- **连接池大小**：根据并发需求调整 `max_connections`（当前为 5）
-- **批量插入**：使用事务包装多个插入操作
-- **索引优化**：根据查询模式添加合适的索引
-
-### 6. 安全注意事项
-
-- **SQL 注入**：始终使用 `bind()` 而非字符串拼接
-- **路径安全**：验证文件路径，避免目录遍历攻击
-- **权限最小化**：只在 `capabilities/` 中启用必要的权限
+- `parse-progress`：文件解析/OCR 进度。
+- `python-status`：Python Sidecar 启动状态。
 
 ---
 
-## 依赖关系
+## 说明
 
-```
-main.rs
-  └─→ lib.rs
-      ├─→ app_state.rs (全局状态)
-      ├─→ sidecar.rs (Python Sidecar/进度流)
-      ├─→ services/ (业务服务)
-      │   └─→ ai_config.rs (加密配置)
-      ├─→ db/ (数据库模块)
-      │   ├─→ types.rs (类型定义)
-      │   ├─→ pool.rs (连接池)
-      │   ├─→ tasks.rs (任务操作)
-      │   ├─→ resources.rs (资源操作)
-      │   └─→ tests.rs (测试)
-      ├─→ commands/ (命令模块)
-      │   ├─→ types.rs (请求/响应类型)
-      │   ├─→ tasks.rs (任务命令)
-      │   ├─→ resources.rs (资源命令)
-      │   ├─→ clipboard.rs (剪贴板命令)
-      │   ├─→ dashboard.rs (Dashboard命令)
-      │   ├─→ python.rs (Python状态命令)
-      │   └─→ ai_config.rs (AI配置命令)
-      ├─→ utils/ (工具模块)
-      │   ├─→ hash.rs (SHA-256)
-      │   ├─→ file.rs (文件操作)
-      │   ├─→ crypto.rs (加密存储)
-      │   └─→ notification.rs (Python通知)
-      ├─→ window/ (窗口模块)
-      │   └─→ hud.rs (HUD管理)
-      └─→ tauri plugins
-          ├─→ global-shortcut (快捷键)
-          ├─→ dialog (文件选择)
-          ├─→ opener (打开文件)
-          └─→ shell (执行命令)
-
-依赖关系：
-commands/* ─→ db/*
-commands/* ─→ utils/*
-commands/ai_config.rs ─→ services/ai_config.rs
-sidecar.rs ─→ db/* (分块写入与状态更新)
-window/hud.rs ─→ tauri plugins
-```
-
----
-
-## 编译与运行
-
-### 开发模式
-
-```bash
-cd src-tauri
-cargo tauri dev
-```
-
-### 构建发布版本
-
-```bash
-cargo tauri build
-```
-
-构建产物位于 `src-tauri/target/release/bundle/`
-
----
-
-## 常见问题
-
-### Q1: 数据库文件在哪里？
-
-**A**: 应用数据目录（由 Tauri 管理）：
-
-- **macOS**: `~/Library/Application Support/com.hovsco.neuralvault/neuralvault.sqlite3`
-- **Windows**: `C:\Users\<用户名>\AppData\Roaming\com.hovsco.neuralvault\neuralvault.sqlite3`
-- **Linux**: `~/.local/share/com.hovsco.neuralvault/neuralvault.sqlite3`
-
-### Q2: 如何查看数据库内容？
-
-**A**: 使用 SQLite 客户端：
-
-```bash
-sqlite3 ~/Library/Application\ Support/com.hovsco.neuralvault/neuralvault.sqlite3
-```
-
-或使用 GUI 工具（DB Browser for SQLite、DBeaver 等）。
-
-### Q3: 全局快捷键不生效怎么办？
-
-**A**:
-
-- **macOS**: 检查"系统偏好设置 → 安全性与隐私 → 辅助功能"中是否授权应用
-- **Windows/Linux**: 确保快捷键未被其他程序占用
-
-### Q4: 如何重置数据库？
-
-**A**: 删除数据库文件，重启应用会自动重新初始化：
-
-```bash
-rm ~/Library/Application\ Support/com.hovsco.neuralvault/neuralvault.sqlite3
-```
-
-### Q5: Python 后端通知失败怎么办？
-
-**A**:
-
-- 检查 Python 后端是否正常运行（端口为动态分配，可通过 `check_python_health` 命令验证）
-- 查看控制台日志中的 `[Sidecar]` 前缀消息
-- 捕获失败不影响本地存储，可以稍后手动触发处理
-- 进度流断开会自动重连，前端可关注 `ingest-progress` 事件
-
-### Q6: Python Sidecar 端口冲突怎么办？
-
-**A**:
-
-- 系统自动分配可用端口，极少发生冲突
-- 如遇问题，检查是否有其他进程占用了分配的端口
-- 重启应用会重新分配端口
-
-## 参考资料
-
-- [Tauri 官方文档](https://tauri.app/)
-- [SQLx 文档](https://docs.rs/sqlx/)
-- [Serde 文档](https://serde.rs/)
-- [clipboard-rs 文档](https://docs.rs/clipboard-rs/)
+- Rust 写入 SQLite；Python 仅写入 Qdrant。
+- AI Pipeline 依赖默认 provider/model 已配置且启用。
+- 目前队列为内存队列，应用重启会清空。
