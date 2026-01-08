@@ -31,7 +31,8 @@ src-tauri/
 │       ├── topics.rs        # 主题节点
 │       ├── edges.rs         # 关系连接
 │       ├── chat.rs          # 会话/消息/绑定
-│       └── ai_config.rs     # AI 配置与聊天
+│       ├── ai_config.rs     # AI 配置与聊天
+│       └── search.rs        # 语义搜索与精确搜索
 └── migrations/
     └── 20241006120000_init.sql
 ```
@@ -152,6 +153,56 @@ pub struct AppState {
 - `edges.rs`：通用节点连接（`related_to` 自动规范化）。
 - `chat.rs`：会话、消息、附件、绑定。
 - `ai_config.rs`：API Key 管理与 chat 调用。
+- `search.rs`：语义搜索与精确搜索。
+
+---
+
+## 搜索命令（`commands/search.rs`）
+
+### search_semantic
+
+语义搜索，调用 Python `/search/hybrid` 进行混合检索。
+
+```rust
+#[tauri::command]
+pub async fn search_semantic(
+    query: String,
+    scope_node_ids: Option<Vec<i64>>,  // Local scope
+    embedding_type: Option<String>,     // summary | content
+    limit: Option<i32>,
+) -> AppResult<Vec<SemanticSearchResult>>
+```
+
+返回结构：
+
+```rust
+pub struct SemanticSearchResult {
+    pub node_id: i64,
+    pub chunk_index: i32,
+    pub chunk_text: String,
+    pub score: f64,
+    pub page_number: Option<i32>,
+}
+```
+
+Scope 权重：
+- `scope_node_ids` 非空（Local）：score × 1.5
+- `scope_node_ids` 为空（Global）：score × 1.0
+
+### search_keyword
+
+精确搜索，使用 SQL LIKE 在 title、file_content、user_note 中匹配。
+
+```rust
+#[tauri::command]
+pub async fn search_keyword(
+    query: String,
+    node_type: Option<String>,  // topic | task | resource
+    limit: Option<i32>,
+) -> AppResult<Vec<NodeRecord>>
+```
+
+返回完整的 `NodeRecord` 列表。
 
 ---
 

@@ -434,3 +434,91 @@ export const setSessionContextResources = async (
 ): Promise<void> => {
   return await invoke("set_session_context_resources_command", { payload: request });
 };
+
+// ============================================
+// Search API
+// ============================================
+
+/**
+ * 语义搜索结果（来自 Qdrant）
+ */
+export interface SemanticSearchResult {
+  node_id: number;
+  chunk_index: number;
+  chunk_text: string;
+  score: number;
+  page_number: number | null;
+}
+
+/**
+ * 语义搜索（使用 Qdrant 混合检索）
+ *
+ * @param query - 搜索查询
+ * @param scopeNodeIds - 可选，限定搜索的 node_id 列表（Local scope）
+ * @param embeddingType - 可选，"summary" | "content"，默认 "content"
+ * @param limit - 可选，返回结果数量，默认 20
+ */
+export const searchSemantic = async (
+  query: string,
+  scopeNodeIds?: number[],
+  embeddingType?: "summary" | "content",
+  limit?: number
+): Promise<SemanticSearchResult[]> => {
+  return await invoke("search_semantic", {
+    query,
+    scopeNodeIds,
+    embeddingType,
+    limit,
+  });
+};
+
+/**
+ * 节点记录（来自 Rust NodeRecord）
+ */
+export interface NodeRecord {
+  node_id: number;
+  uuid: string;
+  user_id: number;
+  title: string;
+  summary: string | null;
+  node_type: "topic" | "task" | "resource";
+  task_status: "todo" | "done" | "cancelled" | null;
+  priority: "high" | "medium" | "low" | null;
+  due_date: string | null;
+  done_date: string | null;
+  file_hash: string | null;
+  file_path: string | null;
+  file_content: string | null;
+  user_note: string | null;
+  resource_subtype: "text" | "pdf" | "image" | "url" | "epub" | "other" | null;
+  sync_status: "pending" | "synced" | "dirty" | "error";
+  processing_stage: "todo" | "chunking" | "embedding" | "done";
+  review_status: "unreviewed" | "reviewed" | "rejected";
+  is_pinned: boolean;
+  pinned_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  is_deleted: boolean;
+  deleted_at: string | null;
+}
+
+/**
+ * 精确搜索（SQL LIKE）
+ *
+ * 在 title、file_content、user_note 中进行模糊匹配
+ *
+ * @param query - 搜索关键词
+ * @param nodeType - 可选，节点类型过滤 "topic" | "task" | "resource"
+ * @param limit - 可选，返回结果数量，默认 20
+ */
+export const searchKeyword = async (
+  query: string,
+  nodeType?: "topic" | "task" | "resource",
+  limit?: number
+): Promise<NodeRecord[]> => {
+  return await invoke("search_keyword", {
+    query,
+    nodeType,
+    limit,
+  });
+};

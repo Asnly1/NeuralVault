@@ -1,7 +1,18 @@
 # NeuralVault 重构计划（Node/Edge + Rust 解析）
 
 本计划以 `docs/overview.md` 为目标功能基线，并采用 `new_database.sql`
-的 Node/Edge 方案，含“文件解析移到 Rust”的整体改造路径。
+的 Node/Edge 方案，含"文件解析移到 Rust"的整体改造路径。
+
+## 完成状态
+
+| Phase | 状态 |
+|-------|------|
+| Phase 1: 数据库 Schema | ✅ 完成 |
+| Phase 2: Rust 后端重构 | ✅ 完成 |
+| Phase 3: Python AI 微服务 | ✅ 完成 |
+| Phase 4: 向量与搜索策略 | ✅ 完成 |
+| Phase 5: 前端重构 | 🔄 进行中 |
+| Phase 6: 验证清单 | ⏳ 待开始 |
 
 ## 范围与假设
 - 不需要数据迁移，旧数据库已删除。

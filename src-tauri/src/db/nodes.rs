@@ -389,3 +389,53 @@ pub async fn delete_context_chunks_by_type(
         .await?;
     Ok(())
 }
+
+/// SQL LIKE 搜索（title + file_content + user_note）
+///
+/// 在 title、file_content、user_note 中进行模糊匹配
+pub async fn search_nodes_by_keyword(
+    pool: &DbPool,
+    keyword: &str,
+    node_type: Option<NodeType>,
+    limit: i32,
+) -> Result<Vec<NodeRecord>, sqlx::Error> {
+    let pattern = format!("%{}%", keyword);
+
+    match node_type {
+        Some(nt) => {
+            let sql = format!(
+                "SELECT {} FROM nodes \
+                 WHERE node_type = ? AND is_deleted = 0 \
+                 AND (title LIKE ? OR file_content LIKE ? OR user_note LIKE ?) \
+                 ORDER BY updated_at DESC \
+                 LIMIT ?",
+                NODE_FIELDS
+            );
+            sqlx::query_as::<_, NodeRecord>(&sql)
+                .bind(nt)
+                .bind(&pattern)
+                .bind(&pattern)
+                .bind(&pattern)
+                .bind(limit)
+                .fetch_all(pool)
+                .await
+        }
+        None => {
+            let sql = format!(
+                "SELECT {} FROM nodes \
+                 WHERE is_deleted = 0 \
+                 AND (title LIKE ? OR file_content LIKE ? OR user_note LIKE ?) \
+                 ORDER BY updated_at DESC \
+                 LIMIT ?",
+                NODE_FIELDS
+            );
+            sqlx::query_as::<_, NodeRecord>(&sql)
+                .bind(&pattern)
+                .bind(&pattern)
+                .bind(&pattern)
+                .bind(limit)
+                .fetch_all(pool)
+                .await
+        }
+    }
+}

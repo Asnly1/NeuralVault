@@ -100,3 +100,26 @@ class ClassifyTopicRequest(BaseModel):
 class ClassifyTopicResponse(BaseModel):
     topic_name: str
     confidence: float
+
+
+# ==========================================
+# Search Schemas
+# ==========================================
+
+class SearchRequest(BaseModel):
+    query: str
+    node_ids: Optional[List[int]] = None  # Scope: Local 限定
+    embedding_type: EmbeddingType = EmbeddingType.content
+    limit: int = 20
+
+
+class SearchResultItem(BaseModel):
+    node_id: int
+    chunk_index: int
+    chunk_text: str
+    score: float
+    page_number: Optional[int] = None
+
+
+class SearchResponse(BaseModel):
+    results: List[SearchResultItem] = Field(default_factory=list)

@@ -7,13 +7,13 @@ import {
   Briefcase,
   Calendar,
   Settings,
-  Search,
   ChevronsLeft,
   ChevronsRight,
 } from "lucide-react";
 import { PageType, navItems } from "../types";
 
 import { useLanguage } from "@/contexts/LanguageContext";
+import { SearchBar } from "./SearchBar";
 
 interface SidebarProps {
   currentPage: PageType;
@@ -135,14 +135,14 @@ export function Sidebar({
         </div>
       </div>
 
-      {/* Search / Quick Actions */}
+      {/* Search */}
       <div className="px-3 py-2">
-        <div className="relative group cursor-pointer">
-          <Search className="absolute left-2.5 top-2 h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-          <div className="h-8 w-full rounded-md bg-muted/50 border border-transparent px-8 py-1.5 text-xs text-muted-foreground group-hover:bg-muted group-hover:border-border/50 transition-all flex items-center">
-            {t("sidebar", "searchPlaceholder")}
-          </div>
-        </div>
+        <SearchBar
+          onSelectResult={(nodeId, nodeType) => {
+            console.log("Selected:", nodeId, nodeType);
+            // TODO: Navigate to the selected node
+          }}
+        />
       </div>
 
       {/* Navigation */}

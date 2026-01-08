@@ -263,6 +263,92 @@ class VectorService:
             return None
         return self._dense_model.model_name
 
+    async def search_hybrid(
+        self,
+        query: str,
+        qdrant_client: QdrantClient,
+        node_ids: Optional[list[int]] = None,
+        embedding_type: str = "content",
+        limit: int = 20,
+    ) -> list[dict]:
+        """
+        混合检索：dense + sparse 向量
+
+        Args:
+            query: 搜索查询
+            qdrant_client: Qdrant 客户端
+            node_ids: 限定搜索的 node_id 列表（Local scope）
+            embedding_type: summary / content
+            limit: 返回结果数量
+
+        Returns:
+            搜索结果列表，包含 node_id, chunk_index, chunk_text, score, page_number
+        """
+        from qdrant_client.models import (
+            Filter, FieldCondition, MatchValue, MatchAny,
+            Prefetch, FusionQuery, Fusion
+        )
+
+        if not self._dense_model or not self._sparse_model:
+            raise RuntimeError("VectorService not initialized")
+
+        # 生成查询向量
+        dense_vector = self.embed_dense([query])[0]
+        sparse_vector = self.embed_sparse([query])[0]
+
+        # 构建过滤条件
+        conditions = [
+            FieldCondition(
+                key="type",
+                match=MatchValue(value=embedding_type),
+            )
+        ]
+
+        if node_ids:
+            conditions.append(
+                FieldCondition(
+                    key="node_id",
+                    match=MatchAny(any=node_ids),
+                )
+            )
+
+        query_filter = Filter(must=conditions)
+
+        # 使用 Reciprocal Rank Fusion (RRF) 进行混合检索
+        results = qdrant_client.query_points(
+            collection_name=settings.qdrant_collection_name,
+            prefetch=[
+                Prefetch(
+                    query=dense_vector,
+                    using="dense",
+                    limit=limit * 2,
+                    filter=query_filter,
+                ),
+                Prefetch(
+                    query=sparse_vector,
+                    using="sparse",
+                    limit=limit * 2,
+                    filter=query_filter,
+                ),
+            ],
+            query=FusionQuery(fusion=Fusion.RRF),
+            limit=limit,
+        )
+
+        # 转换为结果列表
+        search_results = []
+        for point in results.points:
+            payload = point.payload or {}
+            search_results.append({
+                "node_id": payload.get("node_id"),
+                "chunk_index": payload.get("chunk_index", 0),
+                "chunk_text": payload.get("text", ""),
+                "score": point.score if point.score else 0.0,
+                "page_number": payload.get("page_number"),
+            })
+
+        return search_results
+
 
 # 全局单例
 vector_service = VectorService.get_instance()

@@ -57,14 +57,18 @@ src-python/
 | PUT | `/providers/{provider}` | Rust 同步 API Key/base_url |
 | DELETE | `/providers/{provider}` | Rust 删除 API Key |
 
+### /search
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/search/hybrid` | 混合语义检索（dense + sparse 向量，RRF 融合） |
+
 ### 其他
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/health` | 健康检查 |
 | POST | `/shutdown` | 优雅关闭 |
-
-> /search 和 /agent 已注册路由前缀，但当前没有具体实现的接口。
 
 ---
 
@@ -258,9 +262,57 @@ Chunking:
 
 ---
 
+## 搜索接口
+
+### /search/hybrid
+
+混合语义检索，使用 Qdrant 的 dense + sparse 向量进行 RRF（Reciprocal Rank Fusion）融合检索。
+
+输入：
+
+```json
+{
+  "query": "搜索关键词",
+  "node_ids": [1, 2, 3],
+  "embedding_type": "content",
+  "limit": 20
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `query` | string | ✅ | 搜索文本 |
+| `node_ids` | int[] | ❌ | 限定搜索范围（Local scope），为空时搜索全部 |
+| `embedding_type` | string | ❌ | `summary` \| `content`，默认 `content` |
+| `limit` | int | ❌ | 返回结果数量，默认 20 |
+
+输出：
+
+```json
+{
+  "results": [
+    {
+      "node_id": 1,
+      "chunk_index": 0,
+      "chunk_text": "匹配的文本片段...",
+      "score": 0.85,
+      "page_number": null
+    }
+  ]
+}
+```
+
+实现细节：
+
+- 使用 Qdrant Prefetch 机制，分别检索 dense 和 sparse 向量
+- 通过 RRF 融合两路结果，得到最终排序
+- `node_ids` 非空时，通过 Filter 限定搜索范围
+
+---
+
 ## 生命周期
 
-**启动**: Qdrant 初始化 -> VectorService -> 心跳监控  
+**启动**: Qdrant 初始化 -> VectorService -> 心跳监控
 Python 仅提供无状态接口，不维护本地任务队列。
 
 **关闭**: 停止心跳 -> 关闭 Qdrant

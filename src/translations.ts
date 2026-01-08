@@ -96,6 +96,12 @@ export const translations = {
       moreTasks: "还有 {count} 个任务",
       loading: "加载中",
     },
+    search: {
+      semantic: "语义搜索",
+      keyword: "精确搜索",
+      typeToSearch: "输入关键词搜索...",
+      noResults: "未找到结果",
+    },
   },
   en: {
     sidebar: {
@@ -191,6 +197,12 @@ export const translations = {
       untitled: "Untitled",
       moreTasks: "{count} more tasks",
       loading: "Loading",
+    },
+    search: {
+      semantic: "Semantic",
+      keyword: "Keyword",
+      typeToSearch: "Type to search...",
+      noResults: "No results found",
     },
   },
 };
