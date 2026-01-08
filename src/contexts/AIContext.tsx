@@ -18,7 +18,7 @@ import {
   createChatSession,
   listChatSessions,
   listChatMessages,
-  setSessionContextResources,
+  setSessionBindings,
 } from "@/api";
 import {
   AIProvider,
@@ -268,7 +268,11 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
         const sessionId = await ensureSession(context, options?.context_resource_ids);
         if (options?.context_resource_ids) {
           try {
-            await setSessionContextResources(sessionId, options.context_resource_ids);
+            await setSessionBindings({
+              session_id: sessionId,
+              node_ids: options.context_resource_ids,
+              binding_type: "implicit",
+            });
           } catch (e) {
             console.error("Failed to sync session context:", e);
           }
@@ -420,7 +424,11 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
     );
 
     if (context.context_resource_ids) {
-      await setSessionContextResources(sessionId, context.context_resource_ids);
+      await setSessionBindings({
+        session_id: sessionId,
+        node_ids: context.context_resource_ids,
+        binding_type: "implicit",
+      });
     }
 
     // 添加用户消息到 UI

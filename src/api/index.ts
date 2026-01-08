@@ -4,8 +4,6 @@ import {
   dashboardSchema,
   nodeRecordSchema,
   type NodeRecord,
-  type Task,
-  type Resource,
   type CreateTaskRequest,
   type CreateTaskResponse,
   type CaptureRequest,
@@ -36,44 +34,16 @@ import {
   type RemoveMessageAttachmentRequest,
   type SetSessionBindingsRequest,
   type SemanticSearchResult,
+  type DashboardData,
 } from "../types";
-
-// ============================================
-// 兼容性转换工具
-// ============================================
-
-/** 将 NodeRecord 转换为兼容的 Task 格式 */
-const toCompatibleTask = (node: NodeRecord): Task => ({
-  ...node,
-  task_id: node.node_id,
-  status: node.task_status ?? "todo",
-  description: node.summary,
-});
-
-/** 将 NodeRecord 转换为兼容的 Resource 格式 */
-const toCompatibleResource = (node: NodeRecord): Resource => ({
-  ...node,
-  resource_id: node.node_id,
-  content: node.file_content,
-  file_type: node.resource_subtype,
-  display_name: node.title,
-  classification_status: node.review_status === "unreviewed" ? "unclassified" : "classified",
-});
 
 // ============================================
 // Dashboard API
 // ============================================
 
-export const fetchDashboardData = async (): Promise<{
-  tasks: Task[];
-  resources: Resource[];
-}> => {
+export const fetchDashboardData = async (): Promise<DashboardData> => {
   const raw = await invoke("get_dashboard");
-  const data = dashboardSchema.parse(raw);
-  return {
-    tasks: data.tasks.map(toCompatibleTask),
-    resources: data.resources.map(toCompatibleResource),
-  };
+  return dashboardSchema.parse(raw);
 };
 
 // ============================================
@@ -208,22 +178,19 @@ export const updateTaskDescription = async (
   return await invoke("update_task_description_command", { nodeId, description });
 };
 
-export const fetchTasksByDate = async (date: string): Promise<Task[]> => {
+export const fetchTasksByDate = async (date: string): Promise<NodeRecord[]> => {
   const raw = await invoke("get_tasks_by_date", { date });
-  const nodes = z.array(nodeRecordSchema).parse(raw);
-  return nodes.map(toCompatibleTask);
+  return z.array(nodeRecordSchema).parse(raw);
 };
 
-export const fetchAllTasks = async (): Promise<Task[]> => {
+export const fetchAllTasks = async (): Promise<NodeRecord[]> => {
   const raw = await invoke("get_all_tasks");
-  const nodes = z.array(nodeRecordSchema).parse(raw);
-  return nodes.map(toCompatibleTask);
+  return z.array(nodeRecordSchema).parse(raw);
 };
 
-export const fetchActiveTasks = async (): Promise<Task[]> => {
+export const fetchActiveTasks = async (): Promise<NodeRecord[]> => {
   const raw = await invoke("get_active_tasks");
-  const nodes = z.array(nodeRecordSchema).parse(raw);
-  return nodes.map(toCompatibleTask);
+  return z.array(nodeRecordSchema).parse(raw);
 };
 
 // ============================================
@@ -236,16 +203,14 @@ export const quickCapture = async (
   return await invoke("capture_resource", { payload: request });
 };
 
-export const fetchAllResources = async (): Promise<Resource[]> => {
+export const fetchAllResources = async (): Promise<NodeRecord[]> => {
   const raw = await invoke("get_all_resources");
-  const nodes = z.array(nodeRecordSchema).parse(raw);
-  return nodes.map(toCompatibleResource);
+  return z.array(nodeRecordSchema).parse(raw);
 };
 
-export const getResourceById = async (nodeId: number): Promise<Resource> => {
+export const getResourceById = async (nodeId: number): Promise<NodeRecord> => {
   const raw = await invoke("get_resource_by_id", { nodeId });
-  const node = nodeRecordSchema.parse(raw);
-  return toCompatibleResource(node);
+  return nodeRecordSchema.parse(raw);
 };
 
 export const softDeleteResource = async (nodeId: number): Promise<void> => {
@@ -270,35 +235,10 @@ export const updateResourceTitle = async (
   return await invoke("update_resource_title_command", { nodeId, title });
 };
 
-/** @deprecated 使用 updateResourceTitle 替代 */
-export const updateResourceDisplayName = updateResourceTitle;
-
 /** 获取任务关联的资源 */
-export const fetchTaskResources = async (taskNodeId: number): Promise<Resource[]> => {
+export const fetchTaskResources = async (taskNodeId: number): Promise<NodeRecord[]> => {
   const response = await listTargetNodes(taskNodeId, "contains");
-  return response.nodes
-    .filter((n) => n.node_type === "resource")
-    .map(toCompatibleResource);
-};
-
-/** @deprecated 使用 linkNodes 替代 */
-export const linkResource = async (params: {
-  resource_id: number;
-  task_id: number;
-}): Promise<void> => {
-  await linkNodes(params.task_id, params.resource_id, "contains");
-};
-
-/** @deprecated 使用 setSessionBindings 替代 */
-export const setSessionContextResources = async (
-  sessionId: number,
-  resourceIds: number[]
-): Promise<void> => {
-  await setSessionBindings({
-    session_id: sessionId,
-    node_ids: resourceIds,
-    binding_type: "implicit",
-  });
+  return response.nodes.filter((n) => n.node_type === "resource");
 };
 
 // ============================================

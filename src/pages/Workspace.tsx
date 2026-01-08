@@ -2,15 +2,15 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Task, Resource, resourceTypeIcons } from "../types";
-import { fetchAllResources, fetchTaskResources, getAssetsPath, updateResourceContent, updateResourceDisplayName } from "../api";
+import { NodeRecord, resourceSubtypeIcons } from "../types";
+import { fetchAllResources, fetchTaskResources, getAssetsPath, updateResourceContent, updateResourceTitle } from "../api";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { ContextPanel, EditorPanel, ChatPanel } from "../components/workspace";
 import { usePanelResize } from "@/hooks/usePanelResize";
 
 interface WorkspacePageProps {
-  selectedTask: Task | null;
-  selectedResource: Resource | null;
+  selectedTask: NodeRecord | null;
+  selectedResource: NodeRecord | null;
   onBack: () => void;
   onNavigateToSettings?: () => void;
 }
@@ -21,14 +21,14 @@ const RIGHT_MIN = 200;
 const RIGHT_MAX = 500;
 
 export function WorkspacePage({ selectedTask, selectedResource: propSelectedResource, onBack, onNavigateToSettings }: WorkspacePageProps) {
-  const [contextResources, setContextResources] = useState<Resource[]>([]);
-  const [allResources, setAllResources] = useState<Resource[]>([]);
+  const [contextResources, setContextResources] = useState<NodeRecord[]>([]);
+  const [allResources, setAllResources] = useState<NodeRecord[]>([]);
   const [loadingResources, setLoadingResources] = useState(false);
-  const [selectedResource, setSelectedResource] = useState<Resource | null>(
+  const [selectedResource, setSelectedResource] = useState<NodeRecord | null>(
     () => propSelectedResource ?? null
   );
   const [sessionAnchorResourceId, setSessionAnchorResourceId] = useState<number | null>(
-    () => propSelectedResource?.resource_id ?? null
+    () => propSelectedResource?.node_id ?? null
   );
   const [editorContent, setEditorContent] = useState("");
   const [isModified, setIsModified] = useState(false);
@@ -59,13 +59,13 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
 
   const { t } = useLanguage();
   const contextResourceIds = useMemo(
-    () => contextResources.map((resource) => resource.resource_id),
+    () => contextResources.map((resource) => resource.node_id),
     [contextResources]
   );
   const availableContextResources = useMemo(
     () =>
       allResources.filter(
-        (resource) => !contextResourceIds.includes(resource.resource_id)
+        (resource) => !contextResourceIds.includes(resource.node_id)
       ),
     [allResources, contextResourceIds]
   );
@@ -102,7 +102,7 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
     if (isResourceMode && propSelectedResource) {
       setSelectedResource(propSelectedResource);
       setContextResources([propSelectedResource]);
-      setSessionAnchorResourceId(propSelectedResource.resource_id);
+      setSessionAnchorResourceId(propSelectedResource.node_id);
     }
   }, [isResourceMode, propSelectedResource]);
 
@@ -122,12 +122,12 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
     const loadResources = async () => {
       setLoadingResources(true);
       try {
-        const resources = await fetchTaskResources(selectedTask.task_id);
+        const resources = await fetchTaskResources(selectedTask.node_id);
         if (!ignore) {
           setContextResources(resources);
           if (
             selectedResource &&
-            !resources.find((r: Resource) => r.resource_id === selectedResource.resource_id)
+            !resources.find((r: NodeRecord) => r.node_id === selectedResource.node_id)
           ) {
             setSelectedResource(null);
           }
@@ -156,12 +156,12 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
     const resourceToLoad = currentResource;
 
     if (resourceToLoad) {
-      setEditorContent(resourceToLoad.content || "");
+      setEditorContent(resourceToLoad.file_content || "");
       setIsModified(false);
-      setEditedDisplayName(resourceToLoad.display_name || "");
+      setEditedDisplayName(resourceToLoad.title || "");
       setIsEditingName(false);
 
-      if (resourceToLoad.file_type === "text") {
+      if (resourceToLoad.resource_subtype === "text") {
         setViewMode('text');
       } else {
         setViewMode('file');
@@ -175,13 +175,13 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
     }
   }, [currentResource]);
 
-  const handleResourceClick = useCallback((resource: Resource) => {
+  const handleResourceClick = useCallback((resource: NodeRecord) => {
     setSelectedResource(resource);
   }, []);
 
-  const handleAddToContext = useCallback((resource: Resource) => {
+  const handleAddToContext = useCallback((resource: NodeRecord) => {
     setContextResources((prev) => {
-      if (prev.some((item) => item.resource_id === resource.resource_id)) {
+      if (prev.some((item) => item.node_id === resource.node_id)) {
         return prev;
       }
       return [...prev, resource];
@@ -201,7 +201,7 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
     if (!resourceToSave || isSaving) return;
 
     const hasContentChange = isModified;
-    const hasNameChange = editedDisplayName !== (resourceToSave.display_name || "");
+    const hasNameChange = editedDisplayName !== (resourceToSave.title || "");
 
     if (!hasContentChange && !hasNameChange) return;
 
@@ -211,10 +211,10 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
 
     try {
       if (hasContentChange) {
-        await updateResourceContent(resourceToSave.resource_id, editorContent);
+        await updateResourceContent(resourceToSave.node_id, editorContent);
       }
       if (hasNameChange) {
-        await updateResourceDisplayName(resourceToSave.resource_id, editedDisplayName);
+        await updateResourceTitle(resourceToSave.node_id, editedDisplayName);
       }
 
       setIsModified(false);
@@ -222,16 +222,16 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
       setSaveSuccess(true);
 
       if (hasNameChange) {
-        const updatedResource = { ...resourceToSave, display_name: editedDisplayName };
+        const updatedResource = { ...resourceToSave, title: editedDisplayName };
         setSelectedResource(updatedResource);
         setContextResources((prev) =>
           prev.map((resource) =>
-            resource.resource_id === updatedResource.resource_id ? updatedResource : resource
+            resource.node_id === updatedResource.node_id ? updatedResource : resource
           )
         );
         setAllResources((prev) =>
           prev.map((resource) =>
-            resource.resource_id === updatedResource.resource_id ? updatedResource : resource
+            resource.node_id === updatedResource.node_id ? updatedResource : resource
           )
         );
       }
@@ -249,8 +249,8 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
 
   const handleRemoveFromContext = useCallback((resourceId: number) => {
     setContextResources((prev) => {
-      const next = prev.filter((resource) => resource.resource_id !== resourceId);
-      if (selectedResource?.resource_id === resourceId) {
+      const next = prev.filter((resource) => resource.node_id !== resourceId);
+      if (selectedResource?.node_id === resourceId) {
         setSelectedResource(next[0] ?? null);
       }
       return next;
@@ -262,7 +262,7 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
     if (!isResourceMode && selectedTask) {
       // 任务模式：重新获取任务关联的资源
       try {
-        const resources = await fetchTaskResources(selectedTask.task_id);
+        const resources = await fetchTaskResources(selectedTask.node_id);
         setContextResources(resources);
       } catch (err) {
         console.error("刷新上下文资源失败:", err);
@@ -317,8 +317,8 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
               <span className="text-muted-foreground">/</span>
               {currentResource ? (
                 <span className="font-medium">
-                  {currentResource.file_type ? resourceTypeIcons[currentResource.file_type] : "📎"}{" "}
-                  {currentResource.display_name || "未命名资源"}
+                  {currentResource.resource_subtype ? resourceSubtypeIcons[currentResource.resource_subtype] : "📎"}{" "}
+                  {currentResource.title || "未命名资源"}
                 </span>
               ) : (
                 <span className="font-medium text-muted-foreground">未选择资源</span>
@@ -333,8 +333,8 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
                 <>
                   <span className="text-muted-foreground">/</span>
                   <span className="text-muted-foreground">
-                    {currentResource.file_type ? resourceTypeIcons[currentResource.file_type] : "📎"}{" "}
-                    {currentResource.display_name || "未命名文件"}
+                    {currentResource.resource_subtype ? resourceSubtypeIcons[currentResource.resource_subtype] : "📎"}{" "}
+                    {currentResource.title || "未命名文件"}
                   </span>
                 </>
               )}
@@ -396,8 +396,8 @@ export function WorkspacePage({ selectedTask, selectedResource: propSelectedReso
           isResizing={rightPanel.isResizing}
           onMouseDown={rightPanel.onMouseDown}
           onNavigateToSettings={onNavigateToSettings}
-          taskId={!isResourceMode ? selectedTask?.task_id : undefined}
-          resourceId={isResourceMode ? (sessionAnchorResourceId ?? currentResource?.resource_id) : undefined}
+          taskId={!isResourceMode ? selectedTask?.node_id : undefined}
+          resourceId={isResourceMode ? (sessionAnchorResourceId ?? currentResource?.node_id) : undefined}
           contextResourceIds={contextResourceIds}
           onContextRefresh={handleContextRefresh}
         />

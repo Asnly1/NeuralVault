@@ -16,14 +16,14 @@ import {
   Trash2,
   Loader2
 } from "lucide-react";
-import { Resource, Task, IngestProgress, ProcessingStage, resourceTypeIcons } from "../types";
+import { NodeRecord, IngestProgress, ProcessingStage, resourceSubtypeIcons } from "../types";
 
 interface ResourceCardProps {
-  resource: Resource;
-  tasks?: Task[];
+  resource: NodeRecord;
+  tasks?: NodeRecord[];
   onLinkToTask?: (resourceId: number, taskId: number) => Promise<void>;
   onDelete?: (resourceId: number) => Promise<void>;
-  onClick?: (resource: Resource) => void;
+  onClick?: (resource: NodeRecord) => void;
   progress?: IngestProgress;
 }
 
@@ -49,7 +49,7 @@ export function ResourceCard({
     if (onLinkToTask && !linking) {
       setLinking(true);
       try {
-        await onLinkToTask(resource.resource_id, taskId);
+        await onLinkToTask(resource.node_id, taskId);
       } finally {
         setLinking(false);
       }
@@ -68,13 +68,13 @@ export function ResourceCard({
       <CardContent className="flex items-center gap-3 p-3">
         {/* File Icon */}
         <div className="shrink-0 opacity-80 group-hover:opacity-100 transition-opacity text-base">
-          {resource.file_type ? resourceTypeIcons[resource.file_type] : "📎"}
+          {resource.resource_subtype ? resourceSubtypeIcons[resource.resource_subtype] : "📎"}
         </div>
 
         {/* File Info */}
         <div className="flex-1 min-w-0 flex flex-col gap-0.5">
           <h4 className="text-sm font-medium truncate text-foreground/90 group-hover:text-foreground transition-colors">
-            {resource.display_name || "Untitled"}
+            {resource.title || "Untitled"}
           </h4>
           <div className="flex items-center gap-2">
             {resource.created_at && (
@@ -122,11 +122,11 @@ export function ResourceCard({
                 <DropdownMenuSeparator />
                 {tasks.length > 0 ? tasks.map((task) => (
                   <DropdownMenuItem
-                    key={task.task_id}
-                    onClick={() => handleSelectTask(task.task_id)}
+                    key={task.node_id}
+                    onClick={() => handleSelectTask(task.node_id)}
                     className="cursor-pointer gap-2"
                   >
-                    {task.status === "todo" ? <Circle className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3 text-green-500" />}
+                    {task.task_status === "todo" ? <Circle className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3 text-green-500" />}
                     <span className="truncate text-sm">{task.title || "Untitled"}</span>
                   </DropdownMenuItem>
                 )) : (
@@ -144,7 +144,7 @@ export function ResourceCard({
               className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
               onClick={(e) => {
                 e.stopPropagation();
-                onDelete(resource.resource_id);
+                onDelete(resource.node_id);
               }}
             >
               <Trash2 className="h-4 w-4" />

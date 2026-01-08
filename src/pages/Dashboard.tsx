@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 
 import { Sparkles, CheckCircle2, LayoutGrid, Plus } from "lucide-react";
 
-import { Task, Resource, IngestProgress, InputMode } from "../types";
+import { NodeRecord, IngestProgress, InputMode } from "../types";
 import { TaskCard } from "../components/TaskCard";
 import { ResourceCard } from "../components/ResourceCard";
 import { QuickCapture } from "../components/QuickCapture";
@@ -16,14 +16,14 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { isSameDay } from "date-fns";
 
 interface DashboardPageProps {
-  tasks: Task[];
-  resources: Resource[];
+  tasks: NodeRecord[];
+  resources: NodeRecord[];
   loading: boolean;
   error: string | null;
   onCapture: (content: string, filePath?: string) => Promise<void>;
   onRefresh: () => Promise<void>;
-  onSelectTask: (task: Task) => void;
-  onSelectResource: (resource: Resource) => void;
+  onSelectTask: (task: NodeRecord) => void;
+  onSelectResource: (resource: NodeRecord) => void;
   onLinkResource: (resourceId: number, taskId: number) => Promise<void>;
   progressMap?: Map<number, IngestProgress>;
   onNavigateToSettings?: () => void;
@@ -60,8 +60,8 @@ export function DashboardPage({
   const sortedTasks = useMemo(() => {
     return [...tasks].sort((a, b) => {
       // 0. Done tasks at the bottom
-      if (a.status === "done" && b.status !== "done") return 1;
-      if (a.status !== "done" && b.status === "done") return -1;
+      if (a.task_status === "done" && b.task_status !== "done") return 1;
+      if (a.task_status !== "done" && b.task_status === "done") return -1;
 
       // 1. Priority weight (处理 null 值，默认为 medium)
       const pWeight: Record<string, number> = { high: 3, medium: 2, low: 1 };
@@ -82,9 +82,9 @@ export function DashboardPage({
     });
   }, [tasks]);
 
-  const activeTasks = sortedTasks.filter((t) => t.status !== "done");
+  const activeTasks = sortedTasks.filter((t) => t.task_status !== "done");
   const unlinkedResources = resources.filter(
-    (r) => r.classification_status === "unclassified"
+    (r) => r.review_status === "unreviewed"
   );
 
   const getGreeting = () => {
@@ -186,7 +186,7 @@ export function DashboardPage({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {activeTasks.map((task) => (
               <TaskCard
-                key={task.task_id}
+                key={task.node_id}
                 task={task}
                 onClick={() => onSelectTask(task)}
                 onDelete={async (id) => {
@@ -221,7 +221,7 @@ export function DashboardPage({
           // 过滤今日完成的任务
           return allTasks.filter(
             (t) =>
-              t.status === "done" &&
+              t.task_status === "done" &&
               t.done_date &&
               isSameDay(new Date(t.done_date), new Date())
           );
@@ -244,11 +244,11 @@ export function DashboardPage({
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {unlinkedResources.map((res) => (
             <ResourceCard
-              key={res.resource_id}
+              key={res.node_id}
               resource={res}
               tasks={activeTasks} // pass tasks for linking
               onClick={onSelectResource}
-              progress={progressMap?.get(res.resource_id)}
+              progress={progressMap?.get(res.node_id)}
               onLinkToTask={async (resourceId, taskId) => {
                 await onLinkResource(resourceId, taskId);
               }}

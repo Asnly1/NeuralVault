@@ -4,14 +4,14 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Trash2, Calendar, AlertCircle, MoreVertical } from "lucide-react";
-import { Task, priorityConfig } from "../types";
+import { NodeRecord, priorityConfig } from "../types";
 import { TaskEditCard } from "./TaskEditCard";
 import { markTaskAsDone, markTaskAsTodo } from "../api";
 
 interface TaskCardProps {
-  task: Task;
+  task: NodeRecord;
   onClick?: () => void;
-  onDelete?: (taskId: number) => void;
+  onDelete?: (nodeId: number) => void;
   onUpdate?: () => void;
 }
 
@@ -23,7 +23,7 @@ export function TaskCard({ task, onClick, onDelete, onUpdate }: TaskCardProps) {
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation(); // 阻止事件冒泡，防止触发卡片的 onClick
     if (onDelete) {
-      onDelete(task.task_id);
+      onDelete(task.node_id);
     }
   };
 
@@ -35,10 +35,10 @@ export function TaskCard({ task, onClick, onDelete, onUpdate }: TaskCardProps) {
   const handleStatusToggle = async (e: React.MouseEvent) => {
     e.stopPropagation(); // 阻止事件冒泡
     try {
-      if (task.status === "todo") {
-        await markTaskAsDone(task.task_id);
+      if (task.task_status === "todo") {
+        await markTaskAsDone(task.node_id);
       } else {
-        await markTaskAsTodo(task.task_id);
+        await markTaskAsTodo(task.node_id);
       }
       // 刷新数据
       if (onUpdate) {
@@ -90,9 +90,9 @@ export function TaskCard({ task, onClick, onDelete, onUpdate }: TaskCardProps) {
             <button
               onClick={handleStatusToggle}
               className="mt-1 flex-shrink-0 transition-colors hover:border-foreground/40"
-              title={task.status === "todo" ? "标记为完成" : "标记为待办"}
+              title={task.task_status === "todo" ? "标记为完成" : "标记为待办"}
             >
-              {task.status === "done" ? (
+              {task.task_status === "done" ? (
                 <div className="w-3.5 h-3.5 rounded-sm bg-foreground flex items-center justify-center">
                   <svg
                     className="w-2.5 h-2.5 text-background"
@@ -114,7 +114,7 @@ export function TaskCard({ task, onClick, onDelete, onUpdate }: TaskCardProps) {
             </button>
             <h4
               className={`text-sm font-medium leading-snug ${
-                task.status === "done"
+                task.task_status === "done"
                   ? "line-through text-muted-foreground"
                   : ""
               }`}
@@ -124,11 +124,11 @@ export function TaskCard({ task, onClick, onDelete, onUpdate }: TaskCardProps) {
           </div>
         </CardHeader>
 
-        {(task.description || task.due_date || task.priority) && (
+        {(task.summary || task.due_date || task.priority) && (
           <CardContent className="px-3 pb-3 pt-1 flex flex-col gap-2 flex-grow">
-            {task.description && (
+            {task.summary && (
               <p className="text-xs text-muted-foreground line-clamp-2 pl-6">
-                {task.description}
+                {task.summary}
               </p>
             )}
 
@@ -181,3 +181,4 @@ export function TaskCard({ task, onClick, onDelete, onUpdate }: TaskCardProps) {
     </>
   );
 }
+

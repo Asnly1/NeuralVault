@@ -1,11 +1,9 @@
 import { cn } from "@/lib/utils";
+import { getNodeTypeIcon, getNodeTypeLabel } from "@/lib/nodeUtils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  Tag,
-  CheckSquare,
-  FileText,
   Check,
   X,
   Star,
@@ -13,11 +11,9 @@ import {
 } from "lucide-react";
 import {
   NodeRecord,
-  NodeType,
   priorityConfig,
   resourceSubtypeIcons,
 } from "../types";
-import { useLanguage } from "@/contexts/LanguageContext";
 import { format } from "date-fns";
 
 interface NodeCardProps {
@@ -29,28 +25,6 @@ interface NodeCardProps {
   onTogglePinned?: () => void;
 }
 
-const getNodeTypeIcon = (nodeType: NodeType) => {
-  switch (nodeType) {
-    case "topic":
-      return <Tag className="h-4 w-4" />;
-    case "task":
-      return <CheckSquare className="h-4 w-4" />;
-    case "resource":
-      return <FileText className="h-4 w-4" />;
-  }
-};
-
-const getNodeTypeLabel = (nodeType: NodeType) => {
-  switch (nodeType) {
-    case "topic":
-      return "Topic";
-    case "task":
-      return "Task";
-    case "resource":
-      return "Resource";
-  }
-};
-
 export function NodeCard({
   node,
   onClick,
@@ -59,9 +33,6 @@ export function NodeCard({
   onReject,
   onTogglePinned,
 }: NodeCardProps) {
-  // 移除未使用的 t 变量，保留 useLanguage 用于未来国际化
-  useLanguage();
-
   return (
     <Card
       className={cn(

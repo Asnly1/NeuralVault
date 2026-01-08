@@ -14,9 +14,12 @@ src/
 │   ├── TaskEditCard.tsx  # 任务编辑/创建
 │   ├── TasksDialog.tsx   # 通用任务对话框
 │   ├── ResourceCard.tsx  # 资源卡片
+│   ├── NodeCard.tsx      # 通用节点卡片（支持 topic/task/resource）
+│   ├── SearchBar.tsx     # 搜索栏（关键字 + 语义搜索）
 │   ├── QuickCapture.tsx  # 快速捕获
 │   ├── TiptapEditor.tsx  # Markdown 编辑器
 │   ├── PDFViewer.tsx     # PDF 阅读/高亮
+│   ├── TemporaryChatPanel.tsx # 临时聊天面板
 │   ├── workspace/        # Workspace 子组件
 │   │   ├── index.ts
 │   │   ├── ContextPanel.tsx
@@ -43,12 +46,15 @@ src/
 │   ├── AIContext.tsx
 │   └── LanguageContext.tsx
 ├── hooks/
-│   └── useIngestProgress.ts
+│   ├── useIngestProgress.ts
+│   └── usePanelResize.ts
 ├── lib/
-│   └── utils.ts
+│   ├── utils.ts
+│   └── nodeUtils.ts      # 共享节点工具（getNodeTypeIcon, getNodeTypeLabel）
 ├── pages/
 │   ├── Dashboard.tsx
 │   ├── Workspace.tsx
+│   ├── Warehouse.tsx     # 节点仓库（按类型查看 + 审核收件箱）
 │   ├── Calendar.tsx
 │   ├── Settings.tsx
 │   ├── HUD.tsx
@@ -73,33 +79,63 @@ public/
 
 前端的核心类型与常量定义（Zod + TypeScript）。
 
-- Schema：`taskSchema`、`resourceSchema`、`dashboardSchema`
-- 枚举值：`taskStatusValues`、`taskPriorityValues`、`resourceTypeValues`、`classificationValues`
-- 数据类型：`Task`、`Resource`、`DashboardData`、`TaskStatus`、`TaskPriority`、`ResourceType`、`PageType`
-- 常量：`priorityConfig`（优先级标签与颜色）、`resourceTypeIcons`、`navItems`
-- API 类型：`CreateTaskRequest/Response`、`CaptureRequest/Response`、`LinkResourceRequest/Response`、`TaskResourcesResponse`
+**核心数据类型：**
+- `NodeRecord`：统一的节点数据模型，包含 `node_id`、`title`、`summary`、`node_type`（topic/task/resource）、`task_status`、`priority`、`due_date`、`resource_subtype`、`file_path`、`file_content`、`review_status`、`is_pinned` 等字段
+- `EdgeRecord`：节点间的关系记录
+
+**枚举值：**
+- `nodeTypeValues`：`topic`、`task`、`resource`
+- `taskStatusValues`：`todo`、`done`
+- `taskPriorityValues`：`low`、`medium`、`high`
+- `resourceSubtypeValues`：`text`、`image`、`pdf`、`url`、`audio`、`video`、`code`、`other`
+- `reviewStatusValues`：`unreviewed`、`approved`、`rejected`
+- `syncStatusValues`：`local`、`synced`、`conflict`
+
+**常量：**
+- `priorityConfig`：优先级标签与颜色
+- `resourceSubtypeIcons`：资源类型图标映射
+- `nodeTypeIcons`：节点类型图标映射
+- `navItems`：导航菜单项
+
+**API 类型：**
+- `CreateTaskRequest/Response`、`CaptureRequest/Response`、`LinkNodesRequest`、`TaskResourcesResponse`
 - 剪贴板类型：`ClipboardContent`、`ReadClipboardResponse`
 - 资源处理进度：`ProcessingStage`、`IngestProgress`
-- AI 类型：`AIProvider`、`AI_PROVIDER_INFO`、`AIProviderStatus`、`AIConfigStatus`、`SetApiKeyRequest`、`SetDefaultModelRequest`、`ChatMessagePayload`、`SendChatRequest`、`ThinkingEffort`、`ChatUsage`、`ChatStreamAck`、`ChatSession`、`CreateChatSessionRequest/Response`、`ListChatSessionsRequest`、`UpdateChatSessionRequest`、`DeleteChatSessionRequest`、`CreateChatMessageRequest/Response`、`UpdateChatMessageRequest`、`DeleteChatMessageRequest`、`AddMessageAttachmentsRequest`、`RemoveMessageAttachmentRequest`、`SetSessionContextResourcesRequest`、`ModelOption`、`ChatMessage`
-  - `ChatMessagePayload` 为按轮次结构：`user_content + assistant_content + attachments + usage`
-  - `SendChatRequest` 仅发送最新输入（content + images/files 的 resource_id），并可选 `thinking_effort`
-  - `ChatSession` 以 `task_id` 为主上下文，带 `updated_at`；资源上下文通过 `session_context_resources` 关联
+- AI 类型：`AIProvider`、`AI_PROVIDER_INFO`、`AIProviderStatus`、`AIConfigStatus`、`ChatMessage`、`ChatSession`、`SendChatRequest` 等
 
 ---
 
 ### `api/index.ts`
 
-封装所有 Tauri `invoke` 调用，统一返回类型与校验。
+封装所有 Tauri `invoke` 调用，统一返回类型与校验。所有 API 函数返回 `NodeRecord` 或 `NodeRecord[]`。
 
-- Dashboard：`fetchDashboardData()`
-- Task：`createTask()`、`softDeleteTask()`、`hardDeleteTask()`、`markTaskAsDone()`、`markTaskAsTodo()`、`updateTaskTitle()`、`updateTaskDescription()`、`updateTaskPriority()`、`updateTaskDueDate()`、`fetchTasksByDate()`、`fetchAllTasks()`
-- Resource：`quickCapture()`、`linkResource()`、`unlinkResource()`、`fetchTaskResources()`、`fetchAllResources()`、`softDeleteResource()`、`hardDeleteResource()`、`updateResourceContent()`、`updateResourceDisplayName()`
-- Demo：`seedDemoData()`
-- HUD：`toggleHUD()`、`hideHUD()`
-- Clipboard：`readClipboard()`
-- File system：`getAssetsPath()`
+**Dashboard：**
+- `fetchDashboardData()`：返回 `{ tasks: NodeRecord[], resources: NodeRecord[] }`
+
+**Node 通用 API：**
+- `fetchPinnedNodes()`、`fetchUnreviewedNodes()`、`toggleNodePinned()`、`approveNode()`、`rejectNode()`
+- `linkNodes()`、`unlinkNodes()`
+
+**Task API：**
+- `createTask()`、`softDeleteTask()`、`hardDeleteTask()`
+- `markTaskAsDone()`、`markTaskAsTodo()`
+- `updateTaskTitle()`、`updateTaskDescription()`、`updateTaskPriority()`、`updateTaskDueDate()`
+- `fetchTasksByDate()`、`fetchAllTasks()`：返回 `NodeRecord[]`
+
+**Resource API：**
+- `quickCapture()`、`unlinkResource()`
+- `fetchTaskResources()`、`fetchAllResources()`、`getResourceById()`：返回 `NodeRecord[]` 或 `NodeRecord`
+- `softDeleteResource()`、`hardDeleteResource()`
+- `updateResourceContent()`、`updateResourceTitle()`
+
+**Chat Session/Message：**
+- `createChatSession()`、`getChatSession()`、`listChatSessions()`、`updateChatSession()`、`deleteChatSession()`
+- `setSessionBindings()`：设置会话上下文节点绑定
+- `createChatMessage()`、`listChatMessages()`、`updateChatMessage()`、`deleteChatMessage()`
+
+**其他：**
+- `seedDemoData()`、`toggleHUD()`、`hideHUD()`、`readClipboard()`、`getAssetsPath()`
 - AI Config：`getAIConfigStatus()`、`saveApiKey()`、`removeApiKey()`、`setDefaultModel()`、`sendChatMessage()`
-- Chat Session/Message：`createChatSession()`、`getChatSession()`、`listChatSessions()`、`updateChatSession()`、`deleteChatSession()`、`setSessionContextResources()`、`createChatMessage()`、`listChatMessages()`、`updateChatMessage()`、`deleteChatMessage()`、`addMessageAttachments()`、`removeMessageAttachment()`
 
 > 当前前端仅展示 OpenAI Provider，其他 Provider UI 隐藏。
 
@@ -112,9 +148,9 @@ public/
 AI 配置与聊天状态管理。
 
 - 状态：`config`、`loading`、`error`、`configuredProviders`、`selectedModel`、`messages`、`isChatLoading`
-- 方法：`saveKey()`、`removeKey()`、`saveDefaultModel()`、`sendMessage()`（需要 task/resource + context_resource_ids + attachments + thinking_effort）、`loadSessionMessages()`（确保会话存在并同步上下文）、`clearMessages()`、`refreshConfig()`
+- 方法：`saveKey()`、`removeKey()`、`saveDefaultModel()`、`sendMessage()`、`loadSessionMessages()`、`clearMessages()`、`refreshConfig()`
 - 事件：监听 Tauri `chat-stream`，按 `session_id` 拼接 assistant delta
-- 历史渲染：`listChatMessages` 返回按轮次数据，前端拆分为 user/assistant 两条消息渲染
+- 上下文同步：使用 `setSessionBindings()` 将上下文资源绑定到会话
 
 #### Chat 消息端到端流程 (ChatPanel -> Rust -> Python -> Rust -> 前端)
 
@@ -136,21 +172,40 @@ AI 配置与聊天状态管理。
 
 ---
 
-### `hooks/useIngestProgress.ts`
+### `hooks/`
+
+#### `useIngestProgress.ts`
 
 资源处理进度管理 Hook。
 
 - 监听 Tauri `ingest-progress` 事件
-- 输出：`progressMap`（`Map<resource_id, IngestProgress>`）与 `clearProgress()`
+- 输出：`progressMap`（`Map<node_id, IngestProgress>`）与 `clearProgress()`
+
+#### `usePanelResize.ts`
+
+面板拖拽调整 Hook。
+
+- 支持左右方向拖拽
+- 本地存储宽度状态
+- 返回 `{ width, tempWidth, isResizing, onMouseDown }`
 
 ---
 
-### `lib/utils.ts`
+### `lib/`
+
+#### `utils.ts`
 
 通用工具函数。
 
 - `cn`：合并 className（`clsx` + `tailwind-merge`）
 - `getFileTypeFromPath`：统一推断文件类型（App/HUD 的 Quick Capture 复用）
+
+#### `nodeUtils.ts`
+
+共享节点工具函数。
+
+- `getNodeTypeIcon(nodeType)`：返回节点类型对应的图标组件
+- `getNodeTypeLabel(nodeType)`：返回节点类型对应的显示标签
 
 ---
 
@@ -171,28 +226,49 @@ AI 配置与聊天状态管理。
 
 #### `TaskCard.tsx`
 
-- 点击方框切换任务状态（`markTaskAsDone/markTaskAsTodo`）
+- 接收 `NodeRecord` 类型（`node_type === 'task'`）
+- 点击方框切换任务状态（`markTaskAsDone/markTaskAsTodo`，使用 `node_id`）
 - 悬浮显示编辑/删除按钮，编辑使用 `TaskEditCard`
 - 逾期任务高亮，显示优先级标签与截止日期
+- 字段映射：`node_id`、`task_status`、`summary`
 
 #### `TaskEditCard.tsx`
 
 - 统一的创建/编辑 Dialog
+- 接收 `NodeRecord` 类型（可选，传入则为编辑模式）
 - 仅更新变化字段（标题/描述/优先级/截止日期/状态）
 - `Popover + Calendar` 选择日期，保存时格式化为 `YYYY-MM-DD 00:00:00`
+- API 调用使用 `node_id`
 
 #### `TasksDialog.tsx`
 
 - 通用任务对话框，数据获取由 `fetchTasks()` 决定
+- `fetchTasks` 返回 `NodeRecord[]`
 - 使用 `TaskCard` 展示，支持软删除（`softDeleteTask`）
 - 包含加载/错误/空状态
 
 #### `ResourceCard.tsx`
 
+- 接收 `NodeRecord` 类型（`node_type === 'resource'`）
 - 点击进入 Workspace（可选）
 - 下拉菜单关联到任务（`onLinkToTask`）
 - 删除资源（可选）
 - 支持显示 Ingest 进度（`progress`），含阶段与百分比
+- 字段映射：`node_id`、`title`、`resource_subtype`
+
+#### `NodeCard.tsx`
+
+- 通用节点卡片，支持所有节点类型（topic/task/resource）
+- 显示节点标题、类型图标、状态、优先级等元数据
+- 支持固定/取消固定操作
+- 支持审核操作（approve/reject）
+- 使用共享工具 `getNodeTypeIcon`、`getNodeTypeLabel`
+
+#### `SearchBar.tsx`
+
+- 支持关键字搜索和语义搜索
+- 显示搜索结果列表，包含节点类型图标
+- 选择结果导航到对应节点
 
 #### `QuickCapture.tsx`
 
@@ -216,9 +292,9 @@ AI 配置与聊天状态管理。
 
 #### `components/workspace/`
 
-- `ContextPanel.tsx`：上下文资源显示区（加号添加/减号移除），保留附带文本；任务模式下额外展示任务信息
-- `EditorPanel.tsx`：文本编辑（Tiptap）、PDF 预览、图片缩放/拖拽（`react-zoom-pan-pinch`），支持资源名称编辑与文本/文件视图切换
-- `ChatPanel.tsx`：AI 聊天（模型选择 + 思考强度 + 消息历史/发送），需要传入 `taskId/resourceId + contextResourceIds`，上下文变更会同步到会话，无可用模型时引导进入设置页
+- `ContextPanel.tsx`：上下文资源显示区（加号添加/减号移除），保留附带文本；任务模式下额外展示任务信息；使用 `NodeRecord` 类型
+- `EditorPanel.tsx`：文本编辑（Tiptap）、PDF 预览、图片缩放/拖拽（`react-zoom-pan-pinch`），支持资源名称编辑与文本/文件视图切换；使用 `NodeRecord` 类型
+- `ChatPanel.tsx`：AI 聊天（模型选择 + 思考强度 + 消息历史/发送），需要传入 `taskId/resourceId + contextResourceIds`（使用 `node_id`）
 
 ---
 
@@ -226,26 +302,33 @@ AI 配置与聊天状态管理。
 
 #### `Dashboard.tsx`
 
-- 任务排序：done 置底 + 优先级权重 + 截止日期
+- 状态类型：`tasks: NodeRecord[]`、`resources: NodeRecord[]`
+- 任务排序：`task_status === 'done'` 置底 + 优先级权重 + 截止日期
 - 任务区：`TaskCard` + `TaskEditCard`（创建）+ `TasksDialog`（今日完成）
-- 资源区：仅展示 `classification_status === "unclassified"` 的资源
-- 支持 Ingest 进度显示（`progressMap` -> `ResourceCard`）
+- 资源区：仅展示 `review_status === "unreviewed"` 的资源
+- 支持 Ingest 进度显示（`progressMap` -> `ResourceCard`，使用 `node_id` 索引）
 
 #### `Workspace.tsx`
 
+- 参数类型：`selectedTask: NodeRecord | null`、`selectedResource: NodeRecord | null`
 - 双模式：任务模式 / 资源模式
 - 三栏布局：`ContextPanel` / `EditorPanel` / `ChatPanel`
-- 左右面板可拖拽调整，localStorage：
-  - `neuralvault_workspace_left_width`
-  - `neuralvault_workspace_right_width`
-- 任务模式默认上下文为任务关联资源；资源模式默认上下文为当前资源；上下文增删会同步到会话
-- 支持资源内容与名称保存：`updateResourceContent` + `updateResourceDisplayName`
+- 左右面板可拖拽调整（使用 `usePanelResize` Hook）
+- 任务模式默认上下文为任务关联资源；资源模式默认上下文为当前资源
+- 支持资源内容与名称保存：`updateResourceContent` + `updateResourceTitle`（使用 `node_id`）
 - 支持 Ctrl+S / Command+S 保存
+
+#### `Warehouse.tsx`
+
+- 节点仓库页面，按类型查看节点（topic/task/resource）
+- 审核收件箱 Tab：显示 `review_status === 'unreviewed'` 的节点
+- 支持审核操作（approve/reject）和固定操作
 
 #### `Calendar.tsx`
 
+- 状态类型：`tasks: NodeRecord[]`
 - 月历视图，按 `due_date` 聚合任务
-- 点击任务切换 todo/done
+- 点击任务切换 `task_status`（使用 `node_id` 调用 `markTaskAsDone/markTaskAsTodo`）
 - 超过两条任务时用 `TasksDialog` 展示全部
 
 #### `Settings.tsx`
@@ -267,11 +350,15 @@ AI 配置与聊天状态管理。
 
 ### `App.tsx`
 
-- 全局状态：`currentPage`、`tasks`、`allTasks`、`resources`、`selectedTask`、`selectedResource`、`theme`、`pythonError`
+- 全局状态（均使用 `NodeRecord` 类型）：
+  - `tasks: NodeRecord[]`、`allTasks: NodeRecord[]`、`resources: NodeRecord[]`
+  - `selectedTask: NodeRecord | null`、`selectedResource: NodeRecord | null`
+  - `currentPage`、`theme`、`pythonError`
 - 初始加载与刷新：`fetchDashboardData()` + `fetchAllTasks()`
+- 节点关联：`handleLinkResource` 使用 `linkNodes()` 而非废弃的 `linkResource()`
 - 监听 `python-status` 事件，失败时顶部提示
-- `useIngestProgress()` 获取资源处理进度
-- 主题切换：`light` / `dark` / `system`（监听系统主题变化）
+- `useIngestProgress()` 获取资源处理进度（使用 `node_id` 索引）
+- 主题切换：`light` / `dark` / `system`
 
 ### `main.tsx`
 
@@ -294,19 +381,22 @@ main.tsx
   ├─ #/hud -> HUDPage -> QuickCapture
   │        ├─ readClipboard -> Rust (read_clipboard)
   │        └─ quickCapture -> Rust (capture_resource)
-  └─ App.tsx
+  └─ App.tsx (所有状态使用 NodeRecord 类型)
        ├─ listen python-status -> 顶部错误提示
-       ├─ useIngestProgress (ingest-progress event)
-       ├─ DashboardPage
-       │    ├─ TaskCard / TaskEditCard / TasksDialog
+       ├─ useIngestProgress (ingest-progress event, node_id 索引)
+       ├─ DashboardPage (NodeRecord[])
+       │    ├─ TaskCard / TaskEditCard / TasksDialog (node_id)
        │    ├─ QuickCapture
-       │    └─ ResourceCard (progressMap)
-       ├─ WorkspacePage
-       │    ├─ ContextPanel + EditorPanel + ChatPanel
-       │    ├─ fetchTaskResources / updateResourceContent / updateResourceDisplayName
-       │    └─ AI chat -> sendChatMessage
-       ├─ CalendarPage
-       │    └─ markTaskAsDone/markTaskAsTodo + fetchTasksByDate
+       │    └─ ResourceCard (progressMap, node_id)
+       ├─ WorkspacePage (NodeRecord | null)
+       │    ├─ ContextPanel + EditorPanel + ChatPanel (NodeRecord)
+       │    ├─ fetchTaskResources / updateResourceContent / updateResourceTitle
+       │    └─ AI chat -> sendChatMessage (node_id)
+       ├─ WarehousePage
+       │    ├─ NodeCard (NodeRecord)
+       │    └─ approve/reject/pin operations (node_id)
+       ├─ CalendarPage (NodeRecord[])
+       │    └─ markTaskAsDone/markTaskAsTodo + fetchTasksByDate (node_id)
        └─ SettingsPage
             └─ saveApiKey/removeApiKey + theme/language
 ```
@@ -320,7 +410,8 @@ main.tsx
 | Quick Capture HUD | `pages/HUD.tsx` | `#/hud` |
 | Page A - 智能看板 | `pages/Dashboard.tsx` | `dashboard` |
 | Page B - 任务工作台 | `pages/Workspace.tsx` | `workspace` |
-| Page C - 日历视图 | `pages/Calendar.tsx` | `calendar` |
+| Page C - 节点仓库 | `pages/Warehouse.tsx` | `warehouse` |
+| Page D - 日历视图 | `pages/Calendar.tsx` | `calendar` |
 | Page E - 设置 | `pages/Settings.tsx` | `settings` |
 
 ---
@@ -331,5 +422,10 @@ main.tsx
 2. 新增文案时更新 `src/translations.ts`，并确保 `LanguageContext` 可用。
 3. Local Model（Ollama）当前为前端状态，如需启用请对接后端命令。
 4. AI Chat 使用 SSE 流式响应，前端通过 `chat-stream` 事件拼接 assistant 输出与 usage。
-5. 新增资源类型时同步更新 `resourceTypeValues` 与 `EditorPanel` 的渲染逻辑。
-6. 新增/替换 AI Provider 图标时确保放入 `public/assets`（如仅放在 `src/assets`，需同步到 `public/assets`）。
+5. 新增资源类型时同步更新 `resourceSubtypeValues` 与 `EditorPanel` 的渲染逻辑。
+6. 新增/替换 AI Provider 图标时确保放入 `public/assets`。
+7. **关于 NodeRecord 迁移**：
+   - 所有组件已完全迁移到使用 `NodeRecord` 类型
+   - 废弃的 `Task`/`Resource` 类型别名已移除
+   - API 调用使用 `node_id` 而非 `task_id`/`resource_id`
+   - 字段映射参考：`task_status`（原 `status`）、`summary`（原 `description`）、`resource_subtype`（原 `file_type`）、`file_content`（原 `content`）、`title`（原 `display_name`）

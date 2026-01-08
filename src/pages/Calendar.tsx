@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { isSameDay, startOfDay, format, startOfMonth, endOfMonth, eachDayOfInterval, startOfWeek, endOfWeek } from "date-fns";
 import { zhCN } from "date-fns/locale";
-import { Task, priorityConfig } from "../types";
+import { NodeRecord, priorityConfig } from "../types";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
 import { TasksDialog } from "@/components/TasksDialog";
@@ -9,7 +9,7 @@ import { markTaskAsDone, markTaskAsTodo, fetchTasksByDate } from "@/api";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 interface CalendarPageProps {
-  tasks: Task[];
+  tasks: NodeRecord[];
   onRefresh: () => void;
 }
 
@@ -21,7 +21,7 @@ export function CalendarPage({ tasks, onRefresh }: CalendarPageProps) {
 
   // Group tasks by due date for efficient lookup
   const tasksByDate = useMemo(() => {
-    const grouped = new Map<string, Task[]>();
+    const grouped = new Map<string, NodeRecord[]>();
     
     tasks.forEach((task) => {
       if (task.due_date) {
@@ -37,7 +37,7 @@ export function CalendarPage({ tasks, onRefresh }: CalendarPageProps) {
   }, [tasks]);
 
   // Get tasks for a specific date
-  const getTasksForDate = (date: Date): Task[] => {
+  const getTasksForDate = (date: Date): NodeRecord[] => {
     const dateKey = format(startOfDay(date), "yyyy-MM-dd");
     return tasksByDate.get(dateKey) || [];
   };
@@ -63,13 +63,13 @@ export function CalendarPage({ tasks, onRefresh }: CalendarPageProps) {
   };
 
   // Toggle task status
-  const handleToggleTask = async (task: Task, e: React.MouseEvent) => {
+  const handleToggleTask = async (task: NodeRecord, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      if (task.status === "todo") {
-        await markTaskAsDone(task.task_id);
+      if (task.task_status === "todo") {
+        await markTaskAsDone(task.node_id);
       } else {
-        await markTaskAsTodo(task.task_id);
+        await markTaskAsTodo(task.node_id);
       }
       onRefresh();
     } catch (error) {
@@ -128,8 +128,8 @@ export function CalendarPage({ tasks, onRefresh }: CalendarPageProps) {
             const dayTasks = getTasksForDate(day);
             // Sort tasks: todo first, then done
             const sortedTasks = [...dayTasks].sort((a, b) => {
-              if (a.status === 'todo' && b.status === 'done') return -1;
-              if (a.status === 'done' && b.status === 'todo') return 1;
+              if (a.task_status === 'todo' && b.task_status === 'done') return -1;
+              if (a.task_status === 'done' && b.task_status === 'todo') return 1;
               return 0;
             });
             const hasMoreTasks = sortedTasks.length > 2;
@@ -159,7 +159,7 @@ export function CalendarPage({ tasks, onRefresh }: CalendarPageProps) {
                 <div className="flex-1 space-y-1 overflow-hidden">
                   {displayTasks.map((task) => (
                     <div
-                      key={task.task_id}
+                      key={task.node_id}
                       onClick={(e) => handleToggleTask(task, e)}
                       className="text-xs p-1 rounded cursor-pointer hover:bg-accent/50 transition-colors truncate"
                       style={{
@@ -167,13 +167,13 @@ export function CalendarPage({ tasks, onRefresh }: CalendarPageProps) {
                         borderLeft: task.priority ? `2px solid ${priorityConfig[task.priority].color}` : undefined,
                       }}
                     >
-                      <div className={`flex items-center gap-1 ${task.status === "done" ? "line-through opacity-60" : ""}`}>
+                      <div className={`flex items-center gap-1 ${task.task_status === "done" ? "line-through opacity-60" : ""}`}>
                         <div
                           className={`w-3 h-3 rounded-sm border flex items-center justify-center flex-shrink-0
-                            ${task.status === "done" ? "bg-primary border-primary" : "border-muted-foreground"}
+                            ${task.task_status === "done" ? "bg-primary border-primary" : "border-muted-foreground"}
                           `}
                         >
-                          {task.status === "done" && (
+                          {task.task_status === "done" && (
                             <svg
                               className="w-2 h-2 text-primary-foreground"
                               fill="none"

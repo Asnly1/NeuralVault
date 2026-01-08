@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sparkles } from "lucide-react";
-import { Task } from "../types";
+import { NodeRecord } from "../types";
 import { TaskCard } from "./TaskCard";
 import { softDeleteTask } from "../api";
 
@@ -17,7 +17,7 @@ interface TasksDialogProps {
   onOpenChange: (open: boolean) => void;
   onTaskUpdated?: () => void;
   // 函数负责获取和过滤任务，由调用方决定如何获取数据
-  fetchTasks: () => Promise<Task[]>;
+  fetchTasks: () => Promise<NodeRecord[]>;
   // 对话框标题
   title: string;
 }
@@ -29,7 +29,7 @@ export function TasksDialog({
   fetchTasks,
   title,
 }: TasksDialogProps) {
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<NodeRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -99,7 +99,7 @@ export function TasksDialog({
             <div className="space-y-3">
               {tasks.map((task) => (
                 <TaskCard
-                  key={task.task_id}
+                  key={task.node_id}
                   task={task}
                   onUpdate={handleTaskUpdate}
                   onDelete={async (id) => {

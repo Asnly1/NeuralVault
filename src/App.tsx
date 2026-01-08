@@ -3,12 +3,12 @@ import { z } from "zod";
 import { listen } from "@tauri-apps/api/event";
 import "./App.css";
 
-import { Task, Resource, PageType, NodeRecord } from "./types";
+import { PageType, NodeRecord } from "./types";
 import { getFileTypeFromPath } from "./lib/utils";
 import {
   fetchDashboardData,
   quickCapture,
-  linkResource,
+  linkNodes,
   fetchAllTasks,
 } from "./api";
 import { useIngestProgress } from "./hooks/useIngestProgress";
@@ -17,13 +17,13 @@ import { DashboardPage, WorkspacePage, WarehousePage, CalendarPage, SettingsPage
 
 function App() {
   const [currentPage, setCurrentPage] = useState<PageType>("dashboard");
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [allTasks, setAllTasks] = useState<Task[]>([]); // For calendar view (includes done tasks)
-  const [resources, setResources] = useState<Resource[]>([]);
+  const [tasks, setTasks] = useState<NodeRecord[]>([]);
+  const [allTasks, setAllTasks] = useState<NodeRecord[]>([]); // For calendar view (includes done tasks)
+  const [resources, setResources] = useState<NodeRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
+  const [selectedTask, setSelectedTask] = useState<NodeRecord | null>(null);
+  const [selectedResource, setSelectedResource] = useState<NodeRecord | null>(null);
   
   // Theme state
   const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
@@ -142,13 +142,13 @@ function App() {
     [reloadData]
   );
 
-  const handleSelectTask = useCallback((task: Task) => {
+  const handleSelectTask = useCallback((task: NodeRecord) => {
     setSelectedTask(task);
     setSelectedResource(null); // 清除资源选择
     setCurrentPage("workspace");
   }, []);
 
-  const handleSelectResource = useCallback((resource: Resource) => {
+  const handleSelectResource = useCallback((resource: NodeRecord) => {
     setSelectedResource(resource);
     setSelectedTask(null); // 清除任务选择
     setCurrentPage("workspace");
@@ -157,14 +157,14 @@ function App() {
   // 处理从 Sidebar 或 Warehouse 选择节点
   const handleSelectNode = useCallback((node: NodeRecord) => {
     if (node.node_type === "task") {
-      setSelectedTask(node as Task);
+      setSelectedTask(node);
       setSelectedResource(null);
     } else if (node.node_type === "resource") {
-      setSelectedResource(node as Resource);
+      setSelectedResource(node);
       setSelectedTask(null);
     } else if (node.node_type === "topic") {
       // Topic 暂时作为 Resource 处理
-      setSelectedResource(node as Resource);
+      setSelectedResource(node);
       setSelectedTask(null);
     }
     setCurrentPage("workspace");
@@ -181,7 +181,7 @@ function App() {
     async (resourceId: number, taskId: number) => {
       setError(null);
       try {
-        await linkResource({ resource_id: resourceId, task_id: taskId });
+        await linkNodes(taskId, resourceId, "contains");
         // 关联成功后刷新数据，资源会从未分类列表中消失
         await reloadData();
       } catch (err) {

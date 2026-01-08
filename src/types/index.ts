@@ -63,31 +63,6 @@ export const nodeRecordSchema = z.object({
 
 export type NodeRecord = z.infer<typeof nodeRecordSchema>;
 
-// 兼容性别名：渐进式迁移，后续可移除
-/** @deprecated 使用 NodeRecord 替代，通过 node_id 访问 */
-export type Task = NodeRecord & {
-  // 为了向后兼容，添加 task_id 别名（必需，由 API 层填充）
-  task_id: number;
-  // 旧代码使用 status 而非 task_status（必需，由 API 层填充）
-  status: TaskStatus;
-  // 旧代码使用 description 而非 summary
-  description: string | null;
-};
-
-/** @deprecated 使用 NodeRecord 替代，通过 node_id 访问 */
-export type Resource = NodeRecord & {
-  // 为了向后兼容，添加 resource_id 别名（必需，由 API 层填充）
-  resource_id: number;
-  // 旧代码使用 content 而非 file_content
-  content: string | null;
-  // 旧代码使用 classification_status（必需，由 API 层填充）
-  classification_status: string;
-  // 旧代码使用 display_name
-  display_name: string | null;
-  // 旧代码使用 file_type 而非 resource_subtype（必需，由 API 层填充）
-  file_type: ResourceSubtype | null;
-};
-
 // EdgeRecord Schema (对应 Rust EdgeRecord)
 export const edgeRecordSchema = z.object({
   edge_id: z.number(),
@@ -142,8 +117,7 @@ export const resourceSubtypeIcons: Record<ResourceSubtype, string> = {
   other: "📎",
 };
 
-/** @deprecated 使用 resourceSubtypeIcons 替代 */
-export const resourceTypeIcons = resourceSubtypeIcons;
+
 
 export const nodeTypeIcons: Record<NodeType, string> = {
   topic: "🏷️",

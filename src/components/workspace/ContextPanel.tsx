@@ -11,16 +11,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Task, Resource, priorityConfig, resourceTypeIcons } from "@/types";
+import { NodeRecord, priorityConfig, resourceSubtypeIcons } from "@/types";
 import { Minus, Plus } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 interface ContextPanelProps {
   isResourceMode: boolean;
-  selectedTask: Task | null;
-  currentResource: Resource | null;
-  contextResources: Resource[];
-  availableResources: Resource[];
+  selectedTask: NodeRecord | null;
+  currentResource: NodeRecord | null;
+  contextResources: NodeRecord[];
+  availableResources: NodeRecord[];
   loadingResources: boolean;
   editorContent: string;
   viewMode: 'file' | 'text';
@@ -28,8 +28,8 @@ interface ContextPanelProps {
   tempWidth: number | null;
   isResizing: boolean;
   onMouseDown: (e: React.MouseEvent) => void;
-  onResourceClick: (resource: Resource) => void;
-  onAddToContext: (resource: Resource) => void;
+  onResourceClick: (resource: NodeRecord) => void;
+  onAddToContext: (resource: NodeRecord) => void;
   onRemoveFromContext: (resourceId: number) => void;
 }
 
@@ -74,13 +74,13 @@ export function ContextPanel({
                   <h4 className="font-medium">
                     {selectedTask.title || "未命名任务"}
                   </h4>
-                  {selectedTask.description && (
+                  {selectedTask.summary && (
                     <p className="text-sm text-muted-foreground">
-                      {selectedTask.description}
+                      {selectedTask.summary}
                     </p>
                   )}
                   <div className="flex flex-wrap gap-2">
-                    <Badge variant="outline">{selectedTask.status}</Badge>
+                    <Badge variant="outline">{selectedTask.task_status}</Badge>
                     {selectedTask.priority && (
                       <Badge
                         style={{
@@ -131,13 +131,13 @@ export function ContextPanel({
                   {availableResources.length > 0 ? (
                     availableResources.map((resource) => (
                       <DropdownMenuItem
-                        key={resource.resource_id}
+                        key={resource.node_id}
                         onClick={() => onAddToContext(resource)}
                         className="cursor-pointer gap-2"
                       >
-                        <span>{resource.file_type ? resourceTypeIcons[resource.file_type] : "📎"}</span>
+                        <span>{resource.resource_subtype ? resourceSubtypeIcons[resource.resource_subtype] : "📎"}</span>
                         <span className="truncate">
-                          {resource.display_name || "未命名文件"}
+                          {resource.title || "未命名文件"}
                         </span>
                       </DropdownMenuItem>
                     ))
@@ -155,10 +155,10 @@ export function ContextPanel({
               <div className="space-y-1">
                 {contextResources.map((resource) => {
                   const isCurrent =
-                    currentResource?.resource_id === resource.resource_id;
+                    currentResource?.node_id === resource.node_id;
                   return (
                     <div
-                      key={resource.resource_id}
+                      key={resource.node_id}
                       className="flex items-center gap-2"
                     >
                       <button
@@ -169,10 +169,10 @@ export function ContextPanel({
                         onClick={() => onResourceClick(resource)}
                       >
                         {isCurrent && (
-                          <span>{resource.file_type ? resourceTypeIcons[resource.file_type] : "📎"}</span>
+                          <span>{resource.resource_subtype ? resourceSubtypeIcons[resource.resource_subtype] : "📎"}</span>
                         )}
                         <span className="truncate flex-1">
-                          {resource.display_name || "未命名文件"}
+                          {resource.title || "未命名文件"}
                         </span>
                       </button>
                       <Button
@@ -181,7 +181,7 @@ export function ContextPanel({
                         className="h-7 w-7 text-muted-foreground hover:text-destructive"
                         onClick={(e) => {
                           e.stopPropagation();
-                          onRemoveFromContext(resource.resource_id);
+                          onRemoveFromContext(resource.node_id);
                         }}
                         title={t("workspace", "removeFromContext")}
                       >

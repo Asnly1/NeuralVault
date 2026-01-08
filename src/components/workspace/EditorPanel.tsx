@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Resource, resourceTypeIcons } from "@/types";
+import { NodeRecord, resourceSubtypeIcons } from "@/types";
 import { TiptapEditor } from "@/components";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -17,7 +17,7 @@ const PDFViewer = lazy(() =>
 );
 
 interface EditorPanelProps {
-  currentResource: Resource | null;
+  currentResource: NodeRecord | null;
   editorContent: string;
   viewMode: 'file' | 'text';
   isEditingName: boolean;
@@ -48,7 +48,7 @@ export function EditorPanel({
   onDisplayNameChange,
 }: EditorPanelProps) {
   // 判断是否是文件类型资源（可以切换查看模式）
-  const isFileResource = currentResource && currentResource.file_type !== 'text' && currentResource.file_path;
+  const isFileResource = currentResource && currentResource.resource_subtype !== 'text' && currentResource.file_path;
   const { t } = useLanguage();
 
   const renderEditorArea = () => {
@@ -63,7 +63,7 @@ export function EditorPanel({
     }
 
     // 如果是"编辑文本"模式，显示 TiptapEditor（用于非 text 类型资源的文本编辑，即使内容为空也可以添加）
-    if (viewMode === 'text' && currentResource.file_type !== 'text') {
+    if (viewMode === 'text' && currentResource.resource_subtype !== 'text') {
       return (
         <TiptapEditor
           content={editorContent}
@@ -74,7 +74,7 @@ export function EditorPanel({
       );
     }
 
-    if (currentResource.file_type === "text") {
+    if (currentResource.resource_subtype === "text") {
       return (
         <TiptapEditor
           content={editorContent}
@@ -85,7 +85,7 @@ export function EditorPanel({
       );
     }
 
-    if (currentResource.file_type === "pdf") {
+    if (currentResource.resource_subtype === "pdf") {
       const pdfPath = currentResource.file_path;
       if (!pdfPath || !assetsPath) {
         return (
@@ -113,13 +113,13 @@ export function EditorPanel({
         >
           <PDFViewer
             url={pdfUrl}
-            displayName={currentResource.display_name || "PDF 文档"}
+            displayName={currentResource.title || "PDF 文档"}
           />
         </Suspense>
       );
     }
 
-    if (currentResource.file_type === "image") {
+    if (currentResource.resource_subtype === "image") {
       const imagePath = currentResource.file_path;
       if (!imagePath || !assetsPath) {
         return (
@@ -192,7 +192,7 @@ export function EditorPanel({
                 >
                   <img
                     src={imageUrl}
-                    alt={currentResource.display_name || "图片预览"}
+                    alt={currentResource.title || "图片预览"}
                     className="max-w-full max-h-full object-contain"
                     style={{ userSelect: "none" }}
                     onError={(e) => {
@@ -215,12 +215,12 @@ export function EditorPanel({
       );
     }
 
-    if (currentResource.file_type === "url") {
+    if (currentResource.resource_subtype === "url") {
       return (
         <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
           <span className="text-4xl mb-4">🔗</span>
           <p className="text-lg font-medium">链接资源</p>
-          <p className="text-sm">{currentResource.content || "无内容"}</p>
+          <p className="text-sm">{currentResource.file_content || "无内容"}</p>
         </div>
       );
     }
@@ -229,8 +229,8 @@ export function EditorPanel({
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
         <span className="text-4xl mb-4">📎</span>
         <p className="text-lg font-medium">
-          {currentResource.file_type ? resourceTypeIcons[currentResource.file_type] : "📎"}{" "}
-          {currentResource.display_name}
+          {currentResource.resource_subtype ? resourceSubtypeIcons[currentResource.resource_subtype] : "📎"}{" "}
+          {currentResource.title}
         </p>
         <p className="text-sm">此类型文件暂不支持预览</p>
       </div>
@@ -246,13 +246,13 @@ export function EditorPanel({
             // 编辑模式：显示输入框
             <>
               <span className="text-sm">
-                {currentResource.file_type ? resourceTypeIcons[currentResource.file_type] : "📎"}
+                {currentResource.resource_subtype ? resourceSubtypeIcons[currentResource.resource_subtype] : "📎"}
               </span>
               <Input
                 value={editedDisplayName}
                 onChange={(e) => onDisplayNameChange(e.target.value)}
                 onBlur={() => {
-                  if (editedDisplayName !== (currentResource.display_name || "")) {
+                  if (editedDisplayName !== (currentResource.title || "")) {
                     onSave();
                   } else {
                     onEditingNameChange(false);
@@ -262,7 +262,7 @@ export function EditorPanel({
                   if (e.key === "Enter") {
                     e.currentTarget.blur();
                   } else if (e.key === "Escape") {
-                    onDisplayNameChange(currentResource.display_name || "");
+                    onDisplayNameChange(currentResource.title || "");
                     onEditingNameChange(false);
                   }
                 }}
@@ -278,8 +278,8 @@ export function EditorPanel({
                 onClick={() => onEditingNameChange(true)}
                 title="点击编辑名称"
               >
-                {currentResource.file_type ? resourceTypeIcons[currentResource.file_type] : "📎"}{" "}
-                {currentResource.display_name || "未命名"}
+                {currentResource.resource_subtype ? resourceSubtypeIcons[currentResource.resource_subtype] : "📎"}{" "}
+                {currentResource.title || "未命名"}
               </span>
               {/* 文本/文件切换按钮 - 对所有文件类型资源都显示 */}
               {isFileResource && (
@@ -307,12 +307,12 @@ export function EditorPanel({
         ) : (
           <span className="text-sm font-medium">{t("workspace", "workspaceArea")}</span>
         )}
-        {currentResource && (currentResource.file_type === "text" || viewMode === 'text') && (
+        {currentResource && (currentResource.resource_subtype === "text" || viewMode === 'text') && (
           <Button
             variant="ghost"
             size="icon"
             className="h-8 w-8 ml-auto"
-            disabled={(!isModified && editedDisplayName === (currentResource.display_name || "")) || isSaving}
+            disabled={(!isModified && editedDisplayName === (currentResource.title || "")) || isSaving}
             onClick={onSave}
             title={isSaving ? "保存中..." : "保存 (Ctrl+S)"}
           >
@@ -323,7 +323,7 @@ export function EditorPanel({
       {/* Editor Content */}
       <div className={cn(
         "flex-1 overflow-auto",
-        (viewMode === 'text' || (currentResource?.file_type !== "pdf" && currentResource?.file_type !== "image")) && "p-4"
+        (viewMode === 'text' || (currentResource?.resource_subtype !== "pdf" && currentResource?.resource_subtype !== "image")) && "p-4"
       )}>
         {renderEditorArea()}
       </div>

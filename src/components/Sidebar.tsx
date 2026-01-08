@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { getNodeTypeIcon } from "@/lib/nodeUtils";
 import { Button } from "@/components/ui/button";
 import { useState, useRef, useEffect, useCallback } from "react";
 
@@ -10,11 +11,8 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Package,
-  Tag,
-  CheckSquare,
-  FileText,
 } from "lucide-react";
-import { PageType, navItems, NodeRecord, NodeType } from "../types";
+import { PageType, navItems, NodeRecord } from "../types";
 import { fetchPinnedNodes } from "../api";
 
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -32,18 +30,6 @@ interface SidebarProps {
 
 const MIN_WIDTH = 150;
 const MAX_WIDTH = 400;
-
-// 根据 node_type 返回对应图标
-const getNodeTypeIcon = (nodeType: NodeType) => {
-  switch (nodeType) {
-    case "topic":
-      return <Tag className="h-3.5 w-3.5" />;
-    case "task":
-      return <CheckSquare className="h-3.5 w-3.5" />;
-    case "resource":
-      return <FileText className="h-3.5 w-3.5" />;
-  }
-};
 
 export function Sidebar({
   currentPage,

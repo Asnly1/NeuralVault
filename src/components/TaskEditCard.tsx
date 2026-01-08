@@ -26,7 +26,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { Task, TaskStatus, TaskPriority, priorityConfig } from "../types";
+import { NodeRecord, TaskStatus, TaskPriority, priorityConfig } from "../types";
 import {
   createTask,
   updateTaskTitle,
@@ -38,7 +38,7 @@ import {
 } from "../api";
 
 interface TaskEditCardProps {
-  task?: Task; // 可选，传入则为编辑模式
+  task?: NodeRecord; // 可选，传入则为编辑模式
   open: boolean; // 控制 Dialog 显示
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void; // 保存成功后的回调
@@ -65,8 +65,8 @@ export function TaskEditCard({
     if (task) {
       return {
         title: task.title || "",
-        description: task.description || "",
-        status: task.status ?? "todo",
+        description: task.summary || "",
+        status: task.task_status ?? "todo",
         priority: task.priority ?? "medium",
         due_date: task.due_date || undefined,
       };
@@ -111,19 +111,19 @@ export function TaskEditCard({
 
         // 标题
         if (formData.title !== (task.title || "")) {
-          updates.push(updateTaskTitle(task.task_id, formData.title));
+          updates.push(updateTaskTitle(task.node_id, formData.title));
         }
 
         // 描述
-        if (formData.description !== (task.description || "")) {
+        if (formData.description !== (task.summary || "")) {
           updates.push(
-            updateTaskDescription(task.task_id, formData.description || null)
+            updateTaskDescription(task.node_id, formData.description || null)
           );
         }
 
         // 优先级
         if (formData.priority !== task.priority) {
-          updates.push(updateTaskPriority(task.task_id, formData.priority));
+          updates.push(updateTaskPriority(task.node_id, formData.priority));
         }
 
         // 截止日期
@@ -137,15 +137,15 @@ export function TaskEditCard({
           const dueDateValue = formData.due_date
             ? `${format(formData.due_date, "yyyy-MM-dd")} 00:00:00`
             : null;
-          updates.push(updateTaskDueDate(task.task_id, dueDateValue));
+          updates.push(updateTaskDueDate(task.node_id, dueDateValue));
         }
 
         // 状态
-        if (formData.status !== task.status) {
+        if (formData.status !== task.task_status) {
           if (formData.status === "done") {
-            updates.push(markTaskAsDone(task.task_id));
+            updates.push(markTaskAsDone(task.node_id));
           } else {
-            updates.push(markTaskAsTodo(task.task_id));
+            updates.push(markTaskAsTodo(task.node_id));
           }
         }
 
