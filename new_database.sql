@@ -49,9 +49,15 @@ CREATE TABLE nodes (
     
     -- 资源处理状态 (Rust 后台使用)
     processing_stage TEXT DEFAULT 'todo' CHECK(processing_stage IN ('todo','chunking','embedding','done')),
+    -- 用户侧的状态 (Inbox 功能核心)
+    -- 'unreviewed': AI 刚抓取，在 Inbox 等待确认
+    -- 'reviewed': 用户已确认/已归档
+    -- 'rejected': 用户认为无效
+    review_status TEXT DEFAULT 'unreviewed' CHECK (review_status IN ('unreviewed', 'reviewed', 'rejected')),
 
     -- 5. 系统/管理属性
     is_pinned BOOLEAN DEFAULT 0, -- 是否出现在Sidebar的收藏
+    pinned_at DATETIME, -- 收藏时间,用来排序
 
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -66,7 +72,8 @@ CREATE INDEX idx_nodes_type ON nodes(node_type);
 CREATE INDEX idx_nodes_uuid ON nodes(uuid);
 CREATE INDEX idx_nodes_task_status ON nodes(task_status) WHERE task_status IS NOT NULL; -- 快速查任务
 CREATE INDEX idx_nodes_file_hash ON nodes(file_hash) WHERE file_hash IS NOT NULL; -- 资源去重
-CREATE INDEX idx_nodes_full_text ON nodes(title); -- 简单的标题搜索
+CREATE INDEX idx_nodes_title ON nodes(title); -- 简单的标题搜索
+CREATE INDEX idx_nodes_user_note ON nodes(user_note);
 
 -- ==========================================
 -- 统一关联表：Edges (图关系)
@@ -163,7 +170,7 @@ CREATE TABLE session_bindings (
     session_id INTEGER NOT NULL,
     node_id INTEGER NOT NULL, -- 这一场对话关联了哪些 Node (Topic/Task/Resource)
     
-    -- 绑定类型 (可选，如果以后想区分这是否是“主要上下文”)
+    -- 绑定类型
     -- 'primary': 用户明确选中的
     -- 'implicit': AI 自动搜索出来的相关上下文
     binding_type TEXT DEFAULT 'primary', 

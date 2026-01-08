@@ -40,7 +40,13 @@ Python依赖：
     3. Workspace（参考Cursor,三个部分都支持折叠）：
         - 左侧：相关资源：显示当前Node contains 的Nodes
         - 中间：文本编辑
-        - 右侧：对话框。可以上传图片/文件/文字。如果上传了图片/文件，自动添加到左侧的Contains Nodes。添加一个“Pin to Context”按钮：如果 AI 说了一段很好的解释，可以一键把它转成一个 Resource 固定在左侧。
+        - 右侧：对话框。可以上传图片/文件/文字。如果上传了图片/文件，自动添加到左侧的Contains Nodes。添加一个“Pin to Context”按钮：如果 AI 说了一段很好的解释，可以一键把它转成一个 Resource 固定在左侧。插入时在 nodes.source_meta 中存入：
+        {
+        "source_type": "chat_message",
+        "session_id": 10,
+        "message_id": 42,
+        "original_prompt": "解释一下 Rust 的生命周期"
+        }
     4. Sidebar：搜索框（用户选择不同搜索模式） + 跳转到不同页面 + Favourite Node
         1. 语义匹配（99%情况）：使用Hybrid Search
         2. 精确匹配（1%情况）： SQL LIKE（不需要FTS5, 个人知识库数据量不大，且FTS5对中文分词支持不好）
