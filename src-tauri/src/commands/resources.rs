@@ -17,7 +17,7 @@ use crate::{
     db::{
         get_node_by_id, insert_node, list_all_resources, update_node_content,
         update_node_summary, update_node_title, update_resource_sync_status, NewNode, NodeType,
-        ResourceProcessingStage, ResourceSubtype, ResourceSyncStatus, ReviewStatus, SourceMeta,
+        ResourceProcessingStage, ResourceSubtype, ResourceEmbeddingStatus, ReviewStatus, SourceMeta,
     },
     utils::{compute_sha256, get_assets_dir, get_extension, parse_file_type, resolve_file_path},
     AppResult,
@@ -385,11 +385,11 @@ pub async fn capture_resource(
             user_note: user_note.as_deref(),
             resource_subtype: Some(subtype),
             source_meta: Some(Json(meta)),
-            indexed_hash: None,
+            embedded_hash: None,
             processing_hash: None,
-            sync_status: ResourceSyncStatus::Pending,
-            last_indexed_at: None,
-            last_error: None,
+            embedding_status: ResourceEmbeddingStatus::Pending,
+            last_embedding_at: None,
+            last_embedding_error: None,
             processing_stage: ResourceProcessingStage::Todo,
             review_status: ReviewStatus::Unreviewed,
         },
@@ -419,7 +419,7 @@ pub async fn capture_resource(
             update_resource_sync_status(
                 &state.db,
                 node_id,
-                ResourceSyncStatus::Error,
+                ResourceEmbeddingStatus::Error,
                 None,
                 Some(&err),
             )

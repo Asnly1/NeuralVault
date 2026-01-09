@@ -67,7 +67,6 @@ class EmbedRequest(BaseModel):
 class EmbedChunkResult(BaseModel):
     chunk_text: str
     chunk_index: int
-    page_number: Optional[int] = None
     qdrant_uuid: str
     embedding_hash: str
     token_count: Optional[int] = None
@@ -77,7 +76,8 @@ class EmbedResponse(BaseModel):
     node_id: int
     embedding_type: EmbeddingType
     chunks: List[EmbedChunkResult] = Field(default_factory=list)
-    embedding_model: Optional[str] = None
+    dense_embedding_model: Optional[str] = None
+    sparse_embedding_model: Optional[str] = None
 
 
 class DeleteEmbeddingRequest(BaseModel):
@@ -118,7 +118,6 @@ class SearchResultItem(BaseModel):
     chunk_index: int
     chunk_text: str
     score: float
-    page_number: Optional[int] = None
 
 
 class SearchResponse(BaseModel):

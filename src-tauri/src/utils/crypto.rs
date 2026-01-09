@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 const NONCE_SIZE: usize = 12;
 const KEY_SIZE: usize = 32; // AES-256
-const TAG_SIZE: usize = 16;
+const TAG_SIZE: usize = 16; // AES-GCM规定的tag长度
 
 /// 加密服务
 pub struct CryptoService {
@@ -34,16 +34,21 @@ impl CryptoService {
     /// nonce: Number used once
     /// 返回格式: [nonce 12B][ciphertext][tag 16B]
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>, String> {
+        // 1. 创建数字
         let mut nonce_bytes = [0u8; NONCE_SIZE];
+        // 2. 使用 OsRng（操作系统提供的加密安全随机数生成器）填充这个数组
         OsRng.fill_bytes(&mut nonce_bytes);
+        // 3. 将其转换为加密库所需的 Nonce 类型。
         let nonce = Nonce::from_slice(&nonce_bytes);
 
+        // 4. 调用 self.cipher.encrypt，传入刚才生成的 nonce 和用户的 plaintext。
         let ciphertext = self
             .cipher
             .encrypt(nonce, plaintext)
             .map_err(|e| e.to_string())?;
 
         let mut result = Vec::with_capacity(NONCE_SIZE + ciphertext.len());
+        // 5. 先写入 nonce，再写入 ciphertext
         result.extend_from_slice(&nonce_bytes);
         result.extend_from_slice(&ciphertext);
 

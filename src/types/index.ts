@@ -19,8 +19,8 @@ export type ResourceSubtype = (typeof resourceSubtypeValues)[number];
 export const reviewStatusValues = ["unreviewed", "reviewed", "rejected"] as const;
 export type ReviewStatus = (typeof reviewStatusValues)[number];
 
-export const syncStatusValues = ["pending", "synced", "dirty", "error"] as const;
-export type SyncStatus = (typeof syncStatusValues)[number];
+export const embeddingStatusValues = ["pending", "synced", "dirty", "error"] as const;
+export type EmbeddingStatus = (typeof embeddingStatusValues)[number];
 
 export const processingStageValues = ["todo", "chunking", "embedding", "done"] as const;
 export type ProcessingStage = (typeof processingStageValues)[number];
@@ -46,11 +46,11 @@ export const nodeRecordSchema = z.object({
   user_note: z.string().nullable(),
   resource_subtype: z.enum(resourceSubtypeValues).nullable(),
   source_meta: z.string().nullable(),
-  indexed_hash: z.string().nullable(),
+  embedded_hash: z.string().nullable(),
   processing_hash: z.string().nullable(),
-  sync_status: z.enum(syncStatusValues),
-  last_indexed_at: z.string().nullable(),
-  last_error: z.string().nullable(),
+  embedding_status: z.enum(embeddingStatusValues),
+  last_embedding_at: z.string().nullable(),
+  last_embedding_error: z.string().nullable(),
   processing_stage: z.enum(processingStageValues),
   review_status: z.enum(reviewStatusValues),
   is_pinned: z.boolean(),
@@ -220,7 +220,6 @@ export interface SemanticSearchResult {
   chunk_index: number;
   chunk_text: string;
   score: number;
-  page_number?: number;
 }
 
 // ============================================

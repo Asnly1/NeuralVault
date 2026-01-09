@@ -42,7 +42,6 @@ async def search_hybrid(req: SearchRequest) -> SearchResponse:
                 chunk_index=r["chunk_index"],
                 chunk_text=r["chunk_text"],
                 score=r["score"],
-                page_number=r["page_number"],
             )
             for r in results
             if r["node_id"] is not None

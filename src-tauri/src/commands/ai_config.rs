@@ -29,7 +29,7 @@ pub struct SetApiKeyRequest {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct SetDefaultModelRequest {
+pub struct SetProcessingProviderModelRequest {
     pub provider: String,
     pub model: String,
 }
@@ -44,8 +44,8 @@ pub struct AIProviderStatus {
 #[derive(Debug, Serialize)]
 pub struct AIConfigStatusResponse {
     pub providers: HashMap<String, AIProviderStatus>,
-    pub default_provider: Option<String>,
-    pub default_model: Option<String>,
+    pub processing_provider: Option<String>,
+    pub processing_model: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -139,8 +139,8 @@ pub async fn get_ai_config_status(
 
     Ok(AIConfigStatusResponse {
         providers,
-        default_provider: config.default_provider,
-        default_model: config.default_model,
+        processing_provider: config.processing_provider,
+        processing_model: config.processing_model,
     })
 }
 
@@ -170,14 +170,14 @@ pub async fn remove_api_key(state: State<'_, AppState>, provider: String) -> Res
     remove_provider_config(&state.python, &provider).await
 }
 
-/// 设置默认模型
+/// 设置processing provider和model
 #[tauri::command]
-pub async fn set_default_model(
+pub async fn set_processing_provider_model(
     state: State<'_, AppState>,
-    request: SetDefaultModelRequest,
+    request: SetProcessingProviderModelRequest,
 ) -> Result<(), String> {
     let config_service = state.ai_config.lock().await;
-    config_service.set_default_model(&request.provider, &request.model)
+    config_service.set_processing_provider_model(&request.provider, &request.model)
 }
 
 /// 发送聊天消息（通过 Python 调用 LLM）

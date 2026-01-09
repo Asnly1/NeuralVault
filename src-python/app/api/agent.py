@@ -23,7 +23,7 @@ router = APIRouter()
 
 def _single_chunk(text: str) -> list[TextChunk]:
     """创建单段 TextChunk（用于 summary 或不切分的 content）"""
-    return [TextChunk(text=text, chunk_index=0, page_number=None, token_count=len(text.split()))]
+    return [TextChunk(text=text, chunk_index=0, token_count=len(text.split()))]
 
 
 @router.post("/summary", response_model=SummaryResponse)
@@ -46,7 +46,8 @@ async def embed_text(request: EmbedRequest):
             node_id=request.node_id,
             embedding_type=request.embedding_type,
             chunks=[],
-            embedding_model=vector_service.get_dense_model_name(),
+            dense_embedding_model=vector_service.get_dense_model_name(),
+            sparse_embedding_model=vector_service.get_sparse_model_name(),
         )
 
     db_manager = await DatabaseManager.get_instance()
@@ -64,7 +65,7 @@ async def embed_text(request: EmbedRequest):
         chunks = _single_chunk(text)
     else:
         if request.chunk:
-            chunks = vector_service.chunk_text(text)
+            chunks = vector_service.chunking_text(text)
         else:
             chunks = _single_chunk(text)
 
@@ -77,12 +78,11 @@ async def embed_text(request: EmbedRequest):
 
     results = [
         EmbedChunkResult(
-            chunk_text=meta["text"],
+            chunk_text=meta["chunk_text"],
             chunk_index=meta["chunk_index"],
-            page_number=meta["page_number"],
+            token_count=meta["token_count"],
             qdrant_uuid=meta["qdrant_uuid"],
             embedding_hash=meta["embedding_hash"],
-            token_count=meta["token_count"],
         )
         for meta in chunk_metadata
     ]
@@ -91,7 +91,8 @@ async def embed_text(request: EmbedRequest):
         node_id=request.node_id,
         embedding_type=request.embedding_type,
         chunks=results,
-        embedding_model=vector_service.get_dense_model_name(),
+        dense_embedding_model=vector_service.get_dense_model_name(),
+        sparse_embedding_model=vector_service.get_sparse_model_name(),
     )
 
 

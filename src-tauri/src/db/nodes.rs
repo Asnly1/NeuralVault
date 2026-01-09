@@ -1,19 +1,19 @@
 use super::{
     DbPool, EmbeddingType, NewNode, NodeRecord, NodeType, ResourceProcessingStage,
-    ResourceSyncStatus, ReviewStatus, TaskPriority, TaskStatus,
+    ResourceEmbeddingStatus, ReviewStatus, TaskPriority, TaskStatus,
 };
 
 const NODE_FIELDS: &str = "node_id, uuid, user_id, title, summary, node_type, task_status, priority, due_date, done_date, \
-    file_hash, file_path, file_content, user_note, resource_subtype, source_meta, indexed_hash, processing_hash, sync_status, \
-    last_indexed_at, last_error, processing_stage, review_status, is_pinned, pinned_at, created_at, updated_at, is_deleted, deleted_at";
+    file_hash, file_path, file_content, user_note, resource_subtype, source_meta, embedded_hash, processing_hash, embedding_status, \
+    last_embedding_at, last_embedding_error, processing_stage, review_status, is_pinned, pinned_at, created_at, updated_at, is_deleted, deleted_at";
 
 pub async fn insert_node(pool: &DbPool, params: NewNode<'_>) -> Result<i64, sqlx::Error> {
     let result = sqlx::query(
         "INSERT INTO nodes (\
             uuid, user_id, title, summary, node_type, task_status, priority, due_date, done_date, \
-            file_hash, file_path, file_content, user_note, resource_subtype, source_meta, indexed_hash, processing_hash, \
-            sync_status, last_indexed_at, last_error, processing_stage, review_status\
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            file_hash, file_path, file_content, user_note, resource_subtype, source_meta, embedded_hash, processing_hash, \
+            embedding_status, last_embedding_at, last_embedding_error, processing_stage, review_status\
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(params.uuid)
     .bind(params.user_id)
@@ -30,11 +30,11 @@ pub async fn insert_node(pool: &DbPool, params: NewNode<'_>) -> Result<i64, sqlx
     .bind(params.user_note)
     .bind(params.resource_subtype)
     .bind(params.source_meta)
-    .bind(params.indexed_hash)
+    .bind(params.embedded_hash)
     .bind(params.processing_hash)
-    .bind(params.sync_status)
-    .bind(params.last_indexed_at)
-    .bind(params.last_error)
+    .bind(params.embedding_status)
+    .bind(params.last_embedding_at)
+    .bind(params.last_embedding_error)
     .bind(params.processing_stage)
     .bind(params.review_status)
     .execute(pool)
@@ -305,19 +305,19 @@ pub async fn update_resource_processing_stage(
 pub async fn update_resource_sync_status(
     pool: &DbPool,
     node_id: i64,
-    status: ResourceSyncStatus,
-    indexed_hash: Option<&str>,
-    last_error: Option<&str>,
+    status: ResourceEmbeddingStatus,
+    embedded_hash: Option<&str>,
+    last_embedding_error: Option<&str>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "UPDATE nodes SET sync_status = ?, indexed_hash = ?, last_error = ?, \
-         last_indexed_at = CASE WHEN ? = 'synced' THEN CURRENT_TIMESTAMP ELSE last_indexed_at END, \
+        "UPDATE nodes SET sync_status = ?, embedded_hash = ?, last_embedding_error = ?, \
+         last_embedding_at = CASE WHEN ? = 'synced' THEN CURRENT_TIMESTAMP ELSE last_embedding_at END, \
          updated_at = CURRENT_TIMESTAMP \
          WHERE node_id = ? AND node_type = 'resource'",
     )
     .bind(status)
-    .bind(indexed_hash)
-    .bind(last_error)
+    .bind(embedded_hash)
+    .bind(last_embedding_error)
     .bind(status)
     .bind(node_id)
     .execute(pool)
@@ -344,23 +344,24 @@ pub async fn insert_context_chunks(
     pool: &DbPool,
     node_id: i64,
     embedding_type: EmbeddingType,
-    chunks: &[super::ChunkData],
-    embedding_model: Option<&str>,
+    chunks: &[super::EmbedChunkResult],
+    dense_embedding_model: Option<&str>,
+    sparse_embedding_model: Option<&str>,
 ) -> Result<(), sqlx::Error> {
     for chunk in chunks {
         sqlx::query(
             "INSERT INTO context_chunks \
-             (node_id, embedding_type, chunk_text, chunk_index, page_number, qdrant_uuid, embedding_hash, embedding_model, embedding_at, token_count) \
+             (node_id, embedding_type, chunk_text, chunk_index, qdrant_uuid, embedding_hash, dense_embedding_model, sparse_embedding_model, embedding_at, token_count) \
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)",
         )
         .bind(node_id)
         .bind(embedding_type)
         .bind(&chunk.chunk_text)
         .bind(chunk.chunk_index)
-        .bind(chunk.page_number)
         .bind(&chunk.qdrant_uuid)
         .bind(&chunk.embedding_hash)
-        .bind(embedding_model)
+        .bind(dense_embedding_model)
+        .bind(sparse_embedding_model)
         .bind(chunk.token_count)
         .execute(pool)
         .await?;

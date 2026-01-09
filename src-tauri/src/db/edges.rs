@@ -89,8 +89,8 @@ pub async fn list_target_nodes(
 ) -> Result<Vec<NodeRecord>, sqlx::Error> {
     sqlx::query_as::<_, NodeRecord>(
         "SELECT n.node_id, n.uuid, n.user_id, n.title, n.summary, n.node_type, n.task_status, n.priority, n.due_date, n.done_date, \
-            n.file_hash, n.file_path, n.file_content, n.user_note, n.resource_subtype, n.source_meta, n.indexed_hash, n.processing_hash, n.sync_status, \
-            n.last_indexed_at, n.last_error, n.processing_stage, n.review_status, n.is_pinned, n.pinned_at, n.created_at, n.updated_at, n.is_deleted, n.deleted_at \
+            n.file_hash, n.file_path, n.file_content, n.user_note, n.resource_subtype, n.source_meta, n.embedded_hash, n.processing_hash, n.embedding_status, \
+            n.last_embedding_at, n.last_embedding_error, n.processing_stage, n.review_status, n.is_pinned, n.pinned_at, n.created_at, n.updated_at, n.is_deleted, n.deleted_at \
          FROM edges e \
          INNER JOIN nodes n ON n.node_id = e.target_node_id \
          WHERE e.source_node_id = ? AND e.relation_type = ? AND e.is_deleted = 0 AND n.is_deleted = 0",
@@ -108,8 +108,8 @@ pub async fn list_source_nodes(
 ) -> Result<Vec<NodeRecord>, sqlx::Error> {
     sqlx::query_as::<_, NodeRecord>(
         "SELECT n.node_id, n.uuid, n.user_id, n.title, n.summary, n.node_type, n.task_status, n.priority, n.due_date, n.done_date, \
-            n.file_hash, n.file_path, n.file_content, n.user_note, n.resource_subtype, n.source_meta, n.indexed_hash, n.processing_hash, n.sync_status, \
-            n.last_indexed_at, n.last_error, n.processing_stage, n.review_status, n.is_pinned, n.pinned_at, n.created_at, n.updated_at, n.is_deleted, n.deleted_at \
+            n.file_hash, n.file_path, n.file_content, n.user_note, n.resource_subtype, n.source_meta, n.embedded_hash, n.processing_hash, n.embedding_status, \
+            n.last_embedding_at, n.last_embedding_error, n.processing_stage, n.review_status, n.is_pinned, n.pinned_at, n.created_at, n.updated_at, n.is_deleted, n.deleted_at \
          FROM edges e \
          INNER JOIN nodes n ON n.node_id = e.source_node_id \
          WHERE e.target_node_id = ? AND e.relation_type = ? AND e.is_deleted = 0 AND n.is_deleted = 0",

@@ -14,7 +14,6 @@ pub struct SemanticSearchResult {
     pub chunk_index: i32,
     pub chunk_text: String,
     pub score: f64,
-    pub page_number: Option<i32>,
 }
 
 /// 语义搜索（调用 Python /search/hybrid）
@@ -74,7 +73,6 @@ pub async fn search_semantic(
         chunk_index: i32,
         chunk_text: String,
         score: f64,
-        page_number: Option<i32>,
     }
 
     let search_response: SearchResponse = response.json().await.map_err(|e| {
@@ -94,7 +92,6 @@ pub async fn search_semantic(
             chunk_index: r.chunk_index,
             chunk_text: r.chunk_text,
             score: r.score * weight,
-            page_number: r.page_number,
         })
         .collect();
 

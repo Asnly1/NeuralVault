@@ -21,8 +21,8 @@ pub struct ProviderConfig {
 pub struct AIConfigData {
     pub version: u32,
     pub providers: HashMap<String, ProviderConfig>,
-    pub default_provider: Option<String>,
-    pub default_model: Option<String>,
+    pub processing_provider: Option<String>,
+    pub processing_model: Option<String>,
 }
 
 impl Default for AIConfigData {
@@ -30,8 +30,8 @@ impl Default for AIConfigData {
         Self {
             version: 1,
             providers: HashMap::new(),
-            default_provider: None,
-            default_model: None,
+            processing_provider: None,
+            processing_model: None,
         }
     }
 }
@@ -97,10 +97,10 @@ impl AIConfigService {
         let mut config = self.load()?;
         config.providers.remove(provider);
 
-        // 如果删除的是默认 provider，清除默认设置
-        if config.default_provider.as_deref() == Some(provider) {
-            config.default_provider = None;
-            config.default_model = None;
+        // 如果删除的是processing provider，清除processing provider和model
+        if config.processing_provider.as_deref() == Some(provider) {
+            config.processing_provider = None;
+            config.processing_model = None;
         }
 
         self.save(&config)
@@ -115,11 +115,7 @@ impl AIConfigService {
     /// 检查 provider 是否有 API Key
     pub fn has_api_key(&self, provider: &str) -> Result<bool, String> {
         let config = self.load()?;
-        Ok(config
-            .providers
-            .get(provider)
-            .map(|p| !p.api_key.is_empty())
-            .unwrap_or(false))
+        Ok(config.providers.get(provider).map(|p| !p.api_key.is_empty()).unwrap_or(false))
     }
 
     /// 获取 provider 的配置
@@ -128,11 +124,11 @@ impl AIConfigService {
         Ok(config.providers.get(provider).cloned())
     }
 
-    /// 设置默认模型
-    pub fn set_default_model(&self, provider: &str, model: &str) -> Result<(), String> {
+    /// 设置processing provider和model
+    pub fn set_processing_provider_model(&self, provider: &str, model: &str) -> Result<(), String> {
         let mut config = self.load()?;
-        config.default_provider = Some(provider.to_string());
-        config.default_model = Some(model.to_string());
+        config.processing_provider = Some(provider.to_string());
+        config.processing_model = Some(model.to_string());
         self.save(&config)
     }
 }

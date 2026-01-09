@@ -185,7 +185,6 @@ export function SearchBar({ onSelectResult }: SearchBarProps) {
                       </p>
                       <p className="text-[10px] text-muted-foreground mt-0.5">
                         Score: {result.score.toFixed(3)}
-                        {result.page_number && ` | Page ${result.page_number}`}
                       </p>
                     </div>
                   </div>

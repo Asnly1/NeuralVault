@@ -8,9 +8,9 @@ use uuid::Uuid;
 use crate::db::{
     delete_context_chunks_by_type, get_node_by_id, get_node_by_title, insert_context_chunks,
     insert_edge_if_missing, insert_node, list_nodes_by_type, update_node_summary,
-    update_resource_processing_stage, update_resource_sync_status, ChunkData, DbPool,
+    update_resource_processing_stage, update_resource_sync_status, DbPool,
     EmbeddingType, EdgeRelationType, NewEdge, NewNode, NodeRecord, NodeType,
-    ResourceProcessingStage, ResourceSyncStatus, ReviewStatus,
+    ResourceProcessingStage, ResourceEmbeddingStatus, ReviewStatus, EmbedChunkResult,
 };
 use crate::services::AIConfigService;
 use crate::sidecar::PythonSidecar;
@@ -25,6 +25,10 @@ struct AiPipelineJob {
 
 #[derive(Clone)]
 pub struct AiPipeline {
+    // Multi-Producer, Single-Consumer
+    // Sender可以有多个，同时向同一个管道仍任务
+    // 但是Receiver只能有一个
+    // 管道里传输的数据类型是AiPipelineJob
     sender: mpsc::Sender<AiPipelineJob>,
     inflight: Arc<Mutex<HashSet<i64>>>,
 }
@@ -35,8 +39,12 @@ impl AiPipeline {
         python: Arc<PythonSidecar>,
         ai_config: Arc<Mutex<AIConfigService>>,
     ) -> Self {
+        // 创建一个mpsc通道，AI_QUEUE_BUFFER是通道的缓冲区大小
+        // 如果超过AI_QUEUE_BUFFER，新的任务会阻塞，直到有空闲位置
         let (sender, receiver) = mpsc::channel(AI_QUEUE_BUFFER);
         let inflight = Arc::new(Mutex::new(HashSet::new()));
+        // 只是增加一个引用计数，不会增加新的数据
+        // 但是可以被送进新线程里面
         let inflight_worker = inflight.clone();
 
         tauri::async_runtime::spawn(async move {
@@ -47,8 +55,13 @@ impl AiPipeline {
     }
 
     pub async fn enqueue_resource(&self, node_id: i64) -> Result<(), String> {
+        // 用括号包起来，使得inflight尽快离开作用域，尽快释放锁
         {
+            // 调用self.inflight时，拿到了Arc里面的Mutex
+            // 然后调用lock()，拿到了MutexGuard<HashSet<i64>>
+            // 但是MutexGuard实现了DerefMut，所以可以像操作HashSet一样操作
             let mut inflight = self.inflight.lock().await;
+            // 查询操作不应该消耗变量，所以用引用
             if inflight.contains(&node_id) {
                 return Ok(());
             }
@@ -69,7 +82,13 @@ async fn run_pipeline(
     python: Arc<PythonSidecar>,
     ai_config: Arc<Mutex<AIConfigService>>,
 ) {
+    // receiver.recv().await:
+    // 空闲时等待：如果队列里没有任务，代码运行到这里会暂停，释放 CPU 资源，直到有新的 AiPipelineJob 被发送过来。
+    // 收到任务时唤醒：一旦有任务，它会醒来，把任务赋值给 job，进入循环体。
+    // 通道关闭时退出：如果所有的发送端都被销毁了（比如程序关闭），recv() 会返回 None，循环结束，函数退出。
     while let Some(job) = receiver.recv().await {
+        // 串行处理每个文件，如果某个文件出错了，也不会panic，而是只打印错误信息，继续处理下一个文件
+        // TODO: 改造为Pipeline，可以并行处理多个文件
         if let Err(err) = process_resource_job(&db, &python, &ai_config, job.node_id).await {
             eprintln!("[AiPipeline] node {} failed: {}", job.node_id, err);
         }
@@ -85,42 +104,41 @@ async fn process_resource_job(
     ai_config: &Arc<Mutex<AIConfigService>>,
     node_id: i64,
 ) -> Result<(), String> {
+    // 1. 获取node
     let node = get_node_by_id(db, node_id).await.map_err(|e| e.to_string())?;
     if node.node_type != NodeType::Resource || node.is_deleted {
         return Ok(());
     }
 
+    // 2. 确保content不为空
     let content = node
-        .file_content
-        .as_deref()
-        .unwrap_or("")
-        .trim()
-        .to_string();
+        .file_content // Option<String>
+        .as_deref() // Option<&str>
+        .unwrap_or("") // &str
+        .trim() // &str
+        .to_string(); // String
     if content.is_empty() {
         mark_resource_error(db, node_id, &node, "resource content is empty").await?;
         return Ok(());
     }
 
     let processing_result: Result<(String, String, String), String> = async {
+        // 3. 更新状态为Pending
         update_resource_sync_status(
             db,
             node_id,
-            ResourceSyncStatus::Pending,
-            node.indexed_hash.as_deref(),
+            ResourceEmbeddingStatus::Pending,
+            node.embedded_hash.as_deref(),
             None,
         )
         .await
         .map_err(|e| e.to_string())?;
-        update_resource_processing_stage(db, node_id, ResourceProcessingStage::Chunking)
-            .await
-            .map_err(|e| e.to_string())?;
 
-        ensure_python_ready(python).await?;
-        let (provider, model) = resolve_provider_model(ai_config).await?;
+        // 4. 获取processing provider和processing model
+        let (provider, model) = get_processing_provider_model(ai_config).await?;
 
-        let summary =
-            request_summary(python, &provider, &model, &content, node.user_note.as_deref())
-                .await?;
+        // 5. 获取summary
+        let summary = request_summary(python, &provider, &model, &content, node.user_note.as_deref()).await?;
         let summary = summary.trim().to_string();
         if summary.is_empty() {
             update_node_summary(db, node_id, None)
@@ -132,10 +150,14 @@ async fn process_resource_job(
                 .map_err(|e| e.to_string())?;
         }
 
+        ensure_python_ready(python).await?;
+        
+        // 6. 更新处理阶段为Embedding
         update_resource_processing_stage(db, node_id, ResourceProcessingStage::Embedding)
             .await
             .map_err(|e| e.to_string())?;
-
+        
+        // 7. 同步summary和content的embedding
         sync_embeddings_for_type(
             db,
             python,
@@ -161,7 +183,7 @@ async fn process_resource_job(
         update_resource_sync_status(
             db,
             node_id,
-            ResourceSyncStatus::Synced,
+            ResourceEmbeddingStatus::Synced,
             node.file_hash.as_deref(),
             None,
         )
@@ -172,6 +194,7 @@ async fn process_resource_job(
     }
     .await;
 
+    // 8. 更新检查处理结果
     let (provider, model, summary) = match processing_result {
         Ok(data) => data,
         Err(err) => {
@@ -180,6 +203,7 @@ async fn process_resource_job(
         }
     };
 
+    // 9. 分类
     if !summary.is_empty() {
         if let Err(err) = classify_and_link_topic(db, python, &provider, &model, &node, &summary)
             .await
@@ -208,18 +232,18 @@ async fn sync_embeddings_for_type(
         return Ok(());
     }
 
+    // TODO:更新processing_hash
     let response = request_embed(python, node_id, embedding_type, text, chunk).await?;
     if response.chunks.is_empty() {
         return Ok(());
     }
 
-    let chunks: Vec<ChunkData> = response
+    let chunks: Vec<EmbedChunkResult> = response
         .chunks
         .into_iter()
-        .map(|chunk| ChunkData {
+        .map(|chunk| EmbedChunkResult {
             chunk_text: chunk.chunk_text,
             chunk_index: chunk.chunk_index,
-            page_number: chunk.page_number,
             qdrant_uuid: chunk.qdrant_uuid,
             embedding_hash: chunk.embedding_hash,
             token_count: chunk.token_count,
@@ -231,7 +255,8 @@ async fn sync_embeddings_for_type(
         node_id,
         embedding_type,
         &chunks,
-        response.embedding_model.as_deref(),
+        response.dense_embedding_model.as_deref(),
+        response.sparse_embedding_model.as_deref(),
     )
     .await
     .map_err(|e| e.to_string())?;
@@ -260,9 +285,6 @@ async fn classify_and_link_topic(
 
     let response = request_classify(python, provider, model, summary, candidates).await?;
     let topic_name = response.topic_name.trim();
-    if topic_name.is_empty() || topic_name == "\u{672a}\u{5206}\u{7c7b}" {
-        return Ok(());
-    }
 
     let topic_id = ensure_topic_node(db, topic_name).await?;
     insert_edge_if_missing(
@@ -308,11 +330,11 @@ async fn ensure_topic_node(db: &DbPool, title: &str) -> Result<i64, String> {
             user_note: None,
             resource_subtype: None,
             source_meta: None,
-            indexed_hash: None,
+            embedded_hash: None,
             processing_hash: None,
-            sync_status: ResourceSyncStatus::Pending,
-            last_indexed_at: None,
-            last_error: None,
+            embedding_status: ResourceEmbeddingStatus::Pending,
+            last_embedding_at: None,
+            last_embedding_error: None,
             processing_stage: ResourceProcessingStage::Todo,
             review_status: ReviewStatus::Reviewed,
         },
@@ -345,8 +367,8 @@ async fn mark_resource_error(
     update_resource_sync_status(
         db,
         node_id,
-        ResourceSyncStatus::Error,
-        node.indexed_hash.as_deref(),
+        ResourceEmbeddingStatus::Error,
+        node.embedded_hash.as_deref(),
         Some(message),
     )
     .await
@@ -357,10 +379,10 @@ async fn ensure_python_ready(python: &PythonSidecar) -> Result<(), String> {
     if python.check_health().await.is_ok() {
         return Ok(());
     }
-    python.wait_for_health(5).await
+    python.wait_for_health(2).await
 }
 
-async fn resolve_provider_model(
+async fn get_processing_provider_model(
     ai_config: &Arc<Mutex<AIConfigService>>,
 ) -> Result<(String, String), String> {
     let service = ai_config.lock().await;
@@ -368,11 +390,11 @@ async fn resolve_provider_model(
     drop(service);
 
     let provider = config
-        .default_provider
-        .ok_or_else(|| "default provider not set".to_string())?;
+        .processing_provider
+        .ok_or_else(|| "processing provider not set".to_string())?;
     let model = config
-        .default_model
-        .ok_or_else(|| "default model not set".to_string())?;
+        .processing_model
+        .ok_or_else(|| "processing model not set".to_string())?;
 
     let provider_config = config
         .providers
@@ -411,8 +433,13 @@ async fn request_summary(
         .send()
         .await
         .map_err(|e| format!("summary request failed: {e}"))?
+        // 将 HTTP 协议层面的“业务失败”（状态码 400-599）强制转换为 Rust 代码层面的 Result::Err
         .error_for_status()
         .map_err(|e| format!("summary request failed: {e}"))?
+        // 读取字节流
+        // 解析JSON
+        // 匹配字段
+        // 构造SummaryResponse
         .json::<SummaryResponse>()
         .await
         .map_err(|e| format!("summary response invalid: {e}"))?;
@@ -533,21 +560,12 @@ struct DeleteEmbeddingRequest {
 }
 
 #[derive(Debug, Deserialize)]
-struct EmbedChunkResult {
-    chunk_text: String,
-    chunk_index: i32,
-    page_number: Option<i32>,
-    qdrant_uuid: String,
-    embedding_hash: String,
-    token_count: Option<i32>,
-}
-
-#[derive(Debug, Deserialize)]
 struct EmbedResponse {
     node_id: i64,
     embedding_type: EmbeddingType,
     chunks: Vec<EmbedChunkResult>,
-    embedding_model: Option<String>,
+    dense_embedding_model: Option<String>,
+    sparse_embedding_model: Option<String>,
 }
 
 #[derive(Debug, Serialize)]

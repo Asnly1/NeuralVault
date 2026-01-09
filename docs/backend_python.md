@@ -123,7 +123,6 @@ src-python/
     {
       "chunk_text": "...",
       "chunk_index": 0,
-      "page_number": null,
       "qdrant_uuid": "...",
       "embedding_hash": "...",
       "token_count": 42
@@ -248,7 +247,7 @@ Chunking:
 
 - 使用 Qdrant embedded 模式 (`qdrant_path`)，collection 使用 named vectors: `dense` + `sparse`。
 - 更新资源时先删除旧向量，再 upsert 新向量。
-- Qdrant payload 包含 `node_id`, `type`(summary/content), `chunk_index`, `page_number`, `text`, `token_count`。
+- Qdrant payload 包含 `node_id`, `type`(summary/content), `chunk_index`, `text`, `token_count`。
 
 ---
 
@@ -296,7 +295,6 @@ Chunking:
       "chunk_index": 0,
       "chunk_text": "匹配的文本片段...",
       "score": 0.85,
-      "page_number": null
     }
   ]
 }

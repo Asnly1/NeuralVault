@@ -23,7 +23,6 @@ class TextChunk:
     """文本片段数据类"""
     text: str
     chunk_index: int
-    page_number: Optional[int] = None
     token_count: Optional[int] = None
 
 
@@ -68,7 +67,7 @@ class VectorService:
         self._initialized = True
         logger.info("Models loaded successfully")
     
-    def chunk_text(self, text: str) -> list[TextChunk]:
+    def chunking_text(self, text: str) -> list[TextChunk]:
         """
         使用 LlamaIndex SentenceSplitter 切分文本
         
@@ -86,19 +85,11 @@ class VectorService:
         # LlamaIndex SentenceSplitter 返回字符串列表
         chunks = self._splitter.split_text(text)
         
-        # [Page X] 标记的正则表达式
-        page_pattern = re.compile(r'\[Page (\d+)\]')
-        
         result: list[TextChunk] = []
         for i, chunk in enumerate(chunks):
-            # 尝试从 chunk 中提取页码
-            page_match = page_pattern.search(chunk)
-            page_number = int(page_match.group(1)) if page_match else None
-            
             result.append(TextChunk(
                 text=chunk,
                 chunk_index=i,
-                page_number=page_number,
                 token_count=len(chunk.split())  # 简单的 token 计数
             ))
         
@@ -194,23 +185,21 @@ class VectorService:
                 },
                 payload={
                     "node_id": node_id,
-                    "type": embedding_type,
+                    "embedding_type": embedding_type,
+                    "chunk_text": chunk.text,
                     "chunk_index": chunk.chunk_index,
-                    "page_number": chunk.page_number,
-                    "text": chunk.text,
                     "token_count": chunk.token_count
                 }
             )
             points.append(point)
             
             chunk_metadata.append({
+                "embedding_type": embedding_type,
+                "chunk_text": chunk.text,
+                "chunk_index": chunk.chunk_index,
+                "token_count": chunk.token_count,
                 "qdrant_uuid": point_id,
                 "embedding_hash": embedding_hash,
-                "embedding_type": embedding_type,
-                "chunk_index": chunk.chunk_index,
-                "page_number": chunk.page_number,
-                "token_count": chunk.token_count,
-                "text": chunk.text
             })
         
         # 批量写入 Qdrant
@@ -263,6 +252,11 @@ class VectorService:
             return None
         return self._dense_model.model_name
 
+    def get_sparse_model_name(self) -> Optional[str]:
+        if not self._sparse_model:
+            return None
+        return self._sparse_model.model_name
+
     async def search_hybrid(
         self,
         query: str,
@@ -282,7 +276,7 @@ class VectorService:
             limit: 返回结果数量
 
         Returns:
-            搜索结果列表，包含 node_id, chunk_index, chunk_text, score, page_number
+            搜索结果列表，包含 node_id, chunk_index, chunk_text, score
         """
         from qdrant_client.models import (
             Filter, FieldCondition, MatchValue, MatchAny,
@@ -344,7 +338,6 @@ class VectorService:
                 "chunk_index": payload.get("chunk_index", 0),
                 "chunk_text": payload.get("text", ""),
                 "score": point.score if point.score else 0.0,
-                "page_number": payload.get("page_number"),
             })
 
         return search_results

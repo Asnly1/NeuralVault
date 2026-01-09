@@ -179,7 +179,6 @@ pub struct SemanticSearchResult {
     pub chunk_index: i32,
     pub chunk_text: String,
     pub score: f64,
-    pub page_number: Option<i32>,
 }
 ```
 

@@ -56,7 +56,7 @@ pub enum EmbeddingType {
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Type, Serialize, Deserialize)]
 #[sqlx(rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
-pub enum ResourceSyncStatus {
+pub enum ResourceEmbeddingStatus {
     Pending,
     Synced,
     Dirty,
@@ -68,7 +68,6 @@ pub enum ResourceSyncStatus {
 #[serde(rename_all = "lowercase")]
 pub enum ResourceProcessingStage {
     Todo,
-    Chunking,
     Embedding,
     Done,
 }
@@ -132,10 +131,10 @@ pub struct NodeRecord {
     pub user_note: Option<String>,
     pub resource_subtype: Option<ResourceSubtype>,
     pub source_meta: Option<Json<SourceMeta>>,
-    pub indexed_hash: Option<String>,
+    pub embedded_hash: Option<String>,
     pub processing_hash: Option<String>,
-    pub sync_status: ResourceSyncStatus,
-    pub last_indexed_at: Option<String>,
+    pub embedding_status: ResourceEmbeddingStatus,
+    pub last_embedding_at: Option<String>,
     pub last_error: Option<String>,
     pub processing_stage: ResourceProcessingStage,
     pub review_status: ReviewStatus,
@@ -163,11 +162,11 @@ pub struct NewNode<'a> {
     pub user_note: Option<&'a str>,
     pub resource_subtype: Option<ResourceSubtype>,
     pub source_meta: Option<Json<SourceMeta>>,
-    pub indexed_hash: Option<&'a str>,
+    pub embedded_hash: Option<&'a str>,
     pub processing_hash: Option<&'a str>,
-    pub sync_status: ResourceSyncStatus,
-    pub last_indexed_at: Option<&'a str>,
-    pub last_error: Option<&'a str>,
+    pub embedding_status: ResourceEmbeddingStatus,
+    pub last_embedding_at: Option<&'a str>,
+    pub last_embedding_error: Option<&'a str>,
     pub processing_stage: ResourceProcessingStage,
     pub review_status: ReviewStatus,
 }
@@ -192,28 +191,6 @@ pub struct NewEdge {
     pub relation_type: EdgeRelationType,
     pub confidence_score: Option<f64>,
     pub is_manual: bool,
-}
-
-/// Python 处理后返回的 chunk 数据
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChunkData {
-    pub chunk_text: String,
-    pub chunk_index: i32,
-    pub page_number: Option<i32>,
-    pub qdrant_uuid: String,
-    pub embedding_hash: String,
-    pub token_count: Option<i32>,
-}
-
-/// Python 处理结果
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IngestionResultData {
-    pub node_id: i64,
-    pub success: bool,
-    pub chunks: Option<Vec<ChunkData>>,
-    pub embedding_model: Option<String>,
-    pub indexed_hash: Option<String>,
-    pub error: Option<String>,
 }
 
 // ==========================================
@@ -283,4 +260,13 @@ pub struct SessionBindingRecord {
     pub node_id: i64,
     pub binding_type: BindingType,
     pub created_at: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EmbedChunkResult {
+    pub chunk_text: String,
+    pub chunk_index: i32,
+    pub qdrant_uuid: String,
+    pub embedding_hash: String,
+    pub token_count: Option<i32>,
 }

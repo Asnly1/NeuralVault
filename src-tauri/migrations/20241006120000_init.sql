@@ -41,14 +41,14 @@ CREATE TABLE nodes (
     source_meta JSON,            -- { url, window_title, process_name, captured_at }
 
     -- 向量化状态 (针对资源本身)
-    indexed_hash TEXT,
+    embedded_hash TEXT,
     processing_hash TEXT,
-    sync_status TEXT DEFAULT 'pending' CHECK (sync_status IN ('pending', 'synced', 'dirty', 'error')),
-    last_indexed_at DATETIME,
-    last_error TEXT,
+    embedding_status TEXT DEFAULT 'pending' CHECK (embedding_status IN ('pending', 'synced', 'dirty', 'error')),
+    last_embedding_at DATETIME,
+    last_embedding_error TEXT,
     
     -- 资源处理状态 (Rust 后台使用)
-    processing_stage TEXT DEFAULT 'todo' CHECK(processing_stage IN ('todo','chunking','embedding','done')),
+    processing_stage TEXT DEFAULT 'todo' CHECK(processing_stage IN ('todo', 'embedding','done')),
     -- 用户侧的状态 (Inbox 功能核心)
     -- 'unreviewed': AI 刚抓取，在 Inbox 等待确认
     -- 'reviewed': 用户已确认/已归档
@@ -135,14 +135,14 @@ CREATE TABLE context_chunks (
 
     chunk_text TEXT NOT NULL,
     chunk_index INTEGER,
-    page_number INTEGER,
-    
+    token_count INTEGER,
     qdrant_uuid TEXT UNIQUE,
     embedding_hash TEXT,
-    embedding_model TEXT,
+
+    dense_embedding_model TEXT,
+    sparse_embedding_model TEXT,
     embedding_at DATETIME,
     chunk_meta JSON,
-    token_count INTEGER,
 
     FOREIGN KEY(node_id) REFERENCES nodes(node_id) ON DELETE CASCADE
 );

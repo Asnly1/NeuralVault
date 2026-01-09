@@ -97,9 +97,9 @@ impl PythonSidecar {
                 &qdrant_path_str,
             ])
             .current_dir(python_dir)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit());
+            .stdin(Stdio::piped()) // 为子进程提供输入
+            .stdout(Stdio::inherit()) // 将子进程的输出重定向到当前进程
+            .stderr(Stdio::inherit()); // 将子进程的错误输出重定向到当前进程
 
             #[cfg(unix)]
             cmd.process_group(0);
@@ -137,7 +137,8 @@ impl PythonSidecar {
             .send()
             .await
             .map_err(|e| format!("Failed to call Python health: {}", e))?;
-
+        
+        // 异步地读取 HTTP 响应体，并将其尝试解析（反序列化）为一个通用的 JSON 结构。
         resp.json::<serde_json::Value>()
             .await
             .map_err(|e| format!("Invalid health response: {}", e))
