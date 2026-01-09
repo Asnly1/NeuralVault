@@ -205,6 +205,7 @@ CREATE TABLE chat_messages (
     session_id INTEGER NOT NULL,
 
     user_content TEXT NOT NULL,
+    -- TODO: 支持Thinking summary
     assistant_content TEXT,
 
     input_tokens INTEGER,

@@ -449,7 +449,6 @@ export function AIContextProvider({ children }: { children: React.ReactNode }) {
         session_id: sessionId,
         provider: selectedModel.provider,
         model: selectedModel.model_id,
-        task_type: "chat",
         content,
         images: context.images,
         files: context.files,

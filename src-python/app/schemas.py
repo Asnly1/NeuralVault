@@ -2,7 +2,7 @@
 Shared schemas and enums for the Python service.
 """
 from enum import Enum
-from typing import Optional, List
+from typing import Optional, List, TypeVar, Generic, Type
 
 from pydantic import BaseModel, Field
 
@@ -11,6 +11,86 @@ class MessageRole(str, Enum):
     user = "user"
     assistant = "assistant"
     system = "system"
+
+
+# ==========================================
+# LLM Task Schemas (结构化输出)
+# ==========================================
+
+T = TypeVar("T", bound=BaseModel)
+
+
+class BaseLLMTask(BaseModel, Generic[T]):
+    """所有 LLM 任务的基类，包含输入参数和预期的输出结构"""
+
+    @property
+    def output_schema(self) -> Type[T]:
+        """返回输出的 Pydantic 类型"""
+        raise NotImplementedError
+
+    def build_prompt(self) -> str:
+        """构建完整的提示词"""
+        raise NotImplementedError
+
+
+# ---------- Summary Task ----------
+
+class SummaryResponse(BaseModel):
+    summary: str = Field(description="生成的摘要文本")
+
+
+class SummaryTask(BaseLLMTask[SummaryResponse]):
+    content: str
+    max_length: int = 100
+    user_note: Optional[str] = None
+
+    @property
+    def output_schema(self) -> Type[SummaryResponse]:
+        return SummaryResponse
+
+    def build_prompt(self) -> str:
+        lines = [
+            "你是知识库助手，请根据用户提供的内容生成简洁摘要。",
+            "",
+            f"请生成不超过 {self.max_length} 字的中文摘要。",
+        ]
+        if self.user_note:
+            lines.append(f"注意：必须围绕用户备注的意图来总结。用户备注：{self.user_note}")
+        lines.append(f"内容：{self.content}")
+        return "\n".join(lines)
+
+
+# ---------- Topic Classify Task ----------
+
+class TopicClassifyResponse(BaseModel):
+    topic_name: str = Field(description="分类的主题名称")
+    confidence: float = Field(description="置信度 0.0-1.0")
+
+
+class TopicClassifyTask(BaseLLMTask[TopicClassifyResponse]):
+    resource_summary: str
+    candidates: List["TopicCandidate"]
+
+    @property
+    def output_schema(self) -> Type[TopicClassifyResponse]:
+        return TopicClassifyResponse
+
+    def build_prompt(self) -> str:
+        lines = [
+            "你是知识库主题分类助手，根据候选主题判断归属或创建新主题。",
+            "",
+            f'新资源摘要: "{self.resource_summary}"',
+            "",
+            "候选主题:",
+        ]
+        if self.candidates:
+            for idx, c in enumerate(self.candidates, 1):
+                lines.append(f"{idx}. {c.title}: {c.summary or ''}")
+        else:
+            lines.append("（无）")
+        lines.append("")
+        lines.append("任务：判断资源属于上述哪个主题；如果都不合适，请创建新主题名。")
+        return "\n".join(lines)
 
 
 class ChatMessage(BaseModel):
@@ -23,7 +103,6 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     provider: str
     model: str
-    task_type: str
     messages: list[ChatMessage]
     stream: bool = True
     thinking_effort: Optional[str] = None
@@ -122,3 +201,7 @@ class SearchResultItem(BaseModel):
 
 class SearchResponse(BaseModel):
     results: List[SearchResultItem] = Field(default_factory=list)
+
+
+# 解决前向引用
+TopicClassifyTask.model_rebuild()

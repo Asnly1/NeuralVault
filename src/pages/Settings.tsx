@@ -188,7 +188,7 @@ export function SettingsPage({ theme, onThemeChange }: SettingsPageProps) {
   const shortcut = "Alt + Space";
   const { language, setLanguage, t } = useLanguage();
   const { config, saveKey, removeKey, loading } = useAI();
-  const visibleProviders: AIProvider[] = ["openai"];
+  const visibleProviders: AIProvider[] = ["gemini"];
 
   return (
     <div className="flex flex-col h-full p-6 space-y-6">

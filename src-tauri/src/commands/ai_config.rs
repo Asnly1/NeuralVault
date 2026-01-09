@@ -53,7 +53,6 @@ pub struct SendChatRequest {
     pub session_id: i64,
     pub provider: String,
     pub model: String,
-    pub task_type: String,
     pub content: String,
     pub images: Option<Vec<i64>>,
     pub files: Option<Vec<i64>>,
@@ -341,7 +340,6 @@ pub async fn send_chat_message(
     let python_request = serde_json::json!({
         "provider": request.provider,
         "model": request.model,
-        "task_type": request.task_type,
         "messages": python_messages,
         "thinking_effort": request.thinking_effort,
     });

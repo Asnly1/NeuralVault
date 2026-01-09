@@ -229,6 +229,7 @@ export interface SemanticSearchResult {
 export const aiProviderValues = ["openai", "anthropic", "gemini", "grok", "deepseek", "qwen"] as const;
 export type AIProvider = (typeof aiProviderValues)[number];
 
+// TODO: 设置不同的ThinkingEffort
 export const thinkingEffortValues = ["none", "low", "high"] as const;
 export type ThinkingEffort = (typeof thinkingEffortValues)[number];
 
@@ -343,7 +344,6 @@ export interface SendChatRequest {
   session_id: number;
   provider: string;
   model: string;
-  task_type: string;
   content: string;
   images?: number[];
   files?: number[];

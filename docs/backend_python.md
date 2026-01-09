@@ -172,7 +172,6 @@ src-python/
 {
   "provider": "openai",
   "model": "gpt-4o",
-  "task_type": "chat",
   "thinking_effort": "low",
   "messages": [
     {"role": "system", "content": "You are a helpful assistant."},

@@ -6,8 +6,7 @@ POST: /chat/completions
         {
           "provider": "openai",
           "model": "gpt-4o",
-          "task_type": "chat",
-          "messages": [
+  messages": [
             {
               "role": "user",
               "content": "帮我分析一下这个文档",
@@ -61,7 +60,6 @@ async def _stream_chat_completions(request: ChatRequest) -> AsyncIterator[str]:
         async for event in llm_service.stream_chat(
             provider=request.provider,
             model=request.model,
-            task_type=request.task_type,
             messages=request.messages,
             thinking_effort=request.thinking_effort,
         ):
