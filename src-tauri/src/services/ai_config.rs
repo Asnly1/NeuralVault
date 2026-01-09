@@ -21,8 +21,8 @@ pub struct ProviderConfig {
 pub struct AIConfigData {
     pub version: u32,
     pub providers: HashMap<String, ProviderConfig>,
-    pub processing_provider: Option<String>,
-    pub processing_model: Option<String>,
+    pub processing_provider: Option<String>, // 处理任务（summary/topic）的provider
+    pub processing_model: Option<String>, // 处理任务（summary/topic）的model
 }
 
 impl Default for AIConfigData {
