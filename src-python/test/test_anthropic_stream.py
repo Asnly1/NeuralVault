@@ -91,19 +91,19 @@ async def main():
                             print("type: text_delta", "delta: ", delta)
                 elif event_type == "content_block_stop":
                     if event.content_block.type == "thinking":
-                        done_text = event.content_block.thinking
-                        if done_text:
+                        full_text = event.content_block.thinking
+                        if full_text:
                             f.write("\n")
-                            f.write(done_text)
+                            f.write(full_text)
                             f.flush()
-                            print("type: thinking_done_text", "done_text: ", done_text)
+                            print("type: thinking_full_text", "full_text: ", full_text)
                     elif event.content_block.type == "text":
-                        done_text = event.content_block.text
-                        if done_text:
+                        full_text = event.content_block.text
+                        if full_text:
                             f.write("\n")
-                            f.write(done_text)
+                            f.write(full_text)
                             f.flush()
-                            print("type: text_done_text", "done_text: ", done_text)
+                            print("type: text_full_text", "full_text: ", full_text)
                 elif event_type == "message_stop":
                     usage = event.message.usage
                     reasoning_tokens = getattr(usage, "reasoning_tokens", 0) or 0

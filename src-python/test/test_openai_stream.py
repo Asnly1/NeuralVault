@@ -62,7 +62,7 @@ async def main():
             elif event_type == "response.output_text.done":
                 full_text = event.text
                 if full_text:
-                    print("type: done_text", "done_text:", full_text)
+                    print("type: full_text", "full_text:", full_text)
                     f.write("\n")
                     f.write(full_text)
             elif event_type == "response.completed":

@@ -404,9 +404,9 @@ pub async fn send_chat_message(
                         let _ = app.emit("chat-stream", payload);
                     }
                 }
-                "done_text" => {
-                    if let Some(done_text) = event.get("done_text").and_then(|v| v.as_str()) {
-                        assistant_content = Some(done_text.to_string());
+                "full_text" => {
+                    if let Some(full_text) = event.get("full_text").and_then(|v| v.as_str()) {
+                        assistant_content = Some(full_text.to_string());
                     }
                 }
                 "usage" => {

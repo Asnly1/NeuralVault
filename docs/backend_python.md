@@ -208,7 +208,7 @@ src-python/
 ```
 data: {"type":"delta","delta":"片段内容"}
 
-data: {"type":"done_text","done_text":"完整回复"}
+data: {"type":"full_text","full_text":"完整回复"}
 
 data: {"type":"usage","usage":{"input_tokens":10,"output_tokens":20,"reasoning_tokens":5,"total_tokens":35}}
 ```
@@ -219,7 +219,7 @@ data: {"type":"usage","usage":{"input_tokens":10,"output_tokens":20,"reasoning_t
 data: {"type":"error","message":"错误信息"}
 ```
 
-> `done_text` 用于 Rust 端写入数据库，避免在 Rust 侧累积 delta。
+> `full_text` 用于 Rust 端写入数据库，避免在 Rust 侧累积 delta。
 >
 > `usage` 通常在流末尾返回（不同 Provider 有差异），字段为 `input_tokens` / `output_tokens` / `reasoning_tokens` / `total_tokens`，其中 `total_tokens` 已包含 `reasoning_tokens`；收到 `usage` 后即可视为流结束。
 

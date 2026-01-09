@@ -160,7 +160,7 @@ AI 配置与聊天状态管理。
 4. 前端调用 Tauri 命令 `send_chat_message`，携带 `session_id`、`provider`/`model`、`content`、`thinking_effort` 以及附件的 `resource_id` (`src/api/index.ts`)。
 5. Rust `send_chat_message` 写入本轮 `user_content` 与附件到数据库，读取 `session_context_resources` 并在消息列表首部插入一条 user 消息（含附件路径），再组装历史并构造 Python 请求 `messages` (含 `images`/`files`) (`src-tauri/src/commands/ai_config.rs`)。
 6. Rust 使用 streaming client 调用 Python `/chat/completions`，Python 通过 `llm_service.stream_chat` 返回 SSE 流 (`src-python/app/api/chat.py`, `src-python/app/services/llm_service.py`)。
-7. Python SSE 事件包含 `delta`/`done_text`/`usage`/`error`；Rust 逐行解析 `data: ...`，转发 `delta`/`usage`/`error` 到前端，`done_text` 仅用于写库（更新同一轮的 `assistant_content`），收到 `usage` 即视为流结束 (`src-tauri/src/commands/ai_config.rs`)。
+7. Python SSE 事件包含 `delta`/`full_text`/`usage`/`error`；Rust 逐行解析 `data: ...`，转发 `delta`/`usage`/`error` 到前端，`full_text` 仅用于写库（更新同一轮的 `assistant_content`），收到 `usage` 即视为流结束 (`src-tauri/src/commands/ai_config.rs`)。
 8. 前端监听 `chat-stream`：`delta` 拼接到最后一条 assistant 消息，`usage` 更新 token 统计并停止 loading，`error` 终止本轮并提示错误，界面即时更新 (`src/contexts/AIContext.tsx`)。
 
 #### `LanguageContext.tsx`

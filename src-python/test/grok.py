@@ -51,7 +51,7 @@ async def main():
                 f.write(chunk.content)
                 f.write("\n")
             
-        print(f"type: done_text, done_text: {full_text}")
+        print(f"type: full_text, full_text: {full_text}")
         usage = {
             "input_tokens": final_response.usage.prompt_tokens,
             "output_tokens": final_response.usage.completion_tokens,

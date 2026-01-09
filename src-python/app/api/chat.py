@@ -28,7 +28,7 @@ POST: /chat/completions
     Response (SSE):
         data: {"type":"delta","delta":"这"}
         data: {"type":"delta","delta":"是"}
-        data: {"type":"done_text","done_text":"这是"}
+        data: {"type":"full_text","full_text":"这是"}
         data: {"type":"usage","usage":{"input_tokens":50,"output_tokens":4,"reasoning_tokens":2,"total_tokens":56}}
 """
 from typing import AsyncIterator
