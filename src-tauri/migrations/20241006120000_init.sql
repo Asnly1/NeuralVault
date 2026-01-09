@@ -217,7 +217,7 @@ CREATE TABLE chat_messages (
 );
 
 CREATE TABLE message_attachments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    attachment_id INTEGER PRIMARY KEY AUTOINCREMENT,
     message_id INTEGER NOT NULL,
     node_id INTEGER NOT NULL,
 
@@ -226,7 +226,7 @@ CREATE TABLE message_attachments (
 );
 
 CREATE TABLE message_citations (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    citation_id INTEGER PRIMARY KEY AUTOINCREMENT,
     message_id INTEGER NOT NULL,       -- 关联到 AI 的那条回复
     node_id INTEGER NOT NULL,          -- 引用的资源
     chunk_id INTEGER,                  -- 引用的具体切片

@@ -93,8 +93,8 @@ async def main():
         }
         print("usage 1:", usage)
 
-    thoughts = ""  # 如果你也想区分 Thoughts summary 2，这里也要重置
-    answer = ""    # 重置 answer，确保能打印出 "Answer 2:"
+    thoughts = ""
+    answer = ""
     final_chunk = None
     stream2 = await chat.send_message_stream(
                 message=[
