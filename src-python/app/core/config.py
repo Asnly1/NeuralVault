@@ -21,12 +21,6 @@ class Settings(BaseSettings):
     # Sparse 模型: Qdrant/bm42-all-minilm-l6-v2-attentions
     sparse_embedding_model: str = "Qdrant/bm42-all-minilm-l6-v2-attentions"
     
-    # LLM 配置
-    llm_provider: str = ""  # ollama 或 openai
-    llm_model: str = "" # 由Tauri传入
-    openai_api_key: str = "" # 由Tauri传入
-    openai_base_url: str = "" # 由Tauri传入
-    
     # 文件处理配置
     chunk_size: int = 512
     chunk_overlap: int = 50

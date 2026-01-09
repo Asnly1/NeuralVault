@@ -21,6 +21,11 @@ from app.services.vector_service import TextChunk, vector_service
 router = APIRouter()
 
 
+def _single_chunk(text: str) -> list[TextChunk]:
+    """创建单段 TextChunk（用于 summary 或不切分的 content）"""
+    return [TextChunk(text=text, chunk_index=0, page_number=None, token_count=len(text.split()))]
+
+
 @router.post("/summary", response_model=SummaryResponse)
 async def summarize(request: SummaryRequest):
     summary = await agent_service.summarize(
@@ -56,26 +61,12 @@ async def embed_text(request: EmbedRequest):
         )
 
     if request.embedding_type == EmbeddingType.summary:
-        chunks = [
-            TextChunk(
-                text=text,
-                chunk_index=0,
-                page_number=None,
-                token_count=len(text.split()),
-            )
-        ]
+        chunks = _single_chunk(text)
     else:
         if request.chunk:
             chunks = vector_service.chunk_text(text)
         else:
-            chunks = [
-                TextChunk(
-                    text=text,
-                    chunk_index=0,
-                    page_number=None,
-                    token_count=len(text.split()),
-                )
-            ]
+            chunks = _single_chunk(text)
 
     chunk_metadata = await vector_service.upsert_chunks(
         node_id=request.node_id,

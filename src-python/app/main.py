@@ -1,13 +1,20 @@
 """
 FastAPI 入口，生命周期管理
 """
+import asyncio
+import os
+import signal
 from contextlib import asynccontextmanager
+import argparse
+import uvicorn
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core import events
 from app.api import chat, agent, search, providers
-
+from app.core.logging import setup_logging, get_logger
+from app.core.config import settings
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -53,30 +60,17 @@ async def health_check():
 @app.post("/shutdown")
 async def shutdown():
     """优雅关闭接口，供 Rust 调用"""
-    import asyncio
-    import os
-    import signal
-    
     asyncio.create_task(_shutdown())
     return {"status": "shutting down"}
 
 
 async def _shutdown():
     """延迟关闭，给响应时间返回"""
-    import asyncio
-    import os
-    import signal
-    
     await asyncio.sleep(0.5)
     os.kill(os.getpid(), signal.SIGTERM)
 
 
 if __name__ == "__main__":
-    import argparse
-    import uvicorn
-    from app.core.logging import setup_logging, get_logger
-    from app.core.config import settings
-    
     # 配置日志
     setup_logging()
     logger = get_logger("Python")

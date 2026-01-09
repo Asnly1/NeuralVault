@@ -24,7 +24,7 @@ async def search_hybrid(req: SearchRequest) -> SearchResponse:
 
     返回匹配的 chunk 列表，按相关性排序
     """
-    db_manager = DatabaseManager.get_instance()
+    db_manager = await DatabaseManager.get_instance()
     qdrant_client = db_manager.get_qdrant()
 
     results = await vector_service.search_hybrid(
