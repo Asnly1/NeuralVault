@@ -104,22 +104,21 @@ pub struct AppState {
 
 ### 处理步骤
 
-1. `sync_status = pending`，`processing_stage = chunking`。
+1. `embedding_status = pending`，`processing_stage = embedding`。
 2. 调用 `/agent/summary` 更新 `nodes.summary`。
-3. `processing_stage = embedding`。
-4. 调用 `/agent/embedding` 两次：
+3. 调用 `/agent/embedding` 两次：
    - `summary`：不切分（chunk=false）。
    - `content`：按 SentenceSplitter 切分（chunk=true）。
    - 先按 `embedding_type` 清理旧 `context_chunks`。
-   - 写入新的 `context_chunks`（含 `embedding_type`）。
-5. `sync_status = synced`，`processing_stage = done`。
-6. 调用 `/agent/classify`：
+   - 写入新的 `context_chunks`（含 `embedding_type`、`dense_embedding_model`、`sparse_embedding_model`）。
+4. `embedding_status = synced`，`processing_stage = done`。
+5. 调用 `/agent/classify`：
    - 需要时创建 Topic 节点。
    - 插入 `contains` 边，写入 `confidence_score`。
 
 ### 错误处理
 
-- 失败时写入 `last_error`，`sync_status = error`，`processing_stage = done`。
+- 失败时写入 `last_embedding_error`，`embedding_status = error`，`processing_stage = done`。
 
 ---
 
@@ -129,6 +128,9 @@ pub struct AppState {
 - `node_type`: topic / task / resource
 - `title` 必填；资源默认文件名或前 10 字。
 - `review_status`：仅资源可为 `unreviewed/reviewed/rejected`，其余强制 `reviewed`。
+- `embedding_status`: pending / synced / dirty / error（原 `sync_status`）。
+- `embedded_hash`：最后成功 embedding 时的内容 hash（原 `indexed_hash`）。
+- `processing_stage`: todo / embedding / done（移除 `chunking`）。
 
 ### edges
 - `relation_type`: contains / related_to
@@ -136,7 +138,7 @@ pub struct AppState {
 
 ### context_chunks
 - `node_id` + `embedding_type`（summary/content）。
-- 每个 chunk 记录 `qdrant_uuid`、`embedding_hash`、`embedding_model` 等。
+- 每个 chunk 记录 `qdrant_uuid`、`embedding_hash`、`dense_embedding_model`、`sparse_embedding_model` 等。
 
 ### chat_sessions / session_bindings
 - `binding_type`: primary / implicit（持久化）。
@@ -150,7 +152,7 @@ pub struct AppState {
 - `topics.rs`：创建 topic、更新、收藏、关联资源/任务。
 - `edges.rs`：通用节点连接（`related_to` 自动规范化）。
 - `chat.rs`：会话、消息、附件、绑定。
-- `ai_config.rs`：API Key 管理与 chat 调用。
+- `ai_config.rs`：API Key 管理、processing provider/model 配置、chat 调用。
 - `search.rs`：语义搜索与精确搜索。
 
 ---
@@ -170,8 +172,6 @@ pub async fn search_semantic(
     limit: Option<i32>,
 ) -> AppResult<Vec<SemanticSearchResult>>
 ```
-
-返回结构：
 
 ```rust
 pub struct SemanticSearchResult {
@@ -213,5 +213,5 @@ pub async fn search_keyword(
 ## 说明
 
 - Rust 写入 SQLite；Python 仅写入 Qdrant。
-- AI Pipeline 依赖默认 provider/model 已配置且启用。
+- AI Pipeline 依赖 processing provider/model 已配置且启用。
 - 目前队列为内存队列，应用重启会清空。

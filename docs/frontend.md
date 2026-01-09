@@ -89,7 +89,7 @@ public/
 - `taskPriorityValues`：`low`、`medium`、`high`
 - `resourceSubtypeValues`：`text`、`image`、`pdf`、`url`、`audio`、`video`、`code`、`other`
 - `reviewStatusValues`：`unreviewed`、`approved`、`rejected`
-- `syncStatusValues`：`local`、`synced`、`conflict`
+- `embeddingStatusValues`：`pending`、`synced`、`dirty`、`error`
 
 **常量：**
 - `priorityConfig`：优先级标签与颜色

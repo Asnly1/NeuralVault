@@ -118,7 +118,8 @@ src-python/
 {
   "node_id": 1,
   "embedding_type": "content",
-  "embedding_model": "BAAI/bge-small-zh-v1.5",
+  "dense_embedding_model": "BAAI/bge-small-zh-v1.5",
+  "sparse_embedding_model": "Qdrant/bm42-all-minilm-l6-v2-attentions",
   "chunks": [
     {
       "chunk_text": "...",
@@ -233,7 +234,7 @@ data: {"type":"error","message":"错误信息"}
 Chunking:
 
 - 使用 LlamaIndex `SentenceSplitter`，`chunk_size=512`，`chunk_overlap=50`。
-- 如果文本中存在 `[Page N]` 标记，将用于提取页码。
+- 方法名：`chunking_text()`。
 
 ---
 
@@ -247,7 +248,7 @@ Chunking:
 
 - 使用 Qdrant embedded 模式 (`qdrant_path`)，collection 使用 named vectors: `dense` + `sparse`。
 - 更新资源时先删除旧向量，再 upsert 新向量。
-- Qdrant payload 包含 `node_id`, `type`(summary/content), `chunk_index`, `text`, `token_count`。
+- Qdrant payload 包含 `node_id`, `embedding_type`(summary/content), `chunk_index`, `chunk_text`, `token_count`。
 
 ---
 
@@ -294,7 +295,7 @@ Chunking:
       "node_id": 1,
       "chunk_index": 0,
       "chunk_text": "匹配的文本片段...",
-      "score": 0.85,
+      "score": 0.85
     }
   ]
 }
