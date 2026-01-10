@@ -152,8 +152,8 @@ async fn process_resource_job(
 
         ensure_python_ready(python).await?;
         
-        // 6. 更新处理阶段为Embedding
-        update_resource_processing_stage(db, node_id, ResourceProcessingStage::Embedding)
+        // 6. 更新处理阶段为Embedding，同时更新processing_hash
+        update_resource_processing_stage(db, node_id, ResourceProcessingStage::Embedding, node.file_hash.as_deref())
             .await
             .map_err(|e| e.to_string())?;
         
@@ -177,7 +177,7 @@ async fn process_resource_job(
         )
         .await?;
 
-        update_resource_processing_stage(db, node_id, ResourceProcessingStage::Done)
+        update_resource_processing_stage(db, node_id, ResourceProcessingStage::Done, node.file_hash.as_deref())
             .await
             .map_err(|e| e.to_string())?;
         update_resource_sync_status(
@@ -232,7 +232,6 @@ async fn sync_embeddings_for_type(
         return Ok(());
     }
 
-    // TODO:更新processing_hash
     let response = request_embed(python, node_id, embedding_type, text, chunk).await?;
     if response.chunks.is_empty() {
         return Ok(());
@@ -361,7 +360,7 @@ async fn mark_resource_error(
     node: &NodeRecord,
     message: &str,
 ) -> Result<(), String> {
-    update_resource_processing_stage(db, node_id, ResourceProcessingStage::Done)
+    update_resource_processing_stage(db, node_id, ResourceProcessingStage::Done, None)
         .await
         .map_err(|e| e.to_string())?;
     update_resource_sync_status(

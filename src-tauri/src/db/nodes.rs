@@ -291,11 +291,13 @@ pub async fn update_resource_processing_stage(
     pool: &DbPool,
     node_id: i64,
     stage: ResourceProcessingStage,
+    processing_hash: Option<&str>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "UPDATE nodes SET processing_stage = ?, updated_at = CURRENT_TIMESTAMP WHERE node_id = ? AND node_type = 'resource'",
+        "UPDATE nodes SET processing_stage = ?, processing_hash = COALESCE(?, processing_hash), updated_at = CURRENT_TIMESTAMP WHERE node_id = ? AND node_type = 'resource'",
     )
     .bind(stage)
+    .bind(processing_hash)
     .bind(node_id)
     .execute(pool)
     .await?;
