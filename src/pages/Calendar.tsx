@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
 import { TasksDialog } from "@/components/TasksDialog";
 import { markTaskAsDone, markTaskAsTodo, fetchTasksByDate } from "@/api";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { sortTasksForCalendar } from "@/lib/taskSort";
 
 interface CalendarPageProps {
   tasks: NodeRecord[];
@@ -126,12 +127,7 @@ export function CalendarPage({ tasks, onRefresh }: CalendarPageProps) {
           {/* Calendar days */}
           {calendarDays.map((day, index) => {
             const dayTasks = getTasksForDate(day);
-            // Sort tasks: todo first, then done
-            const sortedTasks = [...dayTasks].sort((a, b) => {
-              if (a.task_status === 'todo' && b.task_status === 'done') return -1;
-              if (a.task_status === 'done' && b.task_status === 'todo') return 1;
-              return 0;
-            });
+            const sortedTasks = sortTasksForCalendar(dayTasks);
             const hasMoreTasks = sortedTasks.length > 2;
             const displayTasks = sortedTasks.slice(0, 2);
             const isCurrentMonthDay = isCurrentMonth(day);

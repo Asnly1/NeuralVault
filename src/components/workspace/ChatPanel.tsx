@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useAI } from "@/contexts/AIContext";
+import { useAIConfig, useChatMessage } from "@/contexts/AIContext";
 import { AI_PROVIDER_INFO, type ModelOption, type ThinkingEffort } from "@/types";
 import { Send, Loader2, Settings, Pin } from "lucide-react";
 import { quickCapture, linkNodes } from "@/api";
@@ -40,17 +40,15 @@ export function ChatPanel({
   onContextRefresh,
 }: ChatPanelProps) {
   const { t } = useLanguage();
+  const { configuredProviders, selectedModel, setSelectedModel } = useAIConfig();
   const {
-    configuredProviders,
-    selectedModel,
-    setSelectedModel,
     messages,
     isChatLoading,
+    chatError: error,
     sendMessage,
     loadSessionMessages,
     clearMessages,
-    error,
-  } = useAI();
+  } = useChatMessage();
   const [chatInput, setChatInput] = useState("");
   const [thinkingEffort, setThinkingEffort] = useState<ThinkingEffort>("low");
   const [pinningIndex, setPinningIndex] = useState<number | null>(null);

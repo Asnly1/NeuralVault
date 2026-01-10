@@ -14,6 +14,7 @@ import { TemporaryChatPanel } from "../components/TemporaryChatPanel";
 import { softDeleteTask, softDeleteResource, fetchAllTasks } from "../api";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { isSameDay } from "date-fns";
+import { sortTasksForDashboard } from "@/lib/taskSort";
 
 interface DashboardPageProps {
   tasks: NodeRecord[];
@@ -56,31 +57,8 @@ export function DashboardPage({
     setShowChatPanel(true);
   };
 
-  // Smart Sort: Logic to sort tasks
-  const sortedTasks = useMemo(() => {
-    return [...tasks].sort((a, b) => {
-      // 0. Done tasks at the bottom
-      if (a.task_status === "done" && b.task_status !== "done") return 1;
-      if (a.task_status !== "done" && b.task_status === "done") return -1;
-
-      // 1. Priority weight (处理 null 值，默认为 medium)
-      const pWeight: Record<string, number> = { high: 3, medium: 2, low: 1 };
-      const aPriority = a.priority ?? "medium";
-      const bPriority = b.priority ?? "medium";
-      if (pWeight[aPriority] !== pWeight[bPriority]) {
-        return pWeight[bPriority] - pWeight[aPriority];
-      }
-
-      // 2. Due Date (Earlier first)
-      if (a.due_date && b.due_date) {
-        return a.due_date.getTime() - b.due_date.getTime();
-      }
-      if (a.due_date && !b.due_date) return -1;
-      if (!a.due_date && b.due_date) return 1;
-
-      return 0;
-    });
-  }, [tasks]);
+  // 使用统一的排序函数
+  const sortedTasks = useMemo(() => sortTasksForDashboard(tasks), [tasks]);
 
   const activeTasks = sortedTasks.filter((t) => t.task_status !== "done");
   const unlinkedResources = resources.filter(

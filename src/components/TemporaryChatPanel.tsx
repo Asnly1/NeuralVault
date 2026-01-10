@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import { X, Send, Loader2, Settings } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useAI } from "@/contexts/AIContext";
+import { useAIConfig, useChatMessage } from "@/contexts/AIContext";
 import { AI_PROVIDER_INFO, type ModelOption, type ThinkingEffort } from "@/types";
 import { createChatSession } from "@/api";
 
@@ -32,16 +32,14 @@ export function TemporaryChatPanel({
   onNavigateToSettings,
 }: TemporaryChatPanelProps) {
   const { t } = useLanguage();
+  const { configuredProviders, selectedModel, setSelectedModel } = useAIConfig();
   const {
-    configuredProviders,
-    selectedModel,
-    setSelectedModel,
     messages,
     isChatLoading,
+    chatError: error,
     sendMessage,
     clearMessages,
-    error,
-  } = useAI();
+  } = useChatMessage();
 
   const [chatInput, setChatInput] = useState("");
   const [thinkingEffort, _setThinkingEffort] = useState<ThinkingEffort>("low");

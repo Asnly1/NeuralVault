@@ -28,11 +28,8 @@ import {
   X,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useAI } from "@/contexts/AIContext";
-import {
-  AIProvider,
-  AI_PROVIDER_INFO,
-} from "@/types";
+import { useAIConfig } from "@/contexts/AIContext";
+import { type AIProvider, AI_PROVIDER_INFO } from "@/types";
 
 interface SettingsPageProps {
   theme: "light" | "dark" | "system";
@@ -187,7 +184,7 @@ export function SettingsPage({ theme, onThemeChange }: SettingsPageProps) {
   const [enableLocal, setEnableLocal] = useState(false);
   const shortcut = "Alt + Space";
   const { language, setLanguage, t } = useLanguage();
-  const { config, saveKey, removeKey, loading } = useAI();
+  const { config, saveKey, removeKey, loading } = useAIConfig();
   const visibleProviders: AIProvider[] = ["gemini"];
 
   return (
