@@ -3,6 +3,22 @@ Everything is a Node:
     2. Topic
     3. Task
 
+转换：
+Resource -> Topic:
+    1. 新建一个Topic Node，继承Resource的title和summary
+    2. 新建contains edge: Topic contains resource
+    3. 把原来指向Resource的Edge都指向Topic
+Resource -> Task:
+    1. 新建一个Task Node，继承Resource的title和summary
+    2. 新建contains edge: Topic contains resource
+    3. 把原来指向Resource的Edge都指向Topic
+Topic -> Task:
+    1. 直接把node_type改为task
+Task -> Topic: 
+    1. 直接把node_type改为topic
+
+Edge采用DAG模式，即一个Node可以有多个Parent Node，每次插入Edge时要检测有无环
+
 技术栈（尽量轻量化）：
     1. 前端： React + Typescript
     2. 后端： Tauri(Rust) + FastAPI(Python)（处理AI相关，无状态微服务）+ Llamaindex + FastEmbed
@@ -23,7 +39,6 @@ Python依赖：
         "openai>=2.14.0",
         "pydantic-settings>=2.12.0",
         "pyinstaller>=6.17.0",
-        "pymupdf>=1.26.7",
         "qdrant-client>=1.16.2",
         "uvicorn[standard]>=0.38.0",
         "xai-sdk>=1.5.0",
@@ -75,27 +90,80 @@ Python依赖：
                 3. 输出：Summary
             3. FastEmbed向量化存入Qdrant（Payload注意区分type:"summary"和type:"content"）
             4. 调用使用 LlamaIndex 的 PropertyGraphIndex提取知识图谱（暂时不做）
-        3. AI根据分析结果，查找过去已存在的相关的Resource，把新Resource关联到一起，加入原有Topic。如果没有找到合适的Topic，就新建一个Topic。保留记录，用户可以手动撤回
-            1. 用新Resource的Summary的Embedding，Qdrant搜索其他Resource的Summary的Embedding，找最近的Top20
-            2. 获取这Top20 Resource的Topic，去重
-            3. 把topic发给LLM，让LLM判断是否应该生成新的topic。
-                Prompt：
-                    """New Resource Summary: "..."
+        3. AI 智能归类与知识图谱构建（Refined Logic）：
+            1. **检索上下文**：
+                1. 使用新 Resource 的 Summary Embedding，在 Qdrant 搜索 Top-10 （相似度大于0.7，如果相似度大于0.7的小于10个，可以允许小于10个）相似的 Resource。
+                2. 获取这些 Resource 所属的 Topic（Candidate Topics）。
+                3. 同时获取这些 Topic 目前的父级 Topic（Parent Context）。
+            2. **LLM 决策**（Structured Output）：
+                输入：Resource Summary + Candidate Topics (包含 ID, Title, Summary, Existing Parent)。
+                要求 LLM 返回 JSON 指令，执行以下逻辑之一：
+                * **Assign**: 资源属于现有 Topic -> 返回 Topic UUID。
+                * **Create New**: 现有 Topic 都不匹配 -> 返回新 Topic 的 Title/Summary。
+                * **Restructure**：发现现有 Topic 定义不准确或层级缺失。
+                    * 指令 A: 修改现有 Topic 的 Title/Summary（慎用，仅当语义发生漂移时）。
+                    * 指令 B: 创建一个新的 Parent Topic。
+                    * 指令 C: 将新 Resource、现有 Topic (及其它相关 Topic) 移动到该 Parent Topic 下，建立 `contains` 边。
+            3. **执行与反馈**：
+                * **去重检查**：在创建新 Topic (尤其是 Parent Topic) 前，先在该用户的 Topic 库中进行 Exact Match 或 Fuzzy Match，防止生成 "Programming" 和 "Coding" 这种相似节点。
+                * **重试机制**：如果出现相似节点，把相似节点的ID, Title, Summary 一起传入LLM，让LLM重新决策。
+            4. **Inbox**（使用review_status） ：
+                * 激进模式：
+                    1. 如果置信度低于0.8，先把Resource关联到LLM提出的topic_name，但是要加上一个视觉标记（提示用户“AI 不确定，请复核”）
+                    2. 保留AI关联的记录，用户可以手动撤回
+                * 手动模式：
+                    1. 在Warehouse Page中引入 Inbox 区域： 所有 AI 处理过的、未被用户确认的 Resource，先进入 Inbox，并带上 AI 建议的 Tag/Topic。
+                    2. 用户进入 Warehouse Page，看到 Inbox 区域和 AI 的建议，点击“Approve All”或者手动拖拽微调。
+           5. **JSON回复格式**
+            {
+                "action": "assign",
+                "payload": {
+                    "target_topic_uuid": "uuid-of-existing-topic"
+                },
+                "confidence_score": 0.95,
+            }
+            {
+                "action": "create_new",
+                "payload": {
+                    "new_topic": {
+                        "title": "New Topic Name",
+                        "summary": "Summary of the new topic..."
+                    },
+                    // 可选：如果 LLM 觉得这个新 Topic 应该归属于某个已存在的爷爷节点
+                    "parent_topic_uuid": "optional-uuid-of-existing-parent" 
+                },
+                "confidence_score": 0.90,
+            }
+            {
+                "action": "restructure", 
+                "payload": {
+                // 1. 指令 A: 修改现有 Topic (Optional)
+                "topics_to_revise": [
+                    {
+                    "uuid": "existing-uuid-123",
+                    "new_title": "Rust Ownership",
+                    "new_summary": "Focus specifically on ownership rules."
+                    }
+                ],
 
-                    Candidate Topics:
-                    1. React: (Summary...)
-                    2. Rust: (Summary...)
-                    3. System Design: (Summary...)
+                // 2. 指令 B: 创建新父节点
+                "new_parent_topic": {
+                    "title": "Rust Memory Management",
+                    "summary": "Core concepts regarding ownership, borrowing, and lifetimes in Rust."
+                },
 
-                    Task: Does the resource belong to any of above? If not, create a new topic.
-                    Output JSON: {"topic_name": "...", "confidence": float}"""
-            激进模式：
-                4. 如果置信度低于0.8，先把Resource关联到LLM提出的topic_name，但是要加上一个视觉标记（提示用户“AI 不确定，请复核”）
-                5. 保留AI关联的记录，用户可以手动撤回
-            手动模式：
-                4. 在Warehouse Page中引入 Inbox 区域： 所有 AI 处理过的、未被用户确认的 Resource，先进入 Inbox，并带上 AI 建议的 Tag/Topic。
-                5. 用户进入 Warehouse Page，看到 Inbox 区域和 AI 的建议，点击“Approve All”或者手动拖拽微调。
-        4. 对于每一个Topic/Task，AI自动生成一个Summary，基于每个Resource的Summary(Topic Summary (New) = LLM( Topic Summary (Old) + New Resource Summary ))
+                // 3. 指令 C: 移动现有 Topic/Resource 到新父节点下
+                "reparent_target_uuids": [
+                    "existing-uuid-123", 
+                    "existing-uuid-456"
+                ],
+                
+                // 标记：新上传的资源是否也属于这个新父节点？
+                "assign_current_resource_to_parent": true
+                },
+                "confidence_score": 0.85
+            }
+        4. 对于每一个Topic/Task，当Contains的资源发生变化时，AI自动生成一个Summary，基于每个Resource的Summary: Topic Summary (New) = LLM( Current Topic Summary + New Resource Summary )
     
     AI Chat：
     1. 在开始对话时，自动把Node的Summary添加到聊天记录

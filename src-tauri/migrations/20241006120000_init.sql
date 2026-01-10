@@ -27,8 +27,8 @@ CREATE TABLE nodes (
     node_type TEXT NOT NULL CHECK (node_type IN ('topic', 'task', 'resource')),
 
     -- 3. 任务组件 (Task Component) - 仅 node_type='task' 时有值，但允许赋予任何节点
-    task_status TEXT CHECK (task_status IN ('todo', 'done', 'cancelled')),
-    priority TEXT CHECK (priority IN ('high', 'medium', 'low')),
+    task_status TEXT DEFAULT 'todo' CHECK (task_status IN ('todo', 'done', 'cancelled')),
+    priority TEXT DEFAULT 'medium' CHECK (priority IN ('high', 'medium', 'low')),
     due_date DATETIME,
     done_date DATETIME,
 
@@ -50,7 +50,7 @@ CREATE TABLE nodes (
     -- 资源处理状态 (Rust 后台使用)
     processing_stage TEXT DEFAULT 'todo' CHECK(processing_stage IN ('todo', 'embedding','done')),
     -- 用户侧的状态 (Inbox 功能核心)
-    -- 'unreviewed': AI 刚抓取，在 Inbox 等待确认
+    -- 'unreviewed': AI 处理完毕，在 Inbox 等待确认
     -- 'reviewed': 用户已确认/已归档
     -- 'rejected': 用户认为无效
     review_status TEXT DEFAULT 'reviewed'
