@@ -100,7 +100,9 @@ pub async fn create_chat_message(
         NewChatMessage {
             session_id: payload.session_id,
             user_content: &payload.user_content,
+            thinking_summary: payload.thinking_summary.as_deref(),
             assistant_content: payload.assistant_content.as_deref(),
+            thinking_effort: payload.thinking_effort.as_deref(),
             input_tokens: None,
             output_tokens: None,
             reasoning_tokens: None,
@@ -162,7 +164,9 @@ pub async fn update_chat_message(
         &state.db,
         payload.message_id,
         payload.user_content.as_deref(),
+        payload.thinking_summary.as_deref(),
         payload.assistant_content.as_deref(),
+        payload.thinking_effort.as_deref(),
         None,
     )
     .await?)

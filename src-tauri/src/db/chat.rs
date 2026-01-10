@@ -8,7 +8,7 @@ use super::{
 
 /// ChatMessage 表的完整字段列表（用于 SELECT 查询）
 const MESSAGE_FIELDS: &str =
-    "message_id, session_id, user_content, assistant_content, input_tokens, output_tokens, reasoning_tokens, total_tokens, created_at";
+    "message_id, session_id, user_content, thinking_summary, assistant_content, thinking_effort, input_tokens, output_tokens, reasoning_tokens, total_tokens, created_at";
 
 #[derive(Debug, FromRow)]
 pub struct MessageAttachmentWithNode {
@@ -122,12 +122,14 @@ pub async fn insert_chat_message(
     params: NewChatMessage<'_>,
 ) -> Result<i64, sqlx::Error> {
     let result = sqlx::query(
-        "INSERT INTO chat_messages (session_id, user_content, assistant_content, input_tokens, output_tokens, reasoning_tokens, total_tokens) \
-         VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO chat_messages (session_id, user_content, thinking_summary, assistant_content, thinking_effort, input_tokens, output_tokens, reasoning_tokens, total_tokens) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(params.session_id)
     .bind(params.user_content)
+    .bind(params.thinking_summary)
     .bind(params.assistant_content)
+    .bind(params.thinking_effort)
     .bind(params.input_tokens)
     .bind(params.output_tokens)
     .bind(params.reasoning_tokens)
@@ -156,7 +158,9 @@ pub async fn update_chat_message_contents(
     pool: &DbPool,
     message_id: i64,
     user_content: Option<&str>,
+    thinking_summary: Option<&str>,
     assistant_content: Option<&str>,
+    thinking_effort: Option<&str>,
     usage: Option<(&i64, &i64, &i64, &i64)>,
 ) -> Result<(), sqlx::Error> {
     let (input_tokens, output_tokens, reasoning_tokens, total_tokens) =
@@ -164,13 +168,16 @@ pub async fn update_chat_message_contents(
 
     sqlx::query(
         "UPDATE chat_messages \
-         SET user_content = COALESCE(?, user_content), assistant_content = COALESCE(?, assistant_content), \
+         SET user_content = COALESCE(?, user_content), thinking_summary = COALESCE(?, thinking_summary), \
+             assistant_content = COALESCE(?, assistant_content), thinking_effort = COALESCE(?, thinking_effort), \
              input_tokens = COALESCE(?, input_tokens), output_tokens = COALESCE(?, output_tokens), \
              reasoning_tokens = COALESCE(?, reasoning_tokens), total_tokens = COALESCE(?, total_tokens) \
          WHERE message_id = ?",
     )
     .bind(user_content)
+    .bind(thinking_summary)
     .bind(assistant_content)
+    .bind(thinking_effort)
     .bind(input_tokens)
     .bind(output_tokens)
     .bind(reasoning_tokens)

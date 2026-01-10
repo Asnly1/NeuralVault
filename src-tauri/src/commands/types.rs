@@ -130,7 +130,9 @@ pub struct DeleteChatSessionRequest {
 pub struct CreateChatMessageRequest {
     pub session_id: i64,
     pub user_content: String,
+    pub thinking_summary: Option<String>,
     pub assistant_content: Option<String>,
+    pub thinking_effort: Option<String>,
     pub attachment_node_ids: Option<Vec<i64>>,
 }
 
@@ -143,7 +145,9 @@ pub struct CreateChatMessageResponse {
 pub struct UpdateChatMessageRequest {
     pub message_id: i64,
     pub user_content: Option<String>,
+    pub thinking_summary: Option<String>,
     pub assistant_content: Option<String>,
+    pub thinking_effort: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

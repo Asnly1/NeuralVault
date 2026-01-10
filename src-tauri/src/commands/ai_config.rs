@@ -215,7 +215,9 @@ pub async fn send_chat_message(
         NewChatMessage {
             session_id: request.session_id,
             user_content: &request.content,
+            thinking_summary: None,
             assistant_content: None,
+            thinking_effort: request.thinking_effort.as_deref(),
             input_tokens: None,
             output_tokens: None,
             reasoning_tokens: None,
@@ -479,7 +481,9 @@ pub async fn send_chat_message(
         &state.db,
         user_message_id,
         None,
+        None,
         final_assistant.as_deref(),
+        None,
         usage_refs,
     )
     .await
