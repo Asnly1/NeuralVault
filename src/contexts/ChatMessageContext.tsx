@@ -59,6 +59,7 @@ const toChatMessages = (turns: ChatMessagePayload[]): ChatMessage[] => {
       output.push({
         role: "assistant",
         content: turn.assistant_content,
+        thinkingSummary: turn.thinking_summary ?? undefined,
         timestamp,
         usage: turn.usage,
       });
@@ -107,6 +108,20 @@ export function ChatMessageProvider({ children }: { children: React.ReactNode })
     });
   }, []);
 
+  const appendThinkingDeltaToLastAssistant = useCallback((delta: string) => {
+    setMessages((prev) => {
+      const next = [...prev];
+      const lastIndex = next.length - 1;
+      if (lastIndex >= 0 && next[lastIndex].role === "assistant") {
+        next[lastIndex] = {
+          ...next[lastIndex],
+          thinkingSummary: (next[lastIndex].thinkingSummary || "") + delta,
+        };
+      }
+      return next;
+    });
+  }, []);
+
   const setupStreamListener = useCallback(
     async (
       sessionId: number,
@@ -121,8 +136,12 @@ export function ChatMessageProvider({ children }: { children: React.ReactNode })
       }>("chat-stream", (event) => {
         if (event.payload.session_id !== sessionId) return;
 
-        if (event.payload.type === "delta" && event.payload.delta) {
+        if (event.payload.type === "answer_delta" && event.payload.delta) {
           appendDeltaToLastAssistant(event.payload.delta);
+        }
+
+        if (event.payload.type === "thinking_delta" && event.payload.delta) {
+          appendThinkingDeltaToLastAssistant(event.payload.delta);
         }
 
         if (event.payload.type === "usage" && event.payload.usage) {
@@ -138,7 +157,7 @@ export function ChatMessageProvider({ children }: { children: React.ReactNode })
         }
       });
     },
-    [appendDeltaToLastAssistant, applyUsageToLastAssistant]
+    [appendDeltaToLastAssistant, appendThinkingDeltaToLastAssistant, applyUsageToLastAssistant]
   );
 
   // ============================================

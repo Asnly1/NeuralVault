@@ -61,6 +61,7 @@ export interface ChatUsage {
 export interface ChatMessagePayload {
   message_id: number;
   user_content: string;
+  thinking_summary?: string | null;
   assistant_content?: string | null;
   attachments: { node_id: number }[];
   usage?: ChatUsage;
@@ -70,6 +71,7 @@ export interface ChatMessagePayload {
 export interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
+  thinkingSummary?: string;
   timestamp: Date;
   attachments?: { node_id: number }[];
   usage?: ChatUsage;

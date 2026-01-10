@@ -1,35 +1,6 @@
 """
 聊天对话接口 (流式)
 POST: /chat/completions
-    Request:
-        ```json
-        {
-          "provider": "openai",
-          "model": "gpt-4o",
-  messages": [
-            {
-              "role": "user",
-              "content": "帮我分析一下这个文档",
-              "files": ["/abs/path/to/history_file.pdf"]
-            },
-            {
-              "role": "assistant",
-              "content": "好的，文档指出了..."
-            },
-            {
-              "role": "user",
-              "content": "那这个图片里是什么？",
-              "images": ["/abs/path/to/new_image.jpg"],
-              "files": ["/abs/path/to/new_spec.pdf"]
-            }
-          ]
-        }
-        ```
-    Response (SSE):
-        data: {"type":"delta","delta":"这"}
-        data: {"type":"delta","delta":"是"}
-        data: {"type":"full_text","full_text":"这是"}
-        data: {"type":"usage","usage":{"input_tokens":50,"output_tokens":4,"reasoning_tokens":2,"total_tokens":56}}
 """
 from typing import AsyncIterator
 import json

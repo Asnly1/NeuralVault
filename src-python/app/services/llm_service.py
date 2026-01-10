@@ -179,10 +179,10 @@ class LLMService:
 
         stream = await client.aio.models.generate_content_stream(**kwargs)
 
-        full_text = ""
+        answer_text = ""
+        thinking_text = ""
         usage = None
         final_chunk = None
-        # TODO: 添加思考内容
         async for chunk in stream:
             final_chunk = chunk
             if chunk.candidates and chunk.candidates[0].content:
@@ -190,10 +190,12 @@ class LLMService:
                     if not part.text:
                         continue
                     if getattr(part, "thought", False):
-                        continue  # 跳过思考内容
-                    delta = part.text
-                    full_text += delta
-                    yield {"type": "delta", "delta": delta}
+                        thinking_text += part.text
+                        yield {"type": "thinking_delta", "delta": part.text}
+                        continue
+                    else:
+                        answer_text += part.text
+                        yield {"type": "answer_delta", "delta": part.text}
 
         if final_chunk:
             usage = {
@@ -203,7 +205,9 @@ class LLMService:
                 "total_tokens": final_chunk.usage_metadata.total_token_count,
             }
 
-        yield {"type": "full_text", "full_text": full_text}
+        yield {"type": "answer_full_text", "full_text": answer_text}
+        if thinking_text:
+            yield {"type": "thinking_full_text", "full_text": thinking_text}
         if usage:
             yield {"type": "usage", "usage": usage}
 
@@ -236,7 +240,7 @@ class LLMService:
                 thinking_level=thinking_effort
             )
 
-        # TODO: Summary添加图片
+        # TODO: Summary直接使用图片/文件
         config = genai_types.GenerateContentConfig(**config_kwargs)
 
         response = await client.aio.models.generate_content(

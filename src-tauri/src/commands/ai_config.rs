@@ -369,6 +369,8 @@ pub async fn send_chat_message(
     let mut buffer: Vec<u8> = Vec::new();
     let mut assistant_content: Option<String> = None;
     let mut assistant_accum = String::new();
+    let mut thinking_content: Option<String> = None;
+    let mut thinking_accum = String::new();
     let mut usage_tokens: Option<(i64, i64, i64, i64)> = None;
     let mut done = false;
 
@@ -395,20 +397,36 @@ pub async fn send_chat_message(
                 .unwrap_or("");
 
             match event_type {
-                "delta" => {
+                "answer_delta" => {
                     if let Some(delta) = event.get("delta").and_then(|v| v.as_str()) {
                         assistant_accum.push_str(delta);
                         let payload = serde_json::json!({
                             "session_id": request.session_id,
-                            "type": "delta",
+                            "type": "answer_delta",
                             "delta": delta,
                         });
                         let _ = app.emit("chat-stream", payload);
                     }
                 }
-                "full_text" => {
+                "thinking_delta" => {
+                    if let Some(delta) = event.get("delta").and_then(|v| v.as_str()) {
+                        thinking_accum.push_str(delta);
+                        let payload = serde_json::json!({
+                            "session_id": request.session_id,
+                            "type": "thinking_delta",
+                            "delta": delta,
+                        });
+                        let _ = app.emit("chat-stream", payload);
+                    }
+                }
+                "answer_full_text" => {
                     if let Some(full_text) = event.get("full_text").and_then(|v| v.as_str()) {
                         assistant_content = Some(full_text.to_string());
+                    }
+                }
+                "thinking_full_text" => {
+                    if let Some(full_text) = event.get("full_text").and_then(|v| v.as_str()) {
+                        thinking_content = Some(full_text.to_string());
                     }
                 }
                 "usage" => {
@@ -468,6 +486,16 @@ pub async fn send_chat_message(
             }
         }
     };
+    let final_thinking = match thinking_content {
+        Some(text) => Some(text),
+        None => {
+            if thinking_accum.is_empty() {
+                None
+            } else {
+                Some(thinking_accum)
+            }
+        }
+    };
     let usage = match usage_tokens {
         Some((input, output, reasoning, total)) => Some((input, output, reasoning, total)),
         None => None,
@@ -481,7 +509,7 @@ pub async fn send_chat_message(
         &state.db,
         user_message_id,
         None,
-        None,
+        final_thinking.as_deref(),
         final_assistant.as_deref(),
         None,
         usage_refs,
