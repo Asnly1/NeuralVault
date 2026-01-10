@@ -181,8 +181,10 @@ class LLMService:
 
         full_text = ""
         usage = None
+        final_chunk = None
+        # TODO: 添加思考内容
         async for chunk in stream:
-            # 处理多 part 响应（包含 thought 和 answer）
+            final_chunk = chunk
             if chunk.candidates and chunk.candidates[0].content:
                 for part in chunk.candidates[0].content.parts:
                     if not part.text:
@@ -193,18 +195,15 @@ class LLMService:
                     full_text += delta
                     yield {"type": "delta", "delta": delta}
 
-            if chunk.usage_metadata:
-                usage = {
-                    "input_tokens": chunk.usage_metadata.prompt_token_count,
-                    "output_tokens": chunk.usage_metadata.candidates_token_count,
-                    "reasoning_tokens": getattr(
-                        chunk.usage_metadata, "thoughts_token_count", 0
-                    )
-                    or 0,
-                    "total_tokens": chunk.usage_metadata.total_token_count,
-                }
+        if final_chunk:
+            usage = {
+                "input_tokens": final_chunk.usage_metadata.prompt_token_count,
+                "output_tokens": final_chunk.usage_metadata.candidates_token_count,
+                "reasoning_tokens": final_chunk.usage_metadata.thoughts_token_count,
+                "total_tokens": final_chunk.usage_metadata.total_token_count,
+            }
 
-        yield {"type": "done_text", "done_text": full_text}
+        yield {"type": "full_text", "full_text": full_text}
         if usage:
             yield {"type": "usage", "usage": usage}
 
@@ -237,6 +236,7 @@ class LLMService:
                 thinking_level=thinking_effort
             )
 
+        # TODO: Summary添加图片
         config = genai_types.GenerateContentConfig(**config_kwargs)
 
         response = await client.aio.models.generate_content(
