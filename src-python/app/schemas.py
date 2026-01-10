@@ -43,10 +43,17 @@ class SummaryTask(BaseLLMTask[SummaryResponse]):
     content: str
     max_length: int = 100
     user_note: Optional[str] = None
+    file_path: Optional[str] = None
+    resource_subtype: Optional[str] = None
 
     @property
     def output_schema(self) -> Type[SummaryResponse]:
         return SummaryResponse
+
+    @property
+    def should_use_file(self) -> bool:
+        """判断是否应该使用文件上传模式"""
+        return bool(self.file_path and self.resource_subtype != "text")
 
     def build_prompt(self) -> str:
         lines = [
@@ -56,7 +63,9 @@ class SummaryTask(BaseLLMTask[SummaryResponse]):
         ]
         if self.user_note:
             lines.append(f"注意：必须围绕用户备注的意图来总结。用户备注：{self.user_note}")
-        lines.append(f"内容：{self.content}")
+        # 文件上传模式时不需要在 prompt 中包含 content
+        if not self.should_use_file and self.content:
+            lines.append(f"内容：{self.content}")
         return "\n".join(lines)
 
 
@@ -129,6 +138,8 @@ class SummaryRequest(BaseModel):
     content: str
     user_note: Optional[str] = None
     max_length: int = 100
+    file_path: Optional[str] = None
+    resource_subtype: Optional[str] = None
 
 
 class SummaryResponse(BaseModel):

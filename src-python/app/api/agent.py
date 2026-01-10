@@ -34,6 +34,8 @@ async def summarize(request: SummaryRequest):
         content=request.content,
         user_note=request.user_note,
         max_length=request.max_length,
+        file_path=request.file_path,
+        resource_subtype=request.resource_subtype,
     )
     return SummaryResponse(summary=summary)
 

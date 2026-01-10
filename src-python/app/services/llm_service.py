@@ -80,6 +80,7 @@ class LLMService:
         """
         结构化输出接口，返回 Pydantic 模型实例
         task 自包含输入参数、输出 schema 和 prompt 构建逻辑
+        支持文件上传（如果 task 有 file_path 属性）
         """
         provider = provider.lower()
 
@@ -218,17 +219,33 @@ class LLMService:
         thinking_effort: Optional[str] = None,
     ) -> BaseModel:
         """
-        Gemini 结构化输出实现
+        Gemini 结构化输出实现，支持文件上传
         """
         client = await self._get_gemini_client()
 
-        # 从 task 获取 prompt 和 output schema
         prompt = task.build_prompt()
         output_schema = task.output_schema
+        file_path = getattr(task, "file_path", None)
+        should_use_file = getattr(task, "should_use_file", False)
 
-        contents = [
-            genai_types.Content(role="user", parts=[genai_types.Part(text=prompt)])
-        ]
+        parts: list = []
+
+        # 上传文件（如果 task 需要）
+        if file_path and should_use_file:
+            logger.info(f"Uploading file for structured reply: {file_path}")
+            file_obj = await self._gemini_upload_file(client, file_path)
+            await self._wait_for_file_active(client, file_obj)
+            parts.append(
+                genai_types.Part(
+                    file_data=genai_types.FileData(
+                        file_uri=file_obj.uri, mime_type=file_obj.mime_type
+                    )
+                )
+            )
+
+        parts.append(genai_types.Part(text=prompt))
+
+        contents = [genai_types.Content(role="user", parts=parts)]
 
         # 构建配置
         config_kwargs: dict = {
@@ -240,7 +257,6 @@ class LLMService:
                 thinking_level=thinking_effort
             )
 
-        # TODO: Summary直接使用图片/文件
         config = genai_types.GenerateContentConfig(**config_kwargs)
 
         response = await client.aio.models.generate_content(
@@ -249,7 +265,6 @@ class LLMService:
             config=config,
         )
 
-        # 解析并验证输出
         return output_schema.model_validate_json(response.text)
 
 

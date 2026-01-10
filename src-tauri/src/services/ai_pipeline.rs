@@ -10,7 +10,7 @@ use crate::db::{
     insert_edge_if_missing, insert_node, list_nodes_by_type, update_node_summary,
     update_resource_processing_stage, update_resource_sync_status, DbPool,
     EmbeddingType, EdgeRelationType, NewEdge, NewNode, NodeRecord, NodeType,
-    ResourceProcessingStage, ResourceEmbeddingStatus, ReviewStatus, EmbedChunkResult,
+    ResourceProcessingStage, ResourceEmbeddingStatus, ResourceSubtype, ReviewStatus, EmbedChunkResult,
 };
 use crate::services::AIConfigService;
 use crate::sidecar::PythonSidecar;
@@ -138,7 +138,29 @@ async fn process_resource_job(
         let (provider, model) = get_processing_provider_model(ai_config).await?;
 
         // 5. 获取summary
-        let summary = request_summary(python, &provider, &model, &content, node.user_note.as_deref()).await?;
+        // 根据资源类型决定是否传递 file_path
+        let resource_subtype_str = node.resource_subtype.map(|s| match s {
+            ResourceSubtype::Text => "text",
+            ResourceSubtype::Image => "image",
+            ResourceSubtype::Pdf => "pdf",
+            ResourceSubtype::Url => "url",
+            ResourceSubtype::Epub => "epub",
+            ResourceSubtype::Other => "other",
+        });
+        // 非 Text 类型才传递 file_path
+        let file_path_for_summary = match node.resource_subtype {
+            Some(ResourceSubtype::Text) | None => None,
+            _ => node.file_path.as_deref(),
+        };
+        let summary = request_summary(
+            python,
+            &provider,
+            &model,
+            &content,
+            node.user_note.as_deref(),
+            file_path_for_summary,
+            resource_subtype_str,
+        ).await?;
         let summary = summary.trim().to_string();
         if summary.is_empty() {
             update_node_summary(db, node_id, None)
@@ -415,6 +437,8 @@ async fn request_summary(
     model: &str,
     content: &str,
     user_note: Option<&str>,
+    file_path: Option<&str>,
+    resource_subtype: Option<&str>,
 ) -> Result<String, String> {
     let url = format!("{}/agent/summary", python.get_base_url());
     let request = SummaryRequest {
@@ -423,6 +447,8 @@ async fn request_summary(
         content,
         user_note,
         max_length: SUMMARY_MAX_LENGTH,
+        file_path,
+        resource_subtype,
     };
 
     let response = python
@@ -536,6 +562,8 @@ struct SummaryRequest<'a> {
     content: &'a str,
     user_note: Option<&'a str>,
     max_length: i32,
+    file_path: Option<&'a str>,
+    resource_subtype: Option<&'a str>,
 }
 
 #[derive(Debug, Deserialize)]

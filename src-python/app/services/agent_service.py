@@ -11,6 +11,9 @@ from app.schemas import (
     TopicClassifyResponse,
 )
 from app.services.llm_service import llm_service
+from app.core.logging import get_logger
+
+logger = get_logger("AgentService")
 
 
 class AgentService:
@@ -21,24 +24,53 @@ class AgentService:
         content: str,
         user_note: Optional[str],
         max_length: int,
+        file_path: Optional[str] = None,
+        resource_subtype: Optional[str] = None,
     ) -> str:
         content = (content or "").strip()
-        if not content:
-            return ""
-
         max_length = max(10, int(max_length or 100))
 
         task = SummaryTask(
             content=content,
             user_note=user_note,
             max_length=max_length,
+            file_path=file_path,
+            resource_subtype=resource_subtype,
         )
 
-        result: SummaryResponse = await llm_service.structure_reply(
-            provider=provider,
-            model=model,
-            task=task,
-        )
+        if task.should_use_file:
+            # 非文本类型：优先上传文件，失败时回退到 content
+            try:
+                logger.info(f"Using file upload mode for {resource_subtype}: {file_path}")
+                result: SummaryResponse = await llm_service.structure_reply(
+                    provider=provider,
+                    model=model,
+                    task=task,
+                )
+            except Exception as e:
+                logger.warning(f"File upload failed for {file_path}, falling back to text mode: {e}")
+                if not content:
+                    raise ValueError(f"File upload failed and no content available: {e}")
+                # 回退到纯文本模式
+                fallback_task = SummaryTask(
+                    content=content,
+                    user_note=user_note,
+                    max_length=max_length,
+                )
+                result = await llm_service.structure_reply(
+                    provider=provider,
+                    model=model,
+                    task=fallback_task,
+                )
+        else:
+            # 文本类型：使用 content
+            if not content:
+                return ""
+            result = await llm_service.structure_reply(
+                provider=provider,
+                model=model,
+                task=task,
+            )
 
         summary = result.summary.strip()
         if len(summary) > max_length:
