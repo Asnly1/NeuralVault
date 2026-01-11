@@ -28,6 +28,12 @@ Edge采用DAG模式，即一个Node可以有多个Parent Node，每次插入Edge
     1. pdfium
     2. libc
 
+TODO：使用Rust代替Python
+    1. fastembed-rs: dense选择BAAI/bge-m3量化版本; sparse选择BAAI/bge-m3量化版本; Image选择Qdrant/clip-ViT-B-32-vision
+    2. qdrant-client
+    3. 自行实现API调用(reqwest + serde)
+    4. SentenceSpliter 使用 text-splitter()。使用Hugging Face Tokenizer
+    
 Python依赖：
     requires-python = ">=3.12"
     dependencies = [

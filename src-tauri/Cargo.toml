@@ -42,6 +42,10 @@ active-win-pos-rs = "0.9.1"
 ocr_rs = { git = "https://github.com/Asnly1/rust-paddle-ocr.git", rev = "ab7ac86", package = "ocr-rs" }
 pdfium-render = "0.8.37"
 image = "0.25"
+fastembed = "5.7.0"
+qdrant-client = "1.16.0"
+text-splitter = { version = "0.29.3", features = ["markdown", "tokenizers"] }
+tokenizers = { version = "0.22.2", features = ["http"] }
 
 # 只有在目标平台是 Unix 系列（Linux / macOS / BSD 等）时，才会安装 libc
 [target.'cfg(unix)'.dependencies]
