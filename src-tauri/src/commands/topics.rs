@@ -4,9 +4,9 @@ use tauri::State;
 use crate::{
     app_state::AppState,
     db::{
-        delete_edge, insert_edge, list_nodes_by_type, list_source_nodes, list_target_nodes,
-        update_node_pinned, update_node_summary, update_node_title, update_resource_review_status,
-        EdgeRelationType, NewEdge, NodeRecord, NodeType, ReviewStatus,
+        contains_creates_cycle, delete_edge, insert_edge, list_nodes_by_type, list_source_nodes,
+        list_target_nodes, update_node_pinned, update_node_summary, update_node_title,
+        update_resource_review_status, EdgeRelationType, NewEdge, NodeRecord, NodeType, ReviewStatus,
     },
     AppResult,
 };
@@ -144,6 +144,10 @@ pub async fn link_resource_to_topic_command(
 ) -> AppResult<SuccessResponse> {
     let review_status = parse_review_status(payload.review_status.as_deref());
 
+    if contains_creates_cycle(&state.db, payload.topic_id, payload.resource_id).await? {
+        return Err("contains edge would create a cycle".into());
+    }
+
     insert_edge(
         &state.db,
         NewEdge {
@@ -204,6 +208,10 @@ pub async fn link_task_to_topic_command(
     task_id: i64,
     topic_id: i64,
 ) -> AppResult<SuccessResponse> {
+    if contains_creates_cycle(&state.db, topic_id, task_id).await? {
+        return Err("contains edge would create a cycle".into());
+    }
+
     insert_edge(
         &state.db,
         NewEdge {

@@ -16,6 +16,19 @@ pub struct ProviderConfig {
     pub enabled: bool,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ClassificationMode {
+    Manual,
+    Aggressive,
+}
+
+impl Default for ClassificationMode {
+    fn default() -> Self {
+        ClassificationMode::Manual
+    }
+}
+
 /// AI 配置数据结构
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AIConfigData {
@@ -23,6 +36,8 @@ pub struct AIConfigData {
     pub providers: HashMap<String, ProviderConfig>,
     pub processing_provider: Option<String>, // 处理任务（summary/topic）的provider
     pub processing_model: Option<String>, // 处理任务（summary/topic）的model
+    #[serde(default)]
+    pub classification_mode: ClassificationMode,
 }
 
 impl Default for AIConfigData {
@@ -32,6 +47,7 @@ impl Default for AIConfigData {
             providers: HashMap::new(),
             processing_provider: None,
             processing_model: None,
+            classification_mode: ClassificationMode::Manual,
         }
     }
 }
@@ -129,6 +145,12 @@ impl AIConfigService {
         let mut config = self.load()?;
         config.processing_provider = Some(provider.to_string());
         config.processing_model = Some(model.to_string());
+        self.save(&config)
+    }
+
+    pub fn set_classification_mode(&self, mode: ClassificationMode) -> Result<(), String> {
+        let mut config = self.load()?;
+        config.classification_mode = mode;
         self.save(&config)
     }
 }

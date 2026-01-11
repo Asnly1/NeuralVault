@@ -113,10 +113,10 @@ async def delete_embedding(request: DeleteEmbeddingRequest):
 
 @router.post("/classify", response_model=ClassifyTopicResponse)
 async def classify_topic(request: ClassifyTopicRequest):
-    topic_name, confidence = await agent_service.classify_topic(
+    response = await agent_service.classify_topic(
         provider=request.provider,
         model=request.model,
         resource_summary=request.resource_summary,
         candidates=request.candidates,
     )
-    return ClassifyTopicResponse(topic_name=topic_name, confidence=confidence)
+    return response

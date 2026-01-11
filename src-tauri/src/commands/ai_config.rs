@@ -14,7 +14,7 @@ use crate::{
         list_message_attachments_with_node, list_session_bound_resources,
         update_chat_session, update_chat_message_contents,
     },
-    services::ProviderConfig,
+    services::{ClassificationMode, ProviderConfig},
     sidecar::PythonSidecar,
     utils::resolve_file_path,
 };
@@ -34,6 +34,11 @@ pub struct SetProcessingProviderModelRequest {
     pub model: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct SetClassificationModeRequest {
+    pub mode: String,
+}
+
 #[derive(Debug, Serialize)]
 pub struct AIProviderStatus {
     pub has_key: bool,
@@ -46,6 +51,7 @@ pub struct AIConfigStatusResponse {
     pub providers: HashMap<String, AIProviderStatus>,
     pub processing_provider: Option<String>,
     pub processing_model: Option<String>,
+    pub classification_mode: ClassificationMode,
 }
 
 #[derive(Debug, Deserialize)]
@@ -140,6 +146,7 @@ pub async fn get_ai_config_status(
         providers,
         processing_provider: config.processing_provider,
         processing_model: config.processing_model,
+        classification_mode: config.classification_mode,
     })
 }
 
@@ -177,6 +184,20 @@ pub async fn set_processing_provider_model(
 ) -> Result<(), String> {
     let config_service = state.ai_config.lock().await;
     config_service.set_processing_provider_model(&request.provider, &request.model)
+}
+
+/// 设置 AI 归类模式
+#[tauri::command]
+pub async fn set_classification_mode(
+    state: State<'_, AppState>,
+    request: SetClassificationModeRequest,
+) -> Result<(), String> {
+    let mode = match request.mode.as_str() {
+        "aggressive" => ClassificationMode::Aggressive,
+        _ => ClassificationMode::Manual,
+    };
+    let config_service = state.ai_config.lock().await;
+    config_service.set_classification_mode(mode)
 }
 
 /// 发送聊天消息（通过 Python 调用 LLM）

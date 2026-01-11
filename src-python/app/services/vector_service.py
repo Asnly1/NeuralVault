@@ -185,7 +185,7 @@ class VectorService:
                 },
                 payload={
                     "node_id": node_id,
-                    "embedding_type": embedding_type,
+                    "type": embedding_type,
                     "chunk_text": chunk.text,
                     "chunk_index": chunk.chunk_index,
                     "token_count": chunk.token_count
@@ -336,7 +336,7 @@ class VectorService:
             search_results.append({
                 "node_id": payload.get("node_id"),
                 "chunk_index": payload.get("chunk_index", 0),
-                "chunk_text": payload.get("text", ""),
+                "chunk_text": payload.get("chunk_text", ""),
                 "score": point.score if point.score else 0.0,
             })
 

@@ -151,8 +151,18 @@ src-python/
   "model": "gpt-4o-mini",
   "resource_summary": "新资源摘要...",
   "candidates": [
-    { "title": "Rust", "summary": "..." },
-    { "title": "React", "summary": "..." }
+    {
+      "node_id": 12,
+      "title": "Rust",
+      "summary": "...",
+      "parents": [{ "node_id": 3, "title": "Programming", "summary": "..." }]
+    },
+    {
+      "node_id": 34,
+      "title": "React",
+      "summary": "...",
+      "parents": []
+    }
   ]
 }
 ```
@@ -160,7 +170,47 @@ src-python/
 输出：
 
 ```json
-{ "topic_name": "Rust", "confidence": 0.86 }
+{
+  "action": "assign",
+  "payload": { "target_topic_id": 12 },
+  "confidence_score": 0.95
+}
+```
+
+```json
+{
+  "action": "create_new",
+  "payload": {
+    "new_topic": {
+      "title": "Rust Ownership",
+      "summary": "Rust 中所有权与借用规则概览"
+    },
+    "parent_topic_id": 3
+  },
+  "confidence_score": 0.90
+}
+```
+
+```json
+{
+  "action": "restructure",
+  "payload": {
+    "topics_to_revise": [
+      {
+        "topic_id": 12,
+        "new_title": "Rust Ownership",
+        "new_summary": "聚焦所有权与借用规则"
+      }
+    ],
+    "new_parent_topic": {
+      "title": "Rust Memory Management",
+      "summary": "Ownership / Borrowing / Lifetimes"
+    },
+    "reparent_target_ids": [12, 56],
+    "assign_current_resource_to_parent": true
+  },
+  "confidence_score": 0.85
+}
 ```
 
 ---
@@ -248,7 +298,7 @@ Chunking:
 
 - 使用 Qdrant embedded 模式 (`qdrant_path`)，collection 使用 named vectors: `dense` + `sparse`。
 - 更新资源时先删除旧向量，再 upsert 新向量。
-- Qdrant payload 包含 `node_id`, `embedding_type`(summary/content), `chunk_index`, `chunk_text`, `token_count`。
+- Qdrant payload 包含 `node_id`, `type`(summary/content), `chunk_index`, `chunk_text`, `token_count`。
 
 ---
 

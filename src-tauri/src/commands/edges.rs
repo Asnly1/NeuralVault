@@ -3,7 +3,8 @@ use tauri::State;
 use crate::{
     app_state::AppState,
     db::{
-        delete_edge, insert_edge, list_source_nodes, list_target_nodes, EdgeRelationType, NewEdge,
+        contains_creates_cycle, delete_edge, insert_edge, list_source_nodes, list_target_nodes,
+        EdgeRelationType, NewEdge,
     },
     AppResult,
 };
@@ -30,6 +31,12 @@ pub async fn link_nodes_command(
 
     if matches!(relation_type, EdgeRelationType::RelatedTo) && source_node_id > target_node_id {
         std::mem::swap(&mut source_node_id, &mut target_node_id);
+    }
+
+    if matches!(relation_type, EdgeRelationType::Contains)
+        && contains_creates_cycle(&state.db, source_node_id, target_node_id).await?
+    {
+        return Err("contains edge would create a cycle".into());
     }
 
     insert_edge(

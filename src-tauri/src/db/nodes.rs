@@ -312,7 +312,7 @@ pub async fn update_resource_sync_status(
     last_embedding_error: Option<&str>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "UPDATE nodes SET sync_status = ?, embedded_hash = ?, last_embedding_error = ?, \
+        "UPDATE nodes SET embedding_status = ?, embedded_hash = ?, last_embedding_error = ?, \
          last_embedding_at = CASE WHEN ? = 'synced' THEN CURRENT_TIMESTAMP ELSE last_embedding_at END, \
          updated_at = CURRENT_TIMESTAMP \
          WHERE node_id = ? AND node_type = 'resource'",

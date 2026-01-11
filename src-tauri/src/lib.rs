@@ -25,7 +25,7 @@ pub use commands::{
     soft_delete_resource_command, hard_delete_resource_command,
     link_nodes_command, unlink_nodes_command, list_target_nodes_command, list_source_nodes_command,
     read_clipboard, check_python_health, is_python_running, get_ai_config_status, save_api_key,
-    remove_api_key, set_processing_provider_model, send_chat_message, create_chat_session, get_chat_session,
+    remove_api_key, set_processing_provider_model, set_classification_mode, send_chat_message, create_chat_session, get_chat_session,
     list_chat_sessions, update_chat_session_command, delete_chat_session, create_chat_message,
     list_chat_messages_command, list_message_attachments_command, list_session_bound_resources_command,
     update_chat_message, delete_chat_message, add_message_attachments, remove_message_attachment,
@@ -40,6 +40,8 @@ pub use commands::{
     search_semantic, search_keyword,
     // Node commands
     list_pinned_nodes, list_unreviewed_nodes, update_node_review_status, update_node_pinned,
+    list_node_revision_logs, convert_resource_to_topic_command, convert_resource_to_task_command,
+    convert_topic_to_task_command, convert_task_to_topic_command,
 };
 pub use sidecar::PythonSidecar;
 pub use window::{hide_hud, toggle_hud};
@@ -204,6 +206,7 @@ pub fn run() {
             save_api_key,
             remove_api_key,
             set_processing_provider_model,
+            set_classification_mode,
             send_chat_message,
             create_chat_session,
             get_chat_session,
@@ -242,7 +245,12 @@ pub fn run() {
             list_pinned_nodes,
             list_unreviewed_nodes,
             update_node_review_status,
-            update_node_pinned
+            update_node_pinned,
+            list_node_revision_logs,
+            convert_resource_to_topic_command,
+            convert_resource_to_task_command,
+            convert_topic_to_task_command,
+            convert_task_to_topic_command
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {

@@ -238,3 +238,23 @@ CREATE TABLE message_citations (
     FOREIGN KEY(node_id) REFERENCES nodes(node_id) ON DELETE CASCADE,
     FOREIGN KEY(chunk_id) REFERENCES context_chunks(chunk_id) ON DELETE SET NULL
 );
+
+-- ==========================================
+-- 节点变更记录 (AI 自动修改可追溯)
+-- ==========================================
+CREATE TABLE node_revision_logs (
+    revision_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    node_id INTEGER NOT NULL,
+    field_name TEXT NOT NULL,          -- 变更字段: title / summary
+    old_value TEXT,
+    new_value TEXT,
+    reason TEXT,                       -- 变更原因
+    provider TEXT,
+    model TEXT,
+    confidence_score REAL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY(node_id) REFERENCES nodes(node_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_node_revision_logs_node_id ON node_revision_logs(node_id);

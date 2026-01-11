@@ -19,6 +19,7 @@ import type {
   AddMessageAttachmentsRequest,
   RemoveMessageAttachmentRequest,
   SetSessionBindingsRequest,
+  SetClassificationModeRequest,
 } from "../types";
 
 // ============================================
@@ -36,6 +37,9 @@ export const removeApiKey = (provider: string): Promise<void> =>
 
 export const setDefaultModel = (request: SetDefaultModelRequest): Promise<void> =>
   apiCallVoid("set_default_model", { request });
+
+export const setClassificationMode = (request: SetClassificationModeRequest): Promise<void> =>
+  apiCallVoid("set_classification_mode", { request });
 
 // ============================================
 // Chat Streaming

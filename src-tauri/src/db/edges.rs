@@ -1,4 +1,32 @@
+use sqlx::{Executor, Sqlite};
+
 use super::{DbPool, EdgeRecord, EdgeRelationType, NewEdge, NodeRecord};
+
+pub async fn contains_creates_cycle<'a, E>(
+    executor: E,
+    source_node_id: i64,
+    target_node_id: i64,
+) -> Result<bool, sqlx::Error>
+where
+    E: Executor<'a, Database = Sqlite>,
+{
+    let exists: Option<i64> = sqlx::query_scalar(
+        "WITH RECURSIVE reachable(node_id) AS ( \
+            SELECT ? \
+            UNION ALL \
+            SELECT e.target_node_id FROM edges e \
+            INNER JOIN reachable r ON e.source_node_id = r.node_id \
+            WHERE e.relation_type = 'contains' AND e.is_deleted = 0 \
+        ) \
+        SELECT 1 FROM reachable WHERE node_id = ? LIMIT 1",
+    )
+    .bind(target_node_id)
+    .bind(source_node_id)
+    .fetch_optional(executor)
+    .await?;
+
+    Ok(exists.is_some())
+}
 
 pub async fn insert_edge(pool: &DbPool, params: NewEdge) -> Result<i64, sqlx::Error> {
     let result = sqlx::query(

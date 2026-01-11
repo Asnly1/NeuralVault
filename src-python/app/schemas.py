@@ -71,34 +71,97 @@ class SummaryTask(BaseLLMTask[SummaryResponse]):
 
 # ---------- Topic Classify Task ----------
 
-class TopicClassifyResponse(BaseModel):
-    topic_name: str = Field(description="分类的主题名称")
-    confidence: float = Field(description="置信度 0.0-1.0")
+class ParentTopicCandidate(BaseModel):
+    node_id: int = Field(description="父级主题的 node_id")
+    title: str = Field(description="父级主题标题")
+    summary: Optional[str] = Field(default=None, description="父级主题摘要")
 
 
-class TopicClassifyTask(BaseLLMTask[TopicClassifyResponse]):
+class TopicCandidate(BaseModel):
+    node_id: int = Field(description="主题 node_id")
+    title: str = Field(description="主题标题")
+    summary: Optional[str] = Field(default=None, description="主题摘要")
+    parents: List[ParentTopicCandidate] = Field(default_factory=list)
+
+
+class NewTopicPayload(BaseModel):
+    title: str = Field(description="新主题标题")
+    summary: Optional[str] = Field(default=None, description="新主题摘要")
+
+
+class TopicRevisionPayload(BaseModel):
+    topic_id: int = Field(description="需要修改的主题 node_id")
+    new_title: Optional[str] = Field(default=None, description="新标题")
+    new_summary: Optional[str] = Field(default=None, description="新摘要")
+
+
+class AssignPayload(BaseModel):
+    target_topic_id: int = Field(description="现有主题 node_id")
+
+
+class CreateNewPayload(BaseModel):
+    new_topic: NewTopicPayload
+    parent_topic_id: Optional[int] = Field(default=None, description="可选的父主题 node_id")
+
+
+class RestructurePayload(BaseModel):
+    topics_to_revise: List[TopicRevisionPayload] = Field(default_factory=list)
+    new_parent_topic: Optional[NewTopicPayload] = Field(default=None)
+    reparent_target_ids: List[int] = Field(default_factory=list)
+    assign_current_resource_to_parent: Optional[bool] = Field(default=None)
+
+
+class ClassifyAction(str, Enum):
+    assign = "assign"
+    create_new = "create_new"
+    restructure = "restructure"
+
+
+class ClassifyTopicResponse(BaseModel):
+    action: ClassifyAction
+    payload: dict
+    confidence_score: float
+
+
+class TopicClassifyTask(BaseLLMTask[ClassifyTopicResponse]):
     resource_summary: str
-    candidates: List["TopicCandidate"]
+    candidates: List[TopicCandidate]
 
     @property
-    def output_schema(self) -> Type[TopicClassifyResponse]:
-        return TopicClassifyResponse
+    def output_schema(self) -> Type[ClassifyTopicResponse]:
+        return ClassifyTopicResponse
 
     def build_prompt(self) -> str:
         lines = [
-            "你是知识库主题分类助手，根据候选主题判断归属或创建新主题。",
+            "你是知识库主题分类助手，根据候选主题判断归属或创建新主题，必要时重构层级。",
             "",
             f'新资源摘要: "{self.resource_summary}"',
             "",
-            "候选主题:",
+            "候选主题 (node_id, title, summary, parents):",
         ]
         if self.candidates:
             for idx, c in enumerate(self.candidates, 1):
-                lines.append(f"{idx}. {c.title}: {c.summary or ''}")
+                parent_info = ", ".join(
+                    [f'{p.node_id}:{p.title}' for p in c.parents]
+                ) or "None"
+                lines.append(
+                    f"{idx}. [{c.node_id}] {c.title} - {c.summary or ''} | parents: {parent_info}"
+                )
         else:
             lines.append("（无）")
         lines.append("")
-        lines.append("任务：判断资源属于上述哪个主题；如果都不合适，请创建新主题名。")
+        lines.append(
+            "任务：选择一种 action 并返回结构化 JSON："
+        )
+        lines.append(
+            "1) assign: 资源属于现有主题，payload.target_topic_id 为 node_id。"
+        )
+        lines.append(
+            "2) create_new: 现有主题都不合适，payload.new_topic 填写 title/summary，可选 parent_topic_id。"
+        )
+        lines.append(
+            "3) restructure: 需要重构层级，可修改已有主题，创建新父主题，并 reparent。"
+        )
         return "\n".join(lines)
 
 
@@ -175,21 +238,11 @@ class DeleteEmbeddingRequest(BaseModel):
     embedding_type: Optional[EmbeddingType] = None
 
 
-class TopicCandidate(BaseModel):
-    title: str
-    summary: Optional[str] = None
-
-
 class ClassifyTopicRequest(BaseModel):
     provider: str
     model: str
     resource_summary: str
     candidates: List[TopicCandidate] = Field(default_factory=list)
-
-
-class ClassifyTopicResponse(BaseModel):
-    topic_name: str
-    confidence: float
 
 
 # ==========================================

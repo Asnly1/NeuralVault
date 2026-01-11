@@ -135,7 +135,7 @@ pub struct NodeRecord {
     pub processing_hash: Option<String>,
     pub embedding_status: ResourceEmbeddingStatus,
     pub last_embedding_at: Option<String>,
-    pub last_error: Option<String>,
+    pub last_embedding_error: Option<String>,
     pub processing_stage: ResourceProcessingStage,
     pub review_status: ReviewStatus,
     pub is_pinned: bool,
@@ -191,6 +191,35 @@ pub struct NewEdge {
     pub relation_type: EdgeRelationType,
     pub confidence_score: Option<f64>,
     pub is_manual: bool,
+}
+
+// ==========================================
+// Node Revision Logs
+// ==========================================
+
+#[derive(Debug, FromRow, Serialize)]
+pub struct NodeRevisionLogRecord {
+    pub revision_id: i64,
+    pub node_id: i64,
+    pub field_name: String,
+    pub old_value: Option<String>,
+    pub new_value: Option<String>,
+    pub reason: Option<String>,
+    pub provider: Option<String>,
+    pub model: Option<String>,
+    pub confidence_score: Option<f64>,
+    pub created_at: Option<String>,
+}
+
+pub struct NewNodeRevisionLog<'a> {
+    pub node_id: i64,
+    pub field_name: &'a str,
+    pub old_value: Option<&'a str>,
+    pub new_value: Option<&'a str>,
+    pub reason: Option<&'a str>,
+    pub provider: Option<&'a str>,
+    pub model: Option<&'a str>,
+    pub confidence_score: Option<f64>,
 }
 
 // ==========================================

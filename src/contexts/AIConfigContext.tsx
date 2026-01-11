@@ -3,11 +3,18 @@
  * 职责：API Key 管理、模型选择、配置刷新
  */
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { getAIConfigStatus, saveApiKey, removeApiKey, setDefaultModel } from "@/api";
+import {
+  getAIConfigStatus,
+  saveApiKey,
+  removeApiKey,
+  setDefaultModel,
+  setClassificationMode,
+} from "@/api";
 import {
   AI_PROVIDER_INFO,
   type AIProvider,
   type AIConfigStatus,
+  type ClassificationMode,
   type ModelOption,
 } from "@/types";
 
@@ -21,6 +28,8 @@ export interface AIConfigContextType {
   configuredProviders: AIProvider[];
   selectedModel: ModelOption | null;
   setSelectedModel: (model: ModelOption | null) => void;
+  classificationMode: ClassificationMode | null;
+  saveClassificationMode: (mode: ClassificationMode) => Promise<void>;
   saveKey: (provider: AIProvider, apiKey: string, baseUrl?: string) => Promise<void>;
   removeKey: (provider: AIProvider) => Promise<void>;
   saveDefaultModel: (provider: AIProvider, model: string) => Promise<void>;
@@ -34,6 +43,8 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<ModelOption | null>(null);
+
+  const classificationMode = config?.classification_mode ?? null;
 
   const refreshConfig = useCallback(async () => {
     try {
@@ -111,6 +122,14 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
     [refreshConfig]
   );
 
+  const saveClassificationMode = useCallback(
+    async (mode: ClassificationMode) => {
+      await setClassificationMode({ mode });
+      await refreshConfig();
+    },
+    [refreshConfig]
+  );
+
   return (
     <AIConfigContext.Provider
       value={{
@@ -120,6 +139,8 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
         configuredProviders,
         selectedModel,
         setSelectedModel,
+        classificationMode,
+        saveClassificationMode,
         saveKey,
         removeKey,
         saveDefaultModel,

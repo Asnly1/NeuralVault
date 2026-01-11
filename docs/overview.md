@@ -67,7 +67,7 @@ Python依赖：
         2. 精确匹配（1%情况）： SQL LIKE（不需要FTS5, 个人知识库数据量不大，且FTS5对中文分词支持不好）
     5. Warehouse：显示所有Node
     6. Calendar：显示日程，即每个Task的DDL
-    7. Settings：颜色/语言/ API Key/ 快捷键
+    7. Settings：颜色/语言/ API Key/ 快捷键/ 归类模式
 
 使用：
     资源捕获+自动分类（乐观 UI + 后台异步队列）：
@@ -98,7 +98,7 @@ Python依赖：
             2. **LLM 决策**（Structured Output）：
                 输入：Resource Summary + Candidate Topics (包含 ID, Title, Summary, Existing Parent)。
                 要求 LLM 返回 JSON 指令，执行以下逻辑之一：
-                * **Assign**: 资源属于现有 Topic -> 返回 Topic UUID。
+                * **Assign**: 资源属于现有 Topic -> 返回 Topic node_id。
                 * **Create New**: 现有 Topic 都不匹配 -> 返回新 Topic 的 Title/Summary。
                 * **Restructure**：发现现有 Topic 定义不准确或层级缺失。
                     * 指令 A: 修改现有 Topic 的 Title/Summary（慎用，仅当语义发生漂移时）。
@@ -106,7 +106,8 @@ Python依赖：
                     * 指令 C: 将新 Resource、现有 Topic (及其它相关 Topic) 移动到该 Parent Topic 下，建立 `contains` 边。
             3. **执行与反馈**：
                 * **去重检查**：在创建新 Topic (尤其是 Parent Topic) 前，先在该用户的 Topic 库中进行 Exact Match 或 Fuzzy Match，防止生成 "Programming" 和 "Coding" 这种相似节点。
-                * **重试机制**：如果出现相似节点，把相似节点的ID, Title, Summary 一起传入LLM，让LLM重新决策。
+                * **复用机制**：如果出现相似节点，直接复用已有 Topic，避免重复创建。
+                * **修改记录**：置信度 >= 0.8 时允许修改 Topic title/summary，并写入 `node_revision_logs` 供追溯。
             4. **Inbox**（使用review_status） ：
                 * 激进模式：
                     1. 如果置信度低于0.8，先把Resource关联到LLM提出的topic_name，但是要加上一个视觉标记（提示用户“AI 不确定，请复核”）
@@ -118,7 +119,7 @@ Python依赖：
             {
                 "action": "assign",
                 "payload": {
-                    "target_topic_uuid": "uuid-of-existing-topic"
+                    "target_topic_id": 12
                 },
                 "confidence_score": 0.95,
             }
@@ -130,7 +131,7 @@ Python依赖：
                         "summary": "Summary of the new topic..."
                     },
                     // 可选：如果 LLM 觉得这个新 Topic 应该归属于某个已存在的爷爷节点
-                    "parent_topic_uuid": "optional-uuid-of-existing-parent" 
+                    "parent_topic_id": 3
                 },
                 "confidence_score": 0.90,
             }
@@ -140,7 +141,7 @@ Python依赖：
                 // 1. 指令 A: 修改现有 Topic (Optional)
                 "topics_to_revise": [
                     {
-                    "uuid": "existing-uuid-123",
+                    "topic_id": 12,
                     "new_title": "Rust Ownership",
                     "new_summary": "Focus specifically on ownership rules."
                     }
@@ -153,9 +154,9 @@ Python依赖：
                 },
 
                 // 3. 指令 C: 移动现有 Topic/Resource 到新父节点下
-                "reparent_target_uuids": [
-                    "existing-uuid-123", 
-                    "existing-uuid-456"
+                "reparent_target_ids": [
+                    12,
+                    56
                 ],
                 
                 // 标记：新上传的资源是否也属于这个新父节点？

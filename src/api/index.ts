@@ -74,6 +74,7 @@ export {
   saveApiKey,
   removeApiKey,
   setDefaultModel,
+  setClassificationMode,
   sendChatMessage,
   createChatSession,
   getChatSession,

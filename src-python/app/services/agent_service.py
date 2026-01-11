@@ -1,14 +1,14 @@
 """
 AI 非对话任务：摘要与主题分类
 """
-from typing import Optional, Sequence, Tuple
+from typing import Optional, Sequence
 
 from app.schemas import (
     SummaryTask,
     SummaryResponse,
     TopicCandidate,
     TopicClassifyTask,
-    TopicClassifyResponse,
+    ClassifyTopicResponse,
 )
 from app.services.llm_service import llm_service
 from app.core.logging import get_logger
@@ -84,23 +84,33 @@ class AgentService:
         model: str,
         resource_summary: str,
         candidates: Sequence[TopicCandidate],
-    ) -> Tuple[str, float]:
+    ) -> ClassifyTopicResponse:
         summary = (resource_summary or "").strip()
         if not summary:
-            return ("未分类", 0.0)
+            return ClassifyTopicResponse(
+                action="create_new",
+                payload={
+                    "new_topic": {
+                        "title": "未分类",
+                        "summary": "",
+                    }
+                },
+                confidence_score=0.0,
+            )
 
         task = TopicClassifyTask(
             resource_summary=summary,
             candidates=list(candidates),
         )
 
-        result: TopicClassifyResponse = await llm_service.structure_reply(
+        result: ClassifyTopicResponse = await llm_service.structure_reply(
             provider=provider,
             model=model,
             task=task,
         )
 
-        return result.topic_name, max(0.0, min(1.0, result.confidence))
+        result.confidence_score = max(0.0, min(1.0, result.confidence_score))
+        return result
 
 
 agent_service = AgentService()

@@ -30,10 +30,13 @@ export interface AIProviderStatus {
   base_url: string | null;
 }
 
+export type ClassificationMode = "manual" | "aggressive";
+
 export interface AIConfigStatus {
   providers: Record<string, AIProviderStatus>;
   default_provider: string | null;
   default_model: string | null;
+  classification_mode: ClassificationMode;
 }
 
 export interface SetApiKeyRequest {
@@ -45,6 +48,10 @@ export interface SetApiKeyRequest {
 export interface SetDefaultModelRequest {
   provider: string;
   model: string;
+}
+
+export interface SetClassificationModeRequest {
+  mode: ClassificationMode;
 }
 
 // ============================================

@@ -132,12 +132,17 @@ pub struct AppState {
    - 写入新的 `context_chunks`（含 `embedding_type`、`dense_embedding_model`、`sparse_embedding_model`）。
 4. `embedding_status = synced`，`processing_stage = done`。
 5. 调用 `/agent/classify`：
-   - 需要时创建 Topic 节点。
-   - 插入 `contains` 边，写入 `confidence_score`。
+   - 用 Summary 在 Qdrant 搜索 Top-10 相似资源（阈值 0.7）。
+   - 获取候选 Topic 及其父级 Topic 作为上下文输入。
+   - 结构化决策：assign / create_new / restructure。
+   - 去重：新 Topic 创建前做标题相似性检查。
+   - 插入 `contains` 边（DAG 环检测，失败则拒绝）。
+   - `classification_mode` 决定 review_status（manual 全部进 Inbox；aggressive 置信度≥0.8 自动 reviewed）。
+   - 置信度≥0.8 时允许修改 Topic title/summary，并写入 `node_revision_logs`。
 
 ### 错误处理
 
-- 失败时写入 `last_error`，`embedding_status = error`，`processing_stage = done`。
+- 失败时写入 `last_embedding_error`，`embedding_status = error`，`processing_stage = done`。
 
 ---
 
@@ -154,7 +159,7 @@ pub struct AppState {
 | `embedded_hash` | 最后成功 embedding 时的内容 hash |
 | `processing_hash` | 正在处理的内容 hash |
 | `processing_stage` | todo / embedding / done |
-| `last_error` | 最后一次错误信息 |
+| `last_embedding_error` | 最后一次错误信息 |
 | `done_date` | 任务完成日期（仅 task） |
 
 ### edges
@@ -166,6 +171,11 @@ pub struct AppState {
 
 - `node_id` + `embedding_type`（summary/content）。
 - 每个 chunk 记录 `qdrant_uuid`、`embedding_hash`、`dense_embedding_model`、`sparse_embedding_model` 等。
+
+### node_revision_logs
+
+- 记录 AI 自动修改的节点字段（title/summary）。
+- 字段：`field_name`、`old_value`、`new_value`、`reason`、`provider/model`、`confidence_score`。
 
 ### chat_sessions / session_bindings
 
