@@ -15,6 +15,7 @@ src-tauri/
 ├── src/
 │   ├── lib.rs               # 应用组装与启动
 │   ├── app_state.rs         # 全局状态
+│   ├── error.rs             # 错误类型定义
 │   ├── sidecar.rs           # Python Sidecar
 │   ├── services/
 │   │   ├── ai_config.rs     # API Key 配置
@@ -25,14 +26,24 @@ src-tauri/
 │   │   ├── nodes.rs         # Node CRUD
 │   │   ├── edges.rs         # Edge CRUD
 │   │   └── chat.rs          # Chat 相关
-│   └── commands/
-│       ├── resources.rs     # 资源捕获/解析
-│       ├── tasks.rs         # 任务节点
-│       ├── topics.rs        # 主题节点
-│       ├── edges.rs         # 关系连接
-│       ├── chat.rs          # 会话/消息/绑定
-│       ├── ai_config.rs     # AI 配置与聊天
-│       └── search.rs        # 语义搜索与精确搜索
+│   ├── commands/
+│   │   ├── ai_config.rs     # AI 配置与聊天
+│   │   ├── chat.rs          # 会话/消息/绑定
+│   │   ├── clipboard.rs     # 剪贴板读取
+│   │   ├── dashboard.rs     # Dashboard 数据
+│   │   ├── edges.rs         # 关系连接
+│   │   ├── nodes.rs         # 节点通用操作（收藏/审核）
+│   │   ├── python.rs        # Python 状态检查
+│   │   ├── resources.rs     # 资源捕获/解析
+│   │   ├── search.rs        # 语义搜索与精确搜索
+│   │   ├── tasks.rs         # 任务节点
+│   │   ├── topics.rs        # 主题节点
+│   │   └── types.rs         # 命令共用类型定义
+│   ├── utils/
+│   │   ├── crypto.rs        # 加密工具
+│   │   ├── file.rs          # 文件工具
+│   │   └── hash.rs          # 哈希工具
+│   └── window/              # 窗口管理
 └── migrations/
     └── 20241006120000_init.sql
 ```
@@ -90,10 +101,18 @@ pub struct AppState {
 7. 触发 `parse-progress` 事件。
 8. 内容存在则入队 AI Pipeline。
 
-### update_resource_content_command
+### 资源命令
 
-- 更新 `file_content` + `file_hash`。
-- 重新入队 AI Pipeline。
+| 命令 | 说明 |
+|------|------|
+| `capture_resource` | 捕获资源 |
+| `get_all_resources` | 获取所有资源 |
+| `get_resource_by_id` | 获取单个资源 |
+| `update_resource_content_command` | 更新内容 + 重新入队 AI Pipeline |
+| `update_resource_title_command` | 更新标题 |
+| `update_resource_summary_command` | 更新摘要 |
+| `soft_delete_resource_command` | 软删除 |
+| `hard_delete_resource_command` | 硬删除 |
 
 ---
 
@@ -118,42 +137,106 @@ pub struct AppState {
 
 ### 错误处理
 
-- 失败时写入 `last_embedding_error`，`embedding_status = error`，`processing_stage = done`。
+- 失败时写入 `last_error`，`embedding_status = error`，`processing_stage = done`。
 
 ---
 
 ## 数据模型（SQLite）
 
 ### nodes
-- `node_type`: topic / task / resource
-- `title` 必填；资源默认文件名或前 10 字。
-- `review_status`：仅资源可为 `unreviewed/reviewed/rejected`，其余强制 `reviewed`。
-- `embedding_status`: pending / synced / dirty / error（原 `sync_status`）。
-- `embedded_hash`：最后成功 embedding 时的内容 hash（原 `indexed_hash`）。
-- `processing_stage`: todo / embedding / done（移除 `chunking`）。
+
+| 字段 | 说明 |
+|------|------|
+| `node_type` | topic / task / resource |
+| `title` | 必填；资源默认文件名或前 10 字 |
+| `review_status` | 仅资源可为 `unreviewed/reviewed/rejected`，其余强制 `reviewed` |
+| `embedding_status` | pending / synced / dirty / error |
+| `embedded_hash` | 最后成功 embedding 时的内容 hash |
+| `processing_hash` | 正在处理的内容 hash |
+| `processing_stage` | todo / embedding / done |
+| `last_error` | 最后一次错误信息 |
+| `done_date` | 任务完成日期（仅 task） |
 
 ### edges
+
 - `relation_type`: contains / related_to
 - `related_to` 存单边，规范化 `source_node_id < target_node_id`。
 
 ### context_chunks
+
 - `node_id` + `embedding_type`（summary/content）。
 - 每个 chunk 记录 `qdrant_uuid`、`embedding_hash`、`dense_embedding_model`、`sparse_embedding_model` 等。
 
 ### chat_sessions / session_bindings
+
 - `binding_type`: primary / implicit（持久化）。
 
 ---
 
 ## Tauri Commands（概览）
 
-- `resources.rs`：捕获、更新内容/标题/摘要、删除资源。
-- `tasks.rs`：创建任务与状态更新。
-- `topics.rs`：创建 topic、更新、收藏、关联资源/任务。
-- `edges.rs`：通用节点连接（`related_to` 自动规范化）。
-- `chat.rs`：会话、消息、附件、绑定。
-- `ai_config.rs`：API Key 管理、processing provider/model 配置、chat 调用。
-- `search.rs`：语义搜索与精确搜索。
+### resources.rs
+
+捕获、更新内容/标题/摘要、删除资源。
+
+### tasks.rs
+
+| 命令 | 说明 |
+|------|------|
+| `create_task` | 创建任务 |
+| `get_all_tasks` | 获取所有任务 |
+| `get_active_tasks` | 获取活跃任务（未完成/取消） |
+| `get_tasks_by_date` | 按日期获取任务 |
+| `mark_task_as_done_command` | 标记完成 |
+| `mark_task_as_todo_command` | 重置为待办 |
+| `update_task_title_command` | 更新标题 |
+| `update_task_due_date_command` | 更新截止日期 |
+| `update_task_description_command` | 更新描述（user_note） |
+| `update_task_summary_command` | 更新摘要 |
+| `update_task_priority_command` | 更新优先级 |
+| `soft_delete_task_command` | 软删除 |
+| `hard_delete_task_command` | 硬删除 |
+
+### topics.rs
+
+创建 topic、更新标题/摘要、收藏、关联资源/任务。
+
+### nodes.rs
+
+| 命令 | 说明 |
+|------|------|
+| `list_pinned_nodes` | 获取所有收藏节点 |
+| `list_unreviewed_nodes` | 获取所有待审核节点 |
+| `update_node_review_status` | 更新审核状态 |
+| `update_node_pinned` | 更新收藏状态 |
+
+### clipboard.rs
+
+| 命令 | 说明 |
+|------|------|
+| `read_clipboard` | 读取系统剪贴板内容（支持文件/图片/HTML/文本） |
+
+### dashboard.rs
+
+| 命令 | 说明 |
+|------|------|
+| `get_dashboard` | 获取 Dashboard 数据（活跃任务 + 所有资源） |
+
+### edges.rs
+
+通用节点连接（`related_to` 自动规范化）。
+
+### chat.rs
+
+会话、消息、附件、绑定。
+
+### ai_config.rs
+
+API Key 管理、processing provider/model 配置、chat 调用。
+
+### search.rs
+
+语义搜索与精确搜索。
 
 ---
 
@@ -200,6 +283,30 @@ pub async fn search_keyword(
 ```
 
 返回完整的 `NodeRecord` 列表。
+
+---
+
+## 剪贴板读取（`commands/clipboard.rs`）
+
+读取系统剪贴板内容，按优先级返回：
+
+1. **文件**：返回文件路径列表
+2. **图片**：保存到 `assets/` 并返回相对路径
+3. **HTML**：返回 HTML 内容及可选的纯文本版本
+4. **文本**：返回纯文本内容
+5. **空**：剪贴板为空
+
+```rust
+#[derive(Debug, Serialize)]
+#[serde(tag = "type", content = "data")]
+pub enum ClipboardContent {
+    Image { file_path: String, file_name: String },
+    Files { paths: Vec<String> },
+    Text { content: String },
+    Html { content: String, plain_text: Option<String> },
+    Empty,
+}
+```
 
 ---
 

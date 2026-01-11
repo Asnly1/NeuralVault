@@ -20,15 +20,16 @@ src-python/
 │   │   ├── events.py          # 启动/关闭钩子 + 心跳监控
 │   │   └── logging.py         # 日志配置
 │   ├── api/
-│   │   ├── chat.py            # /chat/completions
-│   │   ├── search.py          # 预留: 搜索接口
 │   │   ├── agent.py           # 摘要/Embedding/主题分类接口
+│   │   ├── chat.py            # /chat/completions
+│   │   ├── providers.py       # API Key 管理
+│   │   ├── search.py          # 搜索接口
 │   │   └── example.py         # SDK/Provider 示例 (未注册路由)
 │   ├── schemas.py             # API DTO + 枚举
-│   ├── services/
-│   │   ├── vector_service.py  # 切分 + 向量化 + Qdrant
-│   │   ├── llm_service.py     # LLM Provider 路由 + 流式封装
-│   │   └── agent_service.py   # 摘要/主题分类
+│   └── services/
+│       ├── vector_service.py  # 切分 + 向量化 + Qdrant
+│       ├── llm_service.py     # LLM Provider 路由 + 流式封装
+│       └── agent_service.py   # 摘要/主题分类
 ```
 
 ---
