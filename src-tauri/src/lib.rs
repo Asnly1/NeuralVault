@@ -142,6 +142,20 @@ pub fn run() {
                                     }
                                 }
                             }
+
+                            let db = state.db.clone();
+                            let pipeline = state.ai_pipeline.clone();
+                            match pipeline.enqueue_pending_resources(&db).await {
+                                Ok(count) => {
+                                    println!("[Tauri] Requeued {} resource(s) after restart", count);
+                                }
+                                Err(err) => {
+                                    eprintln!(
+                                        "[Tauri] Failed to requeue resources after restart: {}",
+                                        err
+                                    );
+                                }
+                            }
                         }
 
                     }

@@ -8,10 +8,11 @@ use uuid::Uuid;
 use crate::db::{
     contains_creates_cycle, delete_context_chunks_by_type, get_node_by_id, get_node_by_title,
     insert_context_chunks, insert_edge_if_missing, insert_node, insert_node_revision_log,
-    list_nodes_by_type, list_source_nodes, update_node_summary, update_node_title,
-    update_resource_processing_stage, update_resource_review_status, update_resource_sync_status,
-    DbPool, EmbeddingType, EdgeRelationType, EmbedChunkResult, NewEdge, NewNode, NodeRecord,
-    NodeType, ResourceEmbeddingStatus, ResourceProcessingStage, ResourceSubtype, ReviewStatus,
+    list_nodes_by_type, list_resources_for_requeue, list_source_nodes, update_node_summary,
+    update_node_title, update_resource_processing_stage, update_resource_review_status,
+    update_resource_sync_status, DbPool, EmbeddingType, EdgeRelationType, EmbedChunkResult,
+    NewEdge, NewNode, NodeRecord, NodeType, ResourceEmbeddingStatus, ResourceProcessingStage,
+    ResourceSubtype, ReviewStatus,
 };
 use crate::services::{AIConfigService, ClassificationMode};
 use crate::sidecar::PythonSidecar;
@@ -76,6 +77,18 @@ impl AiPipeline {
             .send(AiPipelineJob { node_id })
             .await
             .map_err(|_| "AI pipeline stopped".to_string())
+    }
+
+    pub async fn enqueue_pending_resources(&self, db: &DbPool) -> Result<usize, String> {
+        let node_ids = list_resources_for_requeue(db)
+            .await
+            .map_err(|e| e.to_string())?;
+        let mut enqueued = 0;
+        for node_id in node_ids {
+            self.enqueue_resource(node_id).await?;
+            enqueued += 1;
+        }
+        Ok(enqueued)
     }
 }
 

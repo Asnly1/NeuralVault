@@ -331,4 +331,4 @@ pub enum ClipboardContent {
 
 - Rust 写入 SQLite；Python 仅写入 Qdrant。
 - AI Pipeline 依赖 processing provider/model 已配置且启用。
-- 目前队列为内存队列，应用重启会清空。
+- 目前队列为内存队列，应用重启会清空；Python ready 后会扫描 `embedding_status=pending/dirty/error` 或 `processing_stage!=done` 且内容非空的资源并重新入队。

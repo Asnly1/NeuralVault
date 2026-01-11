@@ -125,6 +125,18 @@ pub async fn list_all_resources(pool: &DbPool) -> Result<Vec<NodeRecord>, sqlx::
     sqlx::query_as::<_, NodeRecord>(&sql).fetch_all(pool).await
 }
 
+pub async fn list_resources_for_requeue(pool: &DbPool) -> Result<Vec<i64>, sqlx::Error> {
+    sqlx::query_scalar(
+        "SELECT node_id FROM nodes \
+         WHERE node_type = 'resource' AND is_deleted = 0 \
+         AND file_content IS NOT NULL AND length(trim(file_content)) > 0 \
+         AND (embedding_status IN ('pending', 'dirty', 'error') OR processing_stage != 'done') \
+         ORDER BY updated_at DESC",
+    )
+    .fetch_all(pool)
+    .await
+}
+
 pub async fn soft_delete_node(pool: &DbPool, node_id: i64) -> Result<(), sqlx::Error> {
     sqlx::query(
         "UPDATE nodes SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE node_id = ? AND is_deleted = 0",
