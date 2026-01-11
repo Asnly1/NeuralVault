@@ -192,6 +192,7 @@ fn parse_text_file(path: &str) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&bytes).to_string())
 }
 
+// TODO:PDF转成markdown
 fn parse_pdf_text(path: &str) -> Result<String, String> {
     let mut doc = pdf_oxide::PdfDocument::open(path).map_err(|e| e.to_string())?;
     let mut output = String::new();
@@ -210,6 +211,7 @@ fn parse_pdf_text(path: &str) -> Result<String, String> {
     Ok(output)
 }
 
+// TODO:PDF添加页数,存入chunk_meta
 fn parse_pdf_with_ocr(
     path: &str,
     app: Option<&AppHandle>,
