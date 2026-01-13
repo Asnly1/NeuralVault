@@ -13,8 +13,8 @@ export const searchSemantic = (
 ): Promise<SemanticSearchResult[]> =>
   apiCall("search_semantic", {
     query,
-    scopeNodeIds,
-    embeddingType,
+    scope_node_ids: scopeNodeIds,
+    embedding_type: embeddingType,
     limit,
   });
 
@@ -25,6 +25,6 @@ export const searchKeyword = (
 ): Promise<NodeRecord[]> =>
   apiCall("search_keyword", {
     query,
-    nodeType,
+    node_type: nodeType,
     limit,
   });

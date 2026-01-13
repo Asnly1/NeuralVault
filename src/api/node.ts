@@ -16,11 +16,11 @@ export const fetchUnreviewedNodes = (): Promise<NodeRecord[]> =>
 
 /** 更新节点收藏状态 */
 export const updateNodePinned = (nodeId: number, isPinned: boolean): Promise<void> =>
-  apiCallVoid("update_node_pinned", { nodeId, isPinned });
+  apiCallVoid("update_node_pinned", { node_id: nodeId, is_pinned: isPinned });
 
 /** 更新节点审核状态 */
 export const updateNodeReviewStatus = (nodeId: number, reviewStatus: ReviewStatus): Promise<void> =>
-  apiCallVoid("update_node_review_status", { nodeId, reviewStatus });
+  apiCallVoid("update_node_review_status", { node_id: nodeId, review_status: reviewStatus });
 
 // ============================================
 // 节点关联操作
@@ -59,11 +59,17 @@ export const listTargetNodes = (
   sourceNodeId: number,
   relationType: RelationType
 ): Promise<NodeListResponse> =>
-  apiCall("list_target_nodes_command", { sourceNodeId, relationType });
+  apiCall("list_target_nodes_command", {
+    source_node_id: sourceNodeId,
+    relation_type: relationType,
+  });
 
 /** 获取源节点列表（通过关系类型） */
 export const listSourceNodes = (
   targetNodeId: number,
   relationType: RelationType
 ): Promise<NodeListResponse> =>
-  apiCall("list_source_nodes_command", { targetNodeId, relationType });
+  apiCall("list_source_nodes_command", {
+    target_node_id: targetNodeId,
+    relation_type: relationType,
+  });

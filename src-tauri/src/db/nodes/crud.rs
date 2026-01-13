@@ -9,7 +9,7 @@ pub async fn insert_node(pool: &DbPool, params: NewNode<'_>) -> Result<i64, sqlx
             uuid, user_id, title, summary, node_type, task_status, priority, due_date, done_date, \
             file_hash, file_path, file_content, user_note, resource_subtype, source_meta, embedded_hash, processing_hash, \
             embedding_status, last_embedding_at, last_embedding_error, processing_stage, review_status\
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(params.uuid)
     .bind(params.user_id)

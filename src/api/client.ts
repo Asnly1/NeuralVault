@@ -9,10 +9,7 @@ export class ApiError extends Error {
     public command: string,
     public originalError: unknown
   ) {
-    const message =
-      originalError instanceof Error
-        ? originalError.message
-        : String(originalError);
+    const message = formatInvokeError(originalError);
     super(`API Error (${command}): ${message}`);
     this.name = "ApiError";
   }
@@ -26,6 +23,23 @@ export class ApiValidationError extends Error {
     super(`Validation Error: ${zodError.message}`);
     this.name = "ApiValidationError";
   }
+}
+
+function formatInvokeError(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "string") return err;
+  if (err && typeof err === "object") {
+    const message = (err as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return String(err);
+    }
+  }
+  return String(err);
 }
 
 /**

@@ -242,7 +242,17 @@ pub async fn capture_resource(
     }
 
     if should_enqueue {
-        state.ai_pipeline.enqueue_resource(node_id).await?;
+        if let Err(err) = state.ai_pipeline.enqueue_resource(node_id).await {
+            update_resource_sync_status(
+                &state.db,
+                node_id,
+                ResourceEmbeddingStatus::Error,
+                None,
+                Some(&err),
+            )
+            .await?;
+            emit_parse_progress(Some(&app), Some(node_id), "error", None, Some(&err));
+        }
     }
 
     Ok(CaptureResponse {

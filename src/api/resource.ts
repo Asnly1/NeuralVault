@@ -18,23 +18,23 @@ export const fetchAllResources = (): Promise<NodeRecord[]> =>
   apiCallArray("get_all_resources", nodeRecordSchema);
 
 export const getResourceById = (nodeId: number): Promise<NodeRecord> =>
-  apiCall("get_resource_by_id", { nodeId }, nodeRecordSchema);
+  apiCall("get_resource_by_id", { node_id: nodeId }, nodeRecordSchema);
 
 export const softDeleteResource = (nodeId: number): Promise<void> =>
-  apiCallVoid("soft_delete_resource_command", { nodeId });
+  apiCallVoid("soft_delete_resource_command", { node_id: nodeId });
 
 export const hardDeleteResource = (nodeId: number): Promise<void> =>
-  apiCallVoid("hard_delete_resource_command", { nodeId });
+  apiCallVoid("hard_delete_resource_command", { node_id: nodeId });
 
 // ============================================
 // Resource 更新
 // ============================================
 
 export const updateResourceContent = (nodeId: number, content: string): Promise<void> =>
-  apiCallVoid("update_resource_content_command", { nodeId, content });
+  apiCallVoid("update_resource_content_command", { node_id: nodeId, content });
 
 export const updateResourceTitle = (nodeId: number, title: string): Promise<void> =>
-  apiCallVoid("update_resource_title_command", { nodeId, title });
+  apiCallVoid("update_resource_title_command", { node_id: nodeId, title });
 
 // ============================================
 // Resource 关联查询

@@ -66,10 +66,12 @@ export function useDashboardData(): UseDashboardDataReturn {
           });
         }
         await reloadData();
-      } catch (err) {
-        console.error(err);
-        setError("捕获失败");
-      }
+    } catch (err) {
+      console.error(err);
+      const message =
+        err instanceof Error && err.message ? err.message : "捕获失败";
+      setError(message);
+    }
     },
     [reloadData]
   );

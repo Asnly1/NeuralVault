@@ -32,6 +32,21 @@ export type RelationType = (typeof relationTypeValues)[number];
 // Zod Schemas
 // ============================================
 
+const sqliteDateSchema = z.preprocess((value) => {
+  if (value === null || value === undefined) return value;
+  if (value instanceof Date) return value;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return value;
+    const normalized = trimmed.includes("T") ? trimmed : trimmed.replace(" ", "T");
+    const parsed = new Date(normalized);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+    const parsedUtc = new Date(`${normalized}Z`);
+    if (!Number.isNaN(parsedUtc.getTime())) return parsedUtc;
+  }
+  return value;
+}, z.date());
+
 export const sourceMetaSchema = z.object({
   url: z.string().nullable().optional(),
   window_title: z.string().nullable().optional(),
@@ -50,8 +65,8 @@ export const nodeRecordSchema = z.object({
   node_type: z.enum(nodeTypeValues),
   task_status: z.enum(taskStatusValues).nullable(),
   priority: z.enum(taskPriorityValues).nullable(),
-  due_date: z.coerce.date().nullable(),
-  done_date: z.coerce.date().nullable(),
+  due_date: sqliteDateSchema.nullable(),
+  done_date: sqliteDateSchema.nullable(),
   file_hash: z.string().nullable(),
   file_path: z.string().nullable(),
   file_content: z.string().nullable(),
@@ -67,8 +82,8 @@ export const nodeRecordSchema = z.object({
   review_status: z.enum(reviewStatusValues),
   is_pinned: z.boolean(),
   pinned_at: z.string().nullable(),
-  created_at: z.coerce.date().nullable(),
-  updated_at: z.coerce.date().nullable(),
+  created_at: sqliteDateSchema.nullable(),
+  updated_at: sqliteDateSchema.nullable(),
   is_deleted: z.boolean(),
   deleted_at: z.string().nullable(),
 });
@@ -82,7 +97,7 @@ export const edgeRecordSchema = z.object({
   relation_type: z.enum(relationTypeValues),
   confidence_score: z.number().nullable(),
   is_manual: z.boolean(),
-  created_at: z.coerce.date().nullable(),
+  created_at: sqliteDateSchema.nullable(),
 });
 
 export type EdgeRecord = z.infer<typeof edgeRecordSchema>;
