@@ -18,6 +18,8 @@ const PDFViewer = lazy(() =>
 
 interface EditorPanelProps {
   currentResource: NodeRecord | null;
+  isTopicMode?: boolean;
+  selectedTopic?: NodeRecord | null;
   editorContent: string;
   viewMode: 'file' | 'text';
   isEditingName: boolean;
@@ -34,6 +36,8 @@ interface EditorPanelProps {
 
 export function EditorPanel({
   currentResource,
+  isTopicMode = false,
+  selectedTopic,
   editorContent,
   viewMode,
   isEditingName,
@@ -52,6 +56,30 @@ export function EditorPanel({
   const { t } = useLanguage();
 
   const renderEditorArea = () => {
+    // Topic 模式：显示主题摘要（当没有选中资源时）
+    if (isTopicMode && !currentResource && selectedTopic) {
+      return (
+        <div className="flex flex-col h-full">
+          <div className="flex-1 p-4">
+            <div className="mb-4">
+              <h3 className="text-sm font-medium text-muted-foreground mb-2">
+                {t("workspace", "topicSummary")}
+              </h3>
+              {selectedTopic.summary ? (
+                <div className="prose prose-sm dark:prose-invert max-w-none">
+                  <p className="text-foreground whitespace-pre-wrap">{selectedTopic.summary}</p>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">
+                  {t("workspace", "noSummary")}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     if (!currentResource) {
       return (
         <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
@@ -304,6 +332,11 @@ export function EditorPanel({
               )}
             </>
           )
+        ) : isTopicMode && selectedTopic ? (
+          // Topic 模式：显示主题标题
+          <span className="text-sm font-medium">
+            📁 {selectedTopic.title || "未命名主题"}
+          </span>
         ) : (
           <span className="text-sm font-medium">{t("workspace", "workspaceArea")}</span>
         )}

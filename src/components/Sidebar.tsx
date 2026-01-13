@@ -15,7 +15,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { PageType, navItems, NodeRecord } from "../types";
-import { fetchPinnedNodes, processPendingResources } from "../api";
+import { fetchPinnedNodes, processPendingResources, getResourceById } from "../api";
 
 import { useLanguage } from "@/contexts/LanguageContext";
 import { SearchBar } from "./SearchBar";
@@ -168,9 +168,19 @@ export function Sidebar({
       {/* Search */}
       <div className="px-3 py-2">
         <SearchBar
-          onSelectResult={(nodeId, nodeType) => {
-            console.log("Selected:", nodeId, nodeType);
-            // TODO: Navigate to the selected node
+          onSelectResult={async (nodeId, _nodeType, fullNode) => {
+            if (fullNode) {
+              // 关键词搜索已有完整节点
+              onSelectNode?.(fullNode);
+            } else {
+              // 语义搜索需要获取节点信息
+              try {
+                const node = await getResourceById(nodeId);
+                onSelectNode?.(node);
+              } catch (err) {
+                console.error("Failed to fetch node:", err);
+              }
+            }
           }}
         />
       </div>

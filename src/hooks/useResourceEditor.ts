@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { updateResourceContent, updateResourceTitle } from "@/api";
+import { updateResourceUserNote, updateResourceTitle } from "@/api";
 import type { NodeRecord } from "@/types";
 
 export interface ResourceEditorState {
@@ -45,7 +45,8 @@ export function useResourceEditor(
   // 当资源变化时，重置编辑器状态
   useEffect(() => {
     if (currentResource) {
-      setContentState(currentResource.file_content || "");
+      // 使用 user_note 作为编辑内容
+      setContentState(currentResource.user_note || "");
       setIsModified(false);
       setEditedDisplayName(currentResource.title || "");
       setIsEditingName(false);
@@ -95,7 +96,8 @@ export function useResourceEditor(
 
     try {
       if (hasContentChange) {
-        await updateResourceContent(currentResource.node_id, content);
+        // 保存到 user_note 字段
+        await updateResourceUserNote(currentResource.node_id, content);
       }
       if (hasNameChange) {
         await updateResourceTitle(currentResource.node_id, editedDisplayName);

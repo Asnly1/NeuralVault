@@ -32,6 +32,7 @@ export function WorkspacePage({
 
   // 检测模式
   const isResourceMode = !selectedTask && !!propSelectedResource;
+  const isTopicMode = propSelectedResource?.node_type === "topic";
 
   // 面板拖拽
   const leftPanel = usePanelResize({
@@ -99,7 +100,17 @@ export function WorkspacePage({
 
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm">
-          {isResourceMode ? (
+          {isTopicMode ? (
+            // Topic 模式
+            <>
+              <span className="text-muted-foreground">{t("warehouse", "topics")}</span>
+              <span className="text-muted-foreground">/</span>
+              <span className="font-medium">
+                📁 {propSelectedResource?.title || t("common", "untitled")}
+              </span>
+            </>
+          ) : isResourceMode ? (
+            // Resource 模式
             <>
               <span className="text-muted-foreground">{t("workspace", "resourceBreadcrumb")}</span>
               <span className="text-muted-foreground">/</span>
@@ -115,6 +126,7 @@ export function WorkspacePage({
               )}
             </>
           ) : (
+            // Task 模式
             <>
               <span className="text-muted-foreground">{t("dashboard", "tasks")}</span>
               <span className="text-muted-foreground">/</span>
@@ -156,7 +168,9 @@ export function WorkspacePage({
         {/* Left: Context Panel */}
         <ContextPanel
           isResourceMode={isResourceMode}
+          isTopicMode={isTopicMode}
           selectedTask={selectedTask}
+          selectedTopic={isTopicMode ? propSelectedResource : null}
           currentResource={currentResource}
           contextResources={context.contextResources}
           availableResources={context.availableResources}
@@ -175,6 +189,8 @@ export function WorkspacePage({
         {/* Center: Editor Area */}
         <EditorPanel
           currentResource={currentResource}
+          isTopicMode={isTopicMode}
+          selectedTopic={isTopicMode ? propSelectedResource : null}
           editorContent={editor.content}
           viewMode={editor.viewMode}
           isEditingName={editor.isEditingName}

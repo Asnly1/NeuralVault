@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import { useAIConfig, useChatMessage } from "@/contexts/AIContext";
 import { AI_PROVIDER_INFO, type ModelOption, type ThinkingEffort } from "@/types";
 import { Send, Loader2, Settings, Pin } from "lucide-react";
 import { quickCapture, linkNodes } from "@/api";
+import { ThinkingBlock } from "./ThinkingBlock";
 
 interface ChatPanelProps {
   width: number;
@@ -66,6 +67,26 @@ export function ChatPanel({
         display_name: `${AI_PROVIDER_INFO[provider].icon} ${m.name}`,
       }))
   );
+
+  // 根据选中模型计算可用的 thinking effort 选项
+  const availableThinkingEfforts = useMemo((): ThinkingEffort[] => {
+    if (!selectedModel) return ["none", "low", "high"];
+    const providerInfo = AI_PROVIDER_INFO[selectedModel.provider];
+    const modelInfo = providerInfo.models.find((m) => m.id === selectedModel.model_id);
+    return modelInfo?.thinkingConfig?.supported ? [...modelInfo.thinkingConfig.supported] : ["none", "low", "high"];
+  }, [selectedModel]);
+
+  // 当模型切换时，重置 thinkingEffort 为默认值或可用选项中的第一个
+  useEffect(() => {
+    if (selectedModel) {
+      const providerInfo = AI_PROVIDER_INFO[selectedModel.provider];
+      const modelInfo = providerInfo.models.find((m) => m.id === selectedModel.model_id);
+      const defaultEffort = modelInfo?.thinkingConfig?.default ?? "low";
+      if (!availableThinkingEfforts.includes(thinkingEffort)) {
+        setThinkingEffort(defaultEffort);
+      }
+    }
+  }, [selectedModel, availableThinkingEfforts, thinkingEffort]);
 
   const handleSend = async () => {
     if (!chatInput.trim() || !selectedModel || isChatLoading) return;
@@ -210,9 +231,11 @@ export function ChatPanel({
                 <SelectValue placeholder={t("workspace", "thinkingEffort")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">{t("workspace", "effortNone")}</SelectItem>
-                <SelectItem value="low">{t("workspace", "effortLow")}</SelectItem>
-                <SelectItem value="high">{t("workspace", "effortHigh")}</SelectItem>
+                {availableThinkingEfforts.map((effort) => (
+                  <SelectItem key={effort} value={effort}>
+                    {t("workspace", `effort${effort.charAt(0).toUpperCase() + effort.slice(1)}`)}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -257,11 +280,18 @@ export function ChatPanel({
                 </div>
                 <div
                   className={cn(
-                    "rounded-lg p-3 text-sm max-w-[80%] whitespace-pre-wrap",
+                    "rounded-lg p-3 text-sm max-w-[80%]",
                     msg.role === "user" ? "bg-secondary" : "bg-muted"
                   )}
                 >
-                  {msg.content}
+                  {/* 显示 thinking 内容 */}
+                  {msg.role === "assistant" && msg.thinkingSummary && (
+                    <ThinkingBlock
+                      content={msg.thinkingSummary}
+                      isStreaming={isChatLoading && idx === messages.length - 1}
+                    />
+                  )}
+                  <div className="whitespace-pre-wrap">{msg.content}</div>
                   {msg.role === "assistant" && msg.usage && (
                     <div className="mt-2 text-xs text-muted-foreground">
                       {t("workspace", "tokenUsage")}{" "}

@@ -8,5 +8,6 @@ export { QuickCapture } from "./QuickCapture";
 export { TiptapEditor } from "./TiptapEditor";
 export { TasksDialog } from "./TasksDialog";
 export { TemporaryChatPanel } from "./TemporaryChatPanel";
+export { GlobalSearchDialog } from "./GlobalSearchDialog";
 // PDFViewer 不在这里导出，而是在 Workspace.tsx 中懒加载
 

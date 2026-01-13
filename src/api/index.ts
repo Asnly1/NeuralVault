@@ -51,6 +51,7 @@ export {
   hardDeleteResource,
   updateResourceContent,
   updateResourceTitle,
+  updateResourceUserNote,
   fetchTaskResources,
   processPendingResources,
 } from "./resource";

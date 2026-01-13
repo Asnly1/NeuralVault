@@ -5,12 +5,18 @@
 export const aiProviderValues = ["openai", "anthropic", "gemini", "grok", "deepseek", "qwen"] as const;
 export type AIProvider = (typeof aiProviderValues)[number];
 
-export const thinkingEffortValues = ["none", "low", "high"] as const;
+export const thinkingEffortValues = ["none", "minimal", "low", "medium", "high"] as const;
 export type ThinkingEffort = (typeof thinkingEffortValues)[number];
+
+export interface ModelThinkingConfig {
+  supported: ThinkingEffort[];
+  default: ThinkingEffort;
+}
 
 export interface ModelInfo {
   id: string;
   name: string;
+  thinkingConfig?: ModelThinkingConfig;
 }
 
 export interface ProviderInfo {

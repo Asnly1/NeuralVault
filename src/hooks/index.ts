@@ -40,3 +40,4 @@ export { useTheme } from "./useTheme";
 export { useSidebar } from "./useSidebar";
 export { useDashboardData } from "./useDashboardData";
 export { useAppNavigation } from "./useAppNavigation";
+export { useGlobalSearch } from "./useGlobalSearch";

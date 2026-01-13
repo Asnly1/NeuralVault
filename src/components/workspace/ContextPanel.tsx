@@ -14,10 +14,13 @@ import {
 import { NodeRecord, priorityConfig, resourceSubtypeIcons } from "@/types";
 import { Minus, Plus } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { RelatedNodesList } from "./RelatedNodesList";
 
 interface ContextPanelProps {
   isResourceMode: boolean;
+  isTopicMode: boolean;
   selectedTask: NodeRecord | null;
+  selectedTopic: NodeRecord | null;
   currentResource: NodeRecord | null;
   contextResources: NodeRecord[];
   availableResources: NodeRecord[];
@@ -31,11 +34,14 @@ interface ContextPanelProps {
   onResourceClick: (resource: NodeRecord) => void;
   onAddToContext: (resource: NodeRecord) => void;
   onRemoveFromContext: (resourceId: number) => void;
+  onNodeClick?: (node: NodeRecord) => void;
 }
 
 export function ContextPanel({
   isResourceMode,
+  isTopicMode,
   selectedTask,
+  selectedTopic,
   currentResource,
   contextResources,
   availableResources,
@@ -49,6 +55,7 @@ export function ContextPanel({
   onResourceClick,
   onAddToContext,
   onRemoveFromContext,
+  onNodeClick,
 }: ContextPanelProps) {
   const { t } = useLanguage();
   const currentWidth = tempWidth !== null ? tempWidth : width;
@@ -66,7 +73,8 @@ export function ContextPanel({
           className="p-4 space-y-6"
           style={{ maxWidth: `${currentWidth}px`, boxSizing: 'border-box' }}
         >
-          {!isResourceMode && selectedTask && (
+          {/* Task 详情 */}
+          {!isResourceMode && !isTopicMode && selectedTask && (
             <div>
               <h3 className="text-sm font-semibold mb-3">{t("workspace", "taskDetails")}</h3>
               <Card>
@@ -97,6 +105,35 @@ export function ContextPanel({
                       截止: {selectedTask.due_date.toLocaleDateString("zh-CN")}
                     </p>
                   )}
+                  {/* 关联节点列表 */}
+                  <RelatedNodesList
+                    nodeId={selectedTask.node_id}
+                    onNodeClick={onNodeClick}
+                  />
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Topic 详情 */}
+          {isTopicMode && selectedTopic && (
+            <div>
+              <h3 className="text-sm font-semibold mb-3">{t("workspace", "topicDetails")}</h3>
+              <Card>
+                <CardContent className="p-3 space-y-3">
+                  <h4 className="font-medium">
+                    📁 {selectedTopic.title || "未命名主题"}
+                  </h4>
+                  {selectedTopic.summary && (
+                    <p className="text-sm text-muted-foreground">
+                      {selectedTopic.summary}
+                    </p>
+                  )}
+                  {/* 关联节点列表 */}
+                  <RelatedNodesList
+                    nodeId={selectedTopic.node_id}
+                    onNodeClick={onNodeClick}
+                  />
                 </CardContent>
               </Card>
             </div>

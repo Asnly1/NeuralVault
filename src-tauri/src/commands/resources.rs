@@ -13,7 +13,7 @@ use crate::{
     app_state::AppState,
     db::{
         get_node_by_id, insert_node, list_all_resources, update_node_content,
-        update_node_summary, update_node_title, update_resource_sync_status, NewNode, NodeType,
+        update_node_summary, update_node_title, update_node_user_note, update_resource_sync_status, NewNode, NodeType,
         ResourceProcessingStage, ResourceEmbeddingStatus, ReviewStatus, SourceMeta,
     },
     services::parser::{build_text_title, parse_resource_content, ProgressCallback},
@@ -343,4 +343,18 @@ pub async fn process_pending_resources_command(state: State<'_, AppState>) -> Ap
         .await
         .map_err(|e| crate::AppError::Custom(format!("Process resources failed: {e}")))?;
     Ok(count)
+}
+
+#[tauri::command]
+pub async fn update_resource_user_note_command(
+    state: State<'_, AppState>,
+    node_id: i64,
+    user_note: String,
+) -> AppResult<()> {
+    let note = if user_note.trim().is_empty() {
+        None
+    } else {
+        Some(user_note.as_str())
+    };
+    Ok(update_node_user_note(&state.db, node_id, note).await?)
 }

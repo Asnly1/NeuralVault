@@ -70,8 +70,16 @@ export const AI_PROVIDER_INFO: Record<AIProvider, ProviderInfo> = {
     icon: "gemini-color.svg",
     defaultBaseUrl: null,
     models: [
-      { id: "gemini-3-flash-preview", name: "Gemini 3 Flash" },
-      { id: "gemini-3-pro-preview", name: "Gemini 3 Pro" },
+      {
+        id: "gemini-3-flash-preview",
+        name: "Gemini 3 Flash",
+        thinkingConfig: { supported: ["minimal", "low", "medium", "high"], default: "low" },
+      },
+      {
+        id: "gemini-3-pro-preview",
+        name: "Gemini 3 Pro",
+        thinkingConfig: { supported: ["low", "high"], default: "low" },
+      },
     ],
   },
   grok: {

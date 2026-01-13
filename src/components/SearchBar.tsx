@@ -7,7 +7,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 type SearchMode = "semantic" | "keyword";
 
 interface SearchBarProps {
-  onSelectResult?: (nodeId: number, nodeType: string) => void;
+  onSelectResult?: (nodeId: number, nodeType: string, fullNode?: NodeRecord) => void;
 }
 
 export function SearchBar({ onSelectResult }: SearchBarProps) {
@@ -89,8 +89,8 @@ export function SearchBar({ onSelectResult }: SearchBarProps) {
     inputRef.current?.focus();
   };
 
-  const handleResultClick = (nodeId: number, nodeType: string) => {
-    onSelectResult?.(nodeId, nodeType);
+  const handleResultClick = (nodeId: number, nodeType: string, fullNode?: NodeRecord) => {
+    onSelectResult?.(nodeId, nodeType, fullNode);
     setIsOpen(false);
     setQuery("");
   };
@@ -204,7 +204,7 @@ export function SearchBar({ onSelectResult }: SearchBarProps) {
               keywordResults.map((result) => (
                 <button
                   key={result.node_id}
-                  onClick={() => handleResultClick(result.node_id, result.node_type)}
+                  onClick={() => handleResultClick(result.node_id, result.node_type, result)}
                   className="w-full px-3 py-2 text-left hover:bg-muted/50 transition-colors border-b border-border/50 last:border-0"
                 >
                   <div className="flex items-start gap-2">

@@ -36,6 +36,9 @@ export const updateResourceContent = (nodeId: number, content: string): Promise<
 export const updateResourceTitle = (nodeId: number, title: string): Promise<void> =>
   apiCallVoid("update_resource_title_command", { node_id: nodeId, title });
 
+export const updateResourceUserNote = (nodeId: number, userNote: string): Promise<void> =>
+  apiCallVoid("update_resource_user_note_command", { node_id: nodeId, user_note: userNote });
+
 // ============================================
 // Resource Processing
 // ============================================

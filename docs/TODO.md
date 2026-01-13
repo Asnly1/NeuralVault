@@ -19,9 +19,13 @@
 14. ✅ 实现 Sidebar 的自定义大小，用户可以拖拽分界线来控制大小，点击右上角的按钮可以关闭 Sidebar
 15. ✅ 实现 Workspace 三块区域的自定义大小，用户可以拖拽分界线来控制大小（就像 Vscode 一样）
 16. ✅ 保存编辑的text文件/标题
-17. 操作系统相关：
-   1. 快捷键设置
-   2. API Key 的加密获取
-18. HUD周边有白框
-19. 统一路径获取方式
-20. 优化API调用方法（Prompt / Batch API）
+17. ✅ 每个模型设置thinking_effort: Gemini 3 Pro: "low"; "high"; Gemini 3 Flash: "minimal", "low", "medium", "high"
+18. ✅ 搜索要用快捷键唤醒
+19. ✅ topic在workspace中的显示好像还是用的resource，能不能单独创建一个，就像task一样
+20. ✅搜索应该只搜索resource/topic/task，点击后要跳转
+21. ✅工作台的"编辑文本"和"附带文本"查看的应该是user_note,而不是file_content
+22. ✅ AI回复的内容应该流式显示，并且还要出thinking内容。采取Cursor一样的显示：用淡色显示思考内容。如果思考完成，则把思考内容折叠起来，用正常字体显示回答内容
+23. ✅topic和task要在左边显示summary，然后在summary下面显示关联的node
+24. 添加node之间的转换
+25. 在设置界面添加快捷键设置
+26. 切换rag搜索范围
