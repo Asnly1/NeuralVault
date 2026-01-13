@@ -23,27 +23,27 @@ export const fetchUnreviewedNodes = (): Promise<NodeRecord[]> =>
 
 /** 更新节点收藏状态 */
 export const updateNodePinned = (nodeId: number, isPinned: boolean): Promise<void> =>
-  apiCallVoid("update_node_pinned", { node_id: nodeId, is_pinned: isPinned });
+  apiCallVoid("update_node_pinned", { nodeId, isPinned });
 
 /** 更新节点审核状态 */
 export const updateNodeReviewStatus = (nodeId: number, reviewStatus: ReviewStatus): Promise<void> =>
-  apiCallVoid("update_node_review_status", { node_id: nodeId, review_status: reviewStatus });
+  apiCallVoid("update_node_review_status", { nodeId, reviewStatus });
 
 /** 资源 -> 主题 */
 export const convertResourceToTopic = (nodeId: number): Promise<NodeRecord> =>
-  apiCall("convert_resource_to_topic_command", { node_id: nodeId }, nodeRecordSchema);
+  apiCall("convert_resource_to_topic_command", { nodeId }, nodeRecordSchema);
 
 /** 资源 -> 任务 */
 export const convertResourceToTask = (nodeId: number): Promise<NodeRecord> =>
-  apiCall("convert_resource_to_task_command", { node_id: nodeId }, nodeRecordSchema);
+  apiCall("convert_resource_to_task_command", { nodeId }, nodeRecordSchema);
 
 /** 主题 -> 任务 */
 export const convertTopicToTask = (nodeId: number): Promise<NodeRecord> =>
-  apiCall("convert_topic_to_task_command", { node_id: nodeId }, nodeRecordSchema);
+  apiCall("convert_topic_to_task_command", { nodeId }, nodeRecordSchema);
 
 /** 任务 -> 主题 */
 export const convertTaskToTopic = (nodeId: number): Promise<NodeRecord> =>
-  apiCall("convert_task_to_topic_command", { node_id: nodeId }, nodeRecordSchema);
+  apiCall("convert_task_to_topic_command", { nodeId }, nodeRecordSchema);
 
 // ============================================
 // 节点关联操作
@@ -57,9 +57,9 @@ export const linkNodes = (
 ): Promise<LinkNodesResponse> =>
   apiCall("link_nodes_command", {
     payload: {
-      source_node_id: sourceNodeId,
-      target_node_id: targetNodeId,
-      relation_type: relationType,
+      sourceNodeId,
+      targetNodeId,
+      relationType,
     } as LinkNodesRequest,
   });
 
@@ -71,9 +71,9 @@ export const unlinkNodes = (
 ): Promise<LinkNodesResponse> =>
   apiCall("unlink_nodes_command", {
     payload: {
-      source_node_id: sourceNodeId,
-      target_node_id: targetNodeId,
-      relation_type: relationType,
+      sourceNodeId,
+      targetNodeId,
+      relationType,
     } as LinkNodesRequest,
   });
 
@@ -83,8 +83,8 @@ export const listTargetNodes = (
   relationType: RelationType
 ): Promise<NodeListResponse> =>
   apiCall("list_target_nodes_command", {
-    source_node_id: sourceNodeId,
-    relation_type: relationType,
+    sourceNodeId,
+    relationType,
   });
 
 /** 获取源节点列表（通过关系类型） */
@@ -93,8 +93,8 @@ export const listSourceNodes = (
   relationType: RelationType
 ): Promise<NodeListResponse> =>
   apiCall("list_source_nodes_command", {
-    target_node_id: targetNodeId,
-    relation_type: relationType,
+    targetNodeId,
+    relationType,
   });
 
 /** 获取目标节点的边信息（含来源节点） */
@@ -103,8 +103,8 @@ export const listEdgesForTarget = (
   relationType: RelationType
 ): Promise<EdgeWithNode[]> =>
   apiCallArray("list_edges_for_target_command", edgeWithNodeSchema, {
-    target_node_id: targetNodeId,
-    relation_type: relationType,
+    targetNodeId,
+    relationType,
   });
 
 /** 确认边为人工 */
@@ -115,8 +115,8 @@ export const confirmEdge = (
 ): Promise<void> =>
   apiCallVoid("confirm_edge_command", {
     payload: {
-      source_node_id: sourceNodeId,
-      target_node_id: targetNodeId,
-      relation_type: relationType,
+      sourceNodeId,
+      targetNodeId,
+      relationType,
     } as LinkNodesRequest,
   });

@@ -18,26 +18,26 @@ export const fetchAllResources = (): Promise<NodeRecord[]> =>
   apiCallArray("get_all_resources", nodeRecordSchema);
 
 export const getResourceById = (nodeId: number): Promise<NodeRecord> =>
-  apiCall("get_resource_by_id", { node_id: nodeId }, nodeRecordSchema);
+  apiCall("get_resource_by_id", { nodeId }, nodeRecordSchema);
 
 export const softDeleteResource = (nodeId: number): Promise<void> =>
-  apiCallVoid("soft_delete_resource_command", { node_id: nodeId });
+  apiCallVoid("soft_delete_resource_command", { nodeId });
 
 export const hardDeleteResource = (nodeId: number): Promise<void> =>
-  apiCallVoid("hard_delete_resource_command", { node_id: nodeId });
+  apiCallVoid("hard_delete_resource_command", { nodeId });
 
 // ============================================
 // Resource 更新
 // ============================================
 
 export const updateResourceContent = (nodeId: number, content: string): Promise<void> =>
-  apiCallVoid("update_resource_content_command", { node_id: nodeId, content });
+  apiCallVoid("update_resource_content_command", { nodeId, content });
 
 export const updateResourceTitle = (nodeId: number, title: string): Promise<void> =>
-  apiCallVoid("update_resource_title_command", { node_id: nodeId, title });
+  apiCallVoid("update_resource_title_command", { nodeId, title });
 
 export const updateResourceUserNote = (nodeId: number, userNote: string): Promise<void> =>
-  apiCallVoid("update_resource_user_note_command", { node_id: nodeId, user_note: userNote });
+  apiCallVoid("update_resource_user_note_command", { nodeId, userNote });
 
 // ============================================
 // Resource Processing

@@ -44,11 +44,11 @@ export interface CaptureResponse {
 // ============================================
 
 export interface LinkNodesRequest {
-  source_node_id: number;
-  target_node_id: number;
-  relation_type: RelationType;
-  confidence_score?: number;
-  is_manual?: boolean;
+  sourceNodeId: number;
+  targetNodeId: number;
+  relationType: RelationType;
+  confidenceScore?: number;
+  isManual?: boolean;
 }
 
 export interface LinkNodesResponse {

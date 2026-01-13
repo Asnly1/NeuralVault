@@ -60,7 +60,7 @@ export const createChatSession = (
   apiCall("create_chat_session", { payload: request });
 
 export const getChatSession = (sessionId: number): Promise<ChatSession> =>
-  apiCall("get_chat_session", { session_id: sessionId });
+  apiCall("get_chat_session", { sessionId });
 
 export const listChatSessions = (request: ListChatSessionsRequest): Promise<ChatSession[]> =>
   apiCall("list_chat_sessions", { payload: request });
@@ -81,7 +81,7 @@ export const createChatMessage = (
   apiCall("create_chat_message", { payload: request });
 
 export const listChatMessages = (sessionId: number): Promise<ChatMessagePayload[]> =>
-  apiCall("list_chat_messages_command", { session_id: sessionId });
+  apiCall("list_chat_messages_command", { sessionId });
 
 export const updateChatMessage = (request: UpdateChatMessageRequest): Promise<void> =>
   apiCallVoid("update_chat_message", { payload: request });
