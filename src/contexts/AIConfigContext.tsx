@@ -7,7 +7,7 @@ import {
   getAIConfigStatus,
   saveApiKey,
   removeApiKey,
-  setDefaultModel,
+  setProcessingProviderModel,
   setClassificationMode,
 } from "@/api";
 import {
@@ -19,7 +19,7 @@ import {
 } from "@/types";
 
 // 当前启用的 providers（可扩展）
-const ENABLED_PROVIDERS: AIProvider[] = ["openai"];
+const ENABLED_PROVIDERS: AIProvider[] = ["gemini"];
 
 export interface AIConfigContextType {
   config: AIConfigStatus | null;
@@ -32,7 +32,7 @@ export interface AIConfigContextType {
   saveClassificationMode: (mode: ClassificationMode) => Promise<void>;
   saveKey: (provider: AIProvider, apiKey: string, baseUrl?: string) => Promise<void>;
   removeKey: (provider: AIProvider) => Promise<void>;
-  saveDefaultModel: (provider: AIProvider, model: string) => Promise<void>;
+  saveProcessingProviderModel: (provider: AIProvider, model: string) => Promise<void>;
   refreshConfig: () => Promise<void>;
 }
 
@@ -54,24 +54,24 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
       setConfig(status);
 
       // 恢复默认模型选择
-      if (status.default_provider && status.default_model) {
-        const provider = status.default_provider as AIProvider;
-        if (ENABLED_PROVIDERS.includes(provider)) {
-          const providerInfo = AI_PROVIDER_INFO[provider];
-          if (providerInfo) {
-            const modelInfo = providerInfo.models.find(
-              (m) => m.id === status.default_model
-            );
-            setSelectedModel({
-              provider,
-              model_id: status.default_model,
-              display_name: modelInfo
-                ? `${providerInfo.icon} ${modelInfo.name}`
-                : status.default_model,
-            });
-          }
-        }
-      }
+      setSelectedModel((current) => {
+        if (current) return current;
+        if (!status.processing_provider || !status.processing_model) return current;
+        const provider = status.processing_provider as AIProvider;
+        if (!ENABLED_PROVIDERS.includes(provider)) return current;
+        const providerInfo = AI_PROVIDER_INFO[provider];
+        if (!providerInfo) return current;
+        const modelInfo = providerInfo.models.find(
+          (m) => m.id === status.processing_model
+        );
+        return {
+          provider,
+          model_id: status.processing_model,
+          display_name: modelInfo
+            ? `${providerInfo.icon} ${modelInfo.name}`
+            : status.processing_model,
+        };
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load AI config");
     } finally {
@@ -114,9 +114,9 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
     [refreshConfig, selectedModel]
   );
 
-  const saveDefaultModel = useCallback(
+  const saveProcessingProviderModel = useCallback(
     async (provider: AIProvider, model: string) => {
-      await setDefaultModel({ provider, model });
+      await setProcessingProviderModel({ provider, model });
       await refreshConfig();
     },
     [refreshConfig]
@@ -143,7 +143,7 @@ export function AIConfigProvider({ children }: { children: React.ReactNode }) {
         saveClassificationMode,
         saveKey,
         removeKey,
-        saveDefaultModel,
+        saveProcessingProviderModel,
         refreshConfig,
       }}
     >

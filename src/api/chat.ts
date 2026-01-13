@@ -2,7 +2,7 @@ import { apiCall, apiCallVoid } from "./client";
 import type {
   AIConfigStatus,
   SetApiKeyRequest,
-  SetDefaultModelRequest,
+  SetProcessingProviderModelRequest,
   SendChatRequest,
   ChatStreamAck,
   CreateChatSessionRequest,
@@ -35,8 +35,10 @@ export const saveApiKey = (request: SetApiKeyRequest): Promise<void> =>
 export const removeApiKey = (provider: string): Promise<void> =>
   apiCallVoid("remove_api_key", { provider });
 
-export const setDefaultModel = (request: SetDefaultModelRequest): Promise<void> =>
-  apiCallVoid("set_default_model", { request });
+export const setProcessingProviderModel = (
+  request: SetProcessingProviderModelRequest
+): Promise<void> =>
+  apiCallVoid("set_processing_provider_model", { request });
 
 export const setClassificationMode = (request: SetClassificationModeRequest): Promise<void> =>
   apiCallVoid("set_classification_mode", { request });

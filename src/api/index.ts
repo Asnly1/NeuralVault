@@ -73,7 +73,7 @@ export {
   getAIConfigStatus,
   saveApiKey,
   removeApiKey,
-  setDefaultModel,
+  setProcessingProviderModel,
   setClassificationMode,
   sendChatMessage,
   createChatSession,

@@ -7,7 +7,6 @@ import {
   useSidebar,
   useDashboardData,
   useAppNavigation,
-  usePythonStatus,
   useIngestProgress,
 } from "./hooks";
 
@@ -17,7 +16,6 @@ function App() {
   const sidebar = useSidebar();
   const dashboard = useDashboardData();
   const nav = useAppNavigation();
-  const python = usePythonStatus();
   const { progressMap } = useIngestProgress();
 
   return (
@@ -33,19 +31,6 @@ function App() {
       />
 
       <main className="flex-1 min-w-0 overflow-hidden flex flex-col">
-        {/* Python 后端错误提示 */}
-        {python.error && (
-          <div className="bg-red-500/90 text-white px-4 py-2 flex items-center justify-between text-sm">
-            <span>⚠️ AI 功能暂不可用: {python.error}</span>
-            <button
-              onClick={python.dismissError}
-              className="ml-4 hover:bg-red-600/50 px-2 py-1 rounded"
-            >
-              ✕
-            </button>
-          </div>
-        )}
-
         {nav.currentPage === "dashboard" && (
           <DashboardPage
             tasks={dashboard.tasks}

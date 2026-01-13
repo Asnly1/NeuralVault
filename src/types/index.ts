@@ -66,7 +66,7 @@ export type {
   AIProviderStatus,
   AIConfigStatus,
   SetApiKeyRequest,
-  SetDefaultModelRequest,
+  SetProcessingProviderModelRequest,
   SetClassificationModeRequest,
   ChatUsage,
   ChatMessagePayload,

@@ -57,8 +57,7 @@ src/
 │   ├── useTheme.ts           # 主题管理
 │   ├── useSidebar.ts         # 侧边栏状态
 │   ├── useDashboardData.ts   # Dashboard 数据加载
-│   ├── useAppNavigation.ts   # 页面导航状态
-│   └── usePythonStatus.ts    # Python 后端状态监听
+│   └── useAppNavigation.ts   # 页面导航状态
 ├── lib/
 │   ├── utils.ts              # 通用工具函数
 │   ├── nodeUtils.ts          # 节点工具函数
@@ -156,7 +155,7 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 - `setSessionBindings()`
 - `createChatMessage()`、`listChatMessages()`
 - `getAIConfigStatus()`、`saveApiKey()`、`removeApiKey()`
-- `setDefaultModel()`、`sendChatMessage()`
+- `setProcessingProviderModel()`、`setClassificationMode()`、`sendChatMessage()`
 
 #### `api/system.ts`
 系统 API：
@@ -173,7 +172,7 @@ Context 按职责拆分为三个独立模块：
 #### `AIConfigContext.tsx` (~110行)
 AI 配置管理：
 - 状态：`config`、`loading`、`error`、`configuredProviders`
-- 方法：`saveKey()`、`removeKey()`、`refreshConfig()`
+- 方法：`saveKey()`、`removeKey()`、`saveProcessingProviderModel()`、`saveClassificationMode()`、`refreshConfig()`
 
 #### `ChatSessionContext.tsx` (~90行)
 聊天会话管理：
@@ -281,12 +280,6 @@ const { theme, setTheme } = useTheme();
 const { isCollapsed, width, toggleCollapse, setWidth } = useSidebar();
 ```
 
-**`usePythonStatus.ts`**
-Python 后端状态监听：
-```typescript
-const { error, dismissError } = usePythonStatus();
-```
-
 **`useIngestProgress.ts`**
 资源处理进度：
 ```typescript
@@ -367,7 +360,7 @@ sortTasksForCalendar(tasks);   // todo 在 done 前面
 - 月历视图
 
 #### `Settings.tsx`
-- 主题/语言/API Key 管理
+- 主题/语言/API Key/处理模型/归类模式管理
 
 ---
 
@@ -381,7 +374,6 @@ function App() {
   const sidebar = useSidebar();
   const dashboard = useDashboardData();
   const nav = useAppNavigation();
-  const python = usePythonStatus();
   const { progressMap } = useIngestProgress();
 
   return (
@@ -410,7 +402,6 @@ main.tsx
        ├─ useSidebar() -> 侧边栏状态
        ├─ useDashboardData() -> 数据加载与操作
        ├─ useAppNavigation() -> 页面导航
-       ├─ usePythonStatus() -> 后端状态
        ├─ useIngestProgress() -> 处理进度
        │
        ├─ DashboardPage
