@@ -6,7 +6,6 @@
 - AI 逻辑内置 Rust：Gemini LLM、fastembed-rs、LanceDB（内嵌）。
 - LanceDB 运行在进程内，无需单独服务或端口。
 - 统一数据模型：`nodes` + `edges`，覆盖 topic/task/resource。
-- Qdrant 相关代码视为遗留待清理，本文件按 LanceDB 目标形态描述。
 - dense模型选用BAAI/bge-m3量化版本和Qdrant/clip-ViT-B-32-text，image模型选用Qdrant/clip-ViT-B-32-vision
 - Embedding别的资源时，只使用bge-m3量化版本；但是在Embedding Image类型时，用bge-m3embedding计算OCR出来的文本，用clip-ViT-B-32-vision计算Image的向量。
 - 在每次搜索时，实时计算bge-m3的embedding和clip-ViT-B-32-text的embedding，然后进行搜索
@@ -20,11 +19,9 @@ src-tauri/
 │   ├── lib.rs               # 应用组装与启动
 │   ├── app_state.rs         # 全局状态
 │   ├── error.rs             # 错误类型定义
-│   ├── sidecar.rs           # Python Sidecar（遗留，未接入）
 │   ├── services/
 │   │   ├── ai_config.rs     # API Key + VectorConfig 配置
 │   │   ├── ai_pipeline.rs   # Rust AI 队列与管线
-│   │   ├── qdrant_sidecar.rs# Qdrant 进程管理（遗留，待移除）
 │   │   └── ai/              # Rust AI 服务实现
 │   │       ├── llm.rs       # Gemini LLM（流式 + 结构化输出）
 │   │       ├── embedding.rs # fastembed + text-splitter + LanceDB
@@ -385,6 +382,6 @@ pub enum ClipboardContent {
 
 ## 说明
 
-- Rust 写入 SQLite 与 LanceDB（无 Python sidecar 依赖）。
+- Rust 写入 SQLite 与 LanceDB。
 - AI Pipeline 依赖 processing provider/model 已配置且启用。
 - 目前队列为内存队列，应用重启会清空；启动后会扫描 `embedding_status=pending/dirty/error` 或 `processing_stage!=done` 且内容非空的资源并重新入队。
