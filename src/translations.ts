@@ -13,6 +13,8 @@ export const translations = {
       searchPlaceholder: "搜索...",
       menu: "菜单",
       noFavorites: "暂无收藏",
+      processingStatus: "正在整理知识库...",
+      processResources: "处理资源",
     },
     warehouse: {
       title: "仓库",
@@ -140,6 +142,8 @@ export const translations = {
       searchPlaceholder: "Search...",
       menu: "Menu",
       noFavorites: "No favorites",
+      processingStatus: "Processing knowledge base...",
+      processResources: "Process Resources",
     },
     warehouse: {
       title: "Warehouse",

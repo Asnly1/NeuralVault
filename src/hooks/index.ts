@@ -21,6 +21,7 @@ export {
 // 业务 hooks
 export { usePanelResize } from "./usePanelResize";
 export { useIngestProgress } from "./useIngestProgress";
+export { useEmbeddingStatus } from "./useEmbeddingStatus";
 export { useChat } from "./useChat";
 export type { UseChatReturn } from "./useChat";
 

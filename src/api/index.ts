@@ -52,6 +52,7 @@ export {
   updateResourceContent,
   updateResourceTitle,
   fetchTaskResources,
+  processPendingResources,
 } from "./resource";
 
 // ============================================
@@ -93,7 +94,7 @@ export {
 // ============================================
 // Search API
 // ============================================
-export { searchSemantic, searchKeyword } from "./search";
+export { searchSemantic, searchKeyword, warmupEmbedding } from "./search";
 
 // Re-export types for convenience
 export type { NodeRecord, SemanticSearchResult } from "../types";

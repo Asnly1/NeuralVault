@@ -6,9 +6,9 @@
 - AI 逻辑内置 Rust：Gemini LLM、fastembed-rs、LanceDB（内嵌）。
 - LanceDB 运行在进程内，无需单独服务或端口。
 - 统一数据模型：`nodes` + `edges`，覆盖 topic/task/resource。
-- dense模型选用BAAI/bge-m3量化版本和Qdrant/clip-ViT-B-32-text，image模型选用Qdrant/clip-ViT-B-32-vision
-- Embedding别的资源时，只使用bge-m3量化版本；但是在Embedding Image类型时，用bge-m3embedding计算OCR出来的文本，用clip-ViT-B-32-vision计算Image的向量。
-- 在每次搜索时，实时计算bge-m3的embedding和clip-ViT-B-32-text的embedding，然后进行搜索。bge-m3搜索文字，clip-ViT-B-32-text搜索图片。
+- dense模型选用intfloat/multilingual-e5-small和Qdrant/clip-ViT-B-32-text，image模型选用Qdrant/clip-ViT-B-32-vision
+- Embedding别的资源时，只使用multilingual-e5-small；但是在Embedding Image类型时，用multilingual-e5-small计算OCR出来的文本，用clip-ViT-B-32-vision计算Image的向量。
+- 在每次搜索时，实时计算multilingual-e5-small的embedding和clip-ViT-B-32-text的embedding，然后进行搜索。multilingual-e5-small搜索文字，clip-ViT-B-32-text搜索图片。
 
 ---
 
@@ -103,7 +103,7 @@ pub struct AppState {
 - 连接路径：本地目录（如 `${app_data_dir}/lancedb`）。
 - 运行方式：同进程内嵌，无需端口、无需 sidecar。
 - 向量列：Arrow `FixedSizeList<Float32>`。
-  - Dense 向量维度：1024
+- Dense 向量维度：384
   - Image 向量维度：512
 - 使用 FTS 索引（`chunk_text`）以支持 Hybrid Search（文本检索 + 向量检索）。
 
@@ -141,9 +141,9 @@ pub struct AppState {
 
 技术栈：
 - `fastembed-rs`：
-  - Dense: `BAAI/bge-m3`（1024）
+- Dense: `intfloat/multilingual-e5-small`（384）
   - Image: `Qdrant/clip-ViT-B-32-vision`（512）
-- 使用 Hugging Face tokenizer（`BAAI/bge-m3`）+ `text-splitter` 做分段与 token 计数。
+- 使用 Hugging Face tokenizer（`intfloat/multilingual-e5-small`）+ `text-splitter` 做分段与 token 计数。
 - LanceDB 表保存向量与元数据；不再计算 sparse embedding。
 - `embedding_type` 仍区分 `summary` / `content`。
 

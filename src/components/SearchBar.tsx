@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Search, X, Loader2, FileText, Tag, CheckSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { searchSemantic, searchKeyword, SemanticSearchResult, NodeRecord } from "@/api";
+import { searchSemantic, searchKeyword, warmupEmbedding, SemanticSearchResult, NodeRecord } from "@/api";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 type SearchMode = "semantic" | "keyword";
@@ -21,6 +21,7 @@ export function SearchBar({ onSelectResult }: SearchBarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const warmupAtRef = useRef<number | null>(null);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -71,6 +72,14 @@ export function SearchBar({ onSelectResult }: SearchBarProps) {
 
   const handleFocus = () => {
     setIsOpen(true);
+    const now = Date.now();
+    const ttlMs = 5 * 60 * 1000;
+    if (!warmupAtRef.current || now - warmupAtRef.current > ttlMs) {
+      warmupAtRef.current = now;
+      warmupEmbedding().catch((error) => {
+        console.error("Embedding warmup failed:", error);
+      });
+    }
   };
 
   const handleClear = () => {

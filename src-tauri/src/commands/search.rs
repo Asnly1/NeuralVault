@@ -16,6 +16,23 @@ pub struct SemanticSearchResult {
     pub score: f64,
 }
 
+/// Embedding 模型预热（搜索用）
+#[tauri::command]
+pub async fn warmup_embedding(state: tauri::State<'_, AppState>) -> AppResult<()> {
+    let ai = state
+        .ai
+        .wait_ready()
+        .await
+        .map_err(|e| crate::AppError::Custom(format!("AI services not ready: {}", e)))?;
+
+    ai.embedding
+        .warmup_search()
+        .await
+        .map_err(|e| crate::AppError::Custom(format!("Embedding warmup failed: {}", e)))?;
+
+    Ok(())
+}
+
 /// 语义搜索
 ///
 /// 使用 LanceDB 进行混合检索（FTS + dense 向量）

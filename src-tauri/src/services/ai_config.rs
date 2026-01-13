@@ -35,8 +35,8 @@ impl Default for VectorConfig {
         Self {
             lancedb_path: String::new(),
             lancedb_table_name: "neuralvault_vectors".to_string(),
-            dense_embedding_model: "BAAI/bge-m3".to_string(),
-            dense_vector_size: 1024,
+            dense_embedding_model: "intfloat/multilingual-e5-small".to_string(),
+            dense_vector_size: 384,
             clip_text_embedding_model: "Qdrant/clip-ViT-B-32-text".to_string(),
             image_embedding_model: "Qdrant/clip-ViT-B-32-vision".to_string(),
             clip_text_vector_size: 512,

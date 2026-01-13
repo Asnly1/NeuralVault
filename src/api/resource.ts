@@ -37,6 +37,13 @@ export const updateResourceTitle = (nodeId: number, title: string): Promise<void
   apiCallVoid("update_resource_title_command", { node_id: nodeId, title });
 
 // ============================================
+// Resource Processing
+// ============================================
+
+export const processPendingResources = (): Promise<number> =>
+  apiCall("process_pending_resources_command");
+
+// ============================================
 // Resource 关联查询
 // ============================================
 

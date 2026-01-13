@@ -11,12 +11,15 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Package,
+  Loader2,
+  RefreshCw,
 } from "lucide-react";
 import { PageType, navItems, NodeRecord } from "../types";
-import { fetchPinnedNodes } from "../api";
+import { fetchPinnedNodes, processPendingResources } from "../api";
 
 import { useLanguage } from "@/contexts/LanguageContext";
 import { SearchBar } from "./SearchBar";
+import { useEmbeddingStatus } from "@/hooks";
 
 interface SidebarProps {
   currentPage: PageType;
@@ -41,6 +44,7 @@ export function Sidebar({
   onSelectNode,
 }: SidebarProps) {
   const { t } = useLanguage();
+  const { isProcessing } = useEmbeddingStatus();
   const [isResizing, setIsResizing] = useState(false);
   const [tempWidth, setTempWidth] = useState<number | null>(null);
   const tempWidthRef = useRef<number | null>(null);
@@ -53,6 +57,14 @@ export function Sidebar({
       setPinnedNodes(nodes);
     } catch (err) {
       console.error("Failed to load pinned nodes:", err);
+    }
+  }, []);
+
+  const handleProcessResources = useCallback(async () => {
+    try {
+      await processPendingResources();
+    } catch (err) {
+      console.error("Failed to process resources:", err);
     }
   }, []);
 
@@ -215,6 +227,26 @@ export function Sidebar({
           )}
         </div>
       </nav>
+
+      <div className="px-3 py-3 border-t border-border/40 space-y-2">
+        {isProcessing && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <span>{t("sidebar", "processingStatus")}</span>
+          </div>
+        )}
+
+        <Button
+          size="sm"
+          variant="outline"
+          className="w-full justify-center"
+          onClick={handleProcessResources}
+          disabled={isProcessing}
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+          {t("sidebar", "processResources")}
+        </Button>
+      </div>
 
       {/* Resize Handle */}
       <div

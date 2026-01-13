@@ -329,3 +329,18 @@ pub async fn get_resource_by_id(
 ) -> AppResult<crate::db::NodeRecord> {
     Ok(get_node_by_id(&state.db, node_id).await?)
 }
+
+#[tauri::command]
+pub async fn process_pending_resources_command(state: State<'_, AppState>) -> AppResult<usize> {
+    state
+        .ai
+        .wait_ready()
+        .await
+        .map_err(|e| crate::AppError::Custom(format!("AI services not ready: {e}")))?;
+    let count = state
+        .ai_pipeline
+        .enqueue_pending_resources(&state.db)
+        .await
+        .map_err(|e| crate::AppError::Custom(format!("Process resources failed: {e}")))?;
+    Ok(count)
+}

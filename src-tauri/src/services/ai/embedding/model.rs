@@ -1,6 +1,7 @@
 //! EmbeddingService - core embedding functionality
 
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use arrow_array::RecordBatchIterator;
 use arrow_schema::Schema;
@@ -21,48 +22,72 @@ use super::store::{
     embedding_type_label, merge_results, normalize_embedding_type, open_or_create_table,
     LanceChunk, SearchResult,
 };
-use super::{COLUMN_IMAGE_VECTOR, COLUMN_NODE_ID, COLUMN_TEXT_VECTOR, VECTOR_KIND_IMAGE, VECTOR_KIND_TEXT};
+use super::{
+    COLUMN_IMAGE_VECTOR, COLUMN_NODE_ID, COLUMN_TEXT_VECTOR, VECTOR_KIND_IMAGE, VECTOR_KIND_TEXT,
+};
 use crate::db::{EmbedChunkResult, EmbeddingType};
 use crate::services::VectorConfig;
 
+const MODEL_TTL_SECONDS: u64 = 300;
+
 pub struct EmbeddingService {
-    dense: Mutex<TextEmbedding>,
-    clip_text: Mutex<TextEmbedding>,
-    image: Mutex<ImageEmbedding>,
+    dense: Arc<Mutex<TimedModel<TextEmbedding>>>,
+    clip_text: Arc<Mutex<TimedModel<TextEmbedding>>>,
+    image: Arc<Mutex<TimedModel<ImageEmbedding>>>,
     tokenizer: Tokenizer,
     splitter: TextSplitter<Tokenizer>,
     table: Table,
     schema: Arc<Schema>,
     config: VectorConfig,
+    model_ttl: Duration,
 }
 
 pub struct EmbeddingResponse {
     pub chunks: Vec<EmbedChunkResult>,
 }
 
-// TODO: 使用bge-m3量化
+struct TimedModel<T> {
+    model: Option<T>,
+    last_used: Option<Instant>,
+}
+
+impl<T> TimedModel<T> {
+    fn new() -> Self {
+        Self {
+            model: None,
+            last_used: None,
+        }
+    }
+
+    fn evict_if_idle(&mut self, ttl: Duration) {
+        let should_evict = self
+            .last_used
+            .map(|last_used| last_used.elapsed() >= ttl)
+            .unwrap_or(false);
+        if should_evict {
+            self.model = None;
+            self.last_used = None;
+        }
+    }
+
+    fn ensure_with<F>(&mut self, ttl: Duration, init: F) -> Result<&mut T, String>
+    where
+        F: FnOnce() -> Result<T, String>,
+    {
+        self.evict_if_idle(ttl);
+        if self.model.is_none() {
+            self.model = Some(init()?);
+        }
+        self.last_used = Some(Instant::now());
+        Ok(self
+            .model
+            .as_mut()
+            .ok_or_else(|| "embedding model not initialized".to_string())?)
+    }
+}
+
 impl EmbeddingService {
     pub async fn new(config: VectorConfig) -> Result<Self, String> {
-        let dense_model: EmbeddingModel = config
-            .dense_embedding_model
-            .parse::<EmbeddingModel>()
-            .map_err(|e| e.to_string())?;
-        let clip_text_model: EmbeddingModel = config
-            .clip_text_embedding_model
-            .parse::<EmbeddingModel>()
-            .map_err(|e| e.to_string())?;
-        let image_model: ImageEmbeddingModel = config
-            .image_embedding_model
-            .parse::<ImageEmbeddingModel>()
-            .map_err(|e| e.to_string())?;
-
-        let dense = TextEmbedding::try_new(TextInitOptions::new(dense_model))
-            .map_err(|e| e.to_string())?;
-        let clip_text = TextEmbedding::try_new(TextInitOptions::new(clip_text_model))
-            .map_err(|e| e.to_string())?;
-        let image = ImageEmbedding::try_new(ImageInitOptions::new(image_model))
-            .map_err(|e| e.to_string())?;
-
         let tokenizer = Tokenizer::from_pretrained(&config.dense_embedding_model, None)
             .map_err(|e| e.to_string())?;
 
@@ -75,20 +100,119 @@ impl EmbeddingService {
         let schema = build_schema(&config)?;
         let table = open_or_create_table(&config, schema.clone()).await?;
 
+        let dense = Arc::new(Mutex::new(TimedModel::new()));
+        let clip_text = Arc::new(Mutex::new(TimedModel::new()));
+        let image = Arc::new(Mutex::new(TimedModel::new()));
+        let model_ttl = Duration::from_secs(MODEL_TTL_SECONDS);
+
+        Self::spawn_model_cleanup(
+            dense.clone(),
+            clip_text.clone(),
+            image.clone(),
+            model_ttl,
+        );
+
         Ok(Self {
-            dense: Mutex::new(dense),
-            clip_text: Mutex::new(clip_text),
-            image: Mutex::new(image),
+            dense,
+            clip_text,
+            image,
             tokenizer,
             splitter,
             table,
             schema,
             config,
+            model_ttl,
         })
     }
 
     pub fn config(&self) -> &VectorConfig {
         &self.config
+    }
+
+    pub async fn warmup_search(&self) -> Result<(), String> {
+        self.with_dense(|_| Ok(())).await?;
+        self.with_clip_text(|_| Ok(())).await?;
+        Ok(())
+    }
+
+    fn init_dense_model(&self) -> Result<TextEmbedding, String> {
+        let dense_model: EmbeddingModel = self
+            .config
+            .dense_embedding_model
+            .parse::<EmbeddingModel>()
+            .map_err(|e| e.to_string())?;
+        TextEmbedding::try_new(TextInitOptions::new(dense_model)).map_err(|e| e.to_string())
+    }
+
+    fn init_clip_text_model(&self) -> Result<TextEmbedding, String> {
+        let clip_text_model: EmbeddingModel = self
+            .config
+            .clip_text_embedding_model
+            .parse::<EmbeddingModel>()
+            .map_err(|e| e.to_string())?;
+        TextEmbedding::try_new(TextInitOptions::new(clip_text_model)).map_err(|e| e.to_string())
+    }
+
+    fn init_image_model(&self) -> Result<ImageEmbedding, String> {
+        let image_model: ImageEmbeddingModel = self
+            .config
+            .image_embedding_model
+            .parse::<ImageEmbeddingModel>()
+            .map_err(|e| e.to_string())?;
+        ImageEmbedding::try_new(ImageInitOptions::new(image_model)).map_err(|e| e.to_string())
+    }
+
+    fn spawn_model_cleanup(
+        dense: Arc<Mutex<TimedModel<TextEmbedding>>>,
+        clip_text: Arc<Mutex<TimedModel<TextEmbedding>>>,
+        image: Arc<Mutex<TimedModel<ImageEmbedding>>>,
+        ttl: Duration,
+    ) {
+        tauri::async_runtime::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(60));
+            loop {
+                interval.tick().await;
+                {
+                    let mut model = dense.lock().await;
+                    model.evict_if_idle(ttl);
+                }
+                {
+                    let mut model = clip_text.lock().await;
+                    model.evict_if_idle(ttl);
+                }
+                {
+                    let mut model = image.lock().await;
+                    model.evict_if_idle(ttl);
+                }
+            }
+        });
+    }
+
+    async fn with_dense<R, F>(&self, action: F) -> Result<R, String>
+    where
+        F: FnOnce(&mut TextEmbedding) -> Result<R, String>,
+    {
+        let mut model = self.dense.lock().await;
+        let model = model.ensure_with(self.model_ttl, || self.init_dense_model())?;
+        action(model)
+    }
+
+    async fn with_clip_text<R, F>(&self, action: F) -> Result<R, String>
+    where
+        F: FnOnce(&mut TextEmbedding) -> Result<R, String>,
+    {
+        let mut model = self.clip_text.lock().await;
+        let model = model.ensure_with(self.model_ttl, || self.init_clip_text_model())?;
+        action(model)
+    }
+
+    async fn with_image<R, F>(&self, action: F) -> Result<R, String>
+    where
+        F: FnOnce(&mut ImageEmbedding) -> Result<R, String>,
+    {
+        let mut model = self.image.lock().await;
+        let model = model.ensure_with(self.model_ttl, || self.init_image_model())?;
+        action(model)
     }
 
     pub async fn embed_text(
@@ -110,11 +234,9 @@ impl EmbeddingService {
         };
 
         let texts: Vec<&str> = chunks.iter().map(|chunk| chunk.text.as_str()).collect();
-        let dense_vectors = {
-            let mut model = self.dense.lock().await;
-            model.embed(texts.as_slice(), None)
-        }
-        .map_err(|e| e.to_string())?;
+        let dense_vectors = self
+            .with_dense(|model| model.embed(texts.as_slice(), None).map_err(|e| e.to_string()))
+            .await?;
 
         if dense_vectors.len() != chunks.len() {
             return Err("embedding result count mismatch".to_string());
@@ -166,11 +288,9 @@ impl EmbeddingService {
         image_path: &str,
         preview_text: &str,
     ) -> Result<EmbedChunkResult, String> {
-        let vectors = {
-            let mut model = self.image.lock().await;
-            model.embed(vec![image_path], None)
-        }
-        .map_err(|e| e.to_string())?;
+        let vectors = self
+            .with_image(|model| model.embed(vec![image_path], None).map_err(|e| e.to_string()))
+            .await?;
 
         let vector = vectors
             .get(0)
@@ -238,17 +358,13 @@ impl EmbeddingService {
             return Err("query text is empty".to_string());
         }
 
-        let dense = {
-            let mut model = self.dense.lock().await;
-            model.embed(vec![text], None)
-        }
-        .map_err(|e| e.to_string())?;
+        let dense = self
+            .with_dense(|model| model.embed(vec![text], None).map_err(|e| e.to_string()))
+            .await?;
 
-        let clip_text = {
-            let mut model = self.clip_text.lock().await;
-            model.embed(vec![text], None)
-        }
-        .map_err(|e| e.to_string())?;
+        let clip_text = self
+            .with_clip_text(|model| model.embed(vec![text], None).map_err(|e| e.to_string()))
+            .await?;
 
         let dense_vector = dense
             .into_iter()

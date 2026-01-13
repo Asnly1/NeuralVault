@@ -1,4 +1,4 @@
-import { apiCall } from "./client";
+import { apiCall, apiCallVoid } from "./client";
 import type { NodeRecord, SemanticSearchResult } from "../types";
 
 // ============================================
@@ -28,3 +28,6 @@ export const searchKeyword = (
     node_type: nodeType,
     limit,
   });
+
+export const warmupEmbedding = (): Promise<void> =>
+  apiCallVoid("warmup_embedding");

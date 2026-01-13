@@ -23,6 +23,7 @@ pub use commands::{
     get_tasks_by_date, get_all_tasks, get_active_tasks,
     update_resource_content_command, update_resource_title_command, update_resource_summary_command,
     soft_delete_resource_command, hard_delete_resource_command,
+    process_pending_resources_command,
     link_nodes_command, unlink_nodes_command, list_target_nodes_command, list_source_nodes_command,
     read_clipboard, get_ai_config_status, save_api_key,
     remove_api_key, set_processing_provider_model, set_classification_mode, send_chat_message, create_chat_session, get_chat_session,
@@ -37,7 +38,7 @@ pub use commands::{
     update_topic_resource_review_status_command, get_topic_resources_command, get_resource_topics_command,
     link_task_to_topic_command, unlink_task_from_topic_command, get_topic_tasks_command, get_task_topics_command,
     // Search commands
-    search_semantic, search_keyword,
+    search_semantic, search_keyword, warmup_embedding,
     // Node commands
     list_pinned_nodes, list_unreviewed_nodes, update_node_review_status, update_node_pinned,
     list_node_revision_logs, convert_resource_to_topic_command, convert_resource_to_task_command,
@@ -122,6 +123,7 @@ pub fn run() {
                 ai_handle.clone(),
                 ai_config.clone(),
                 app_dir.clone(),
+                app.handle().clone(),
             ));
 
             app.manage(AppState {
@@ -173,6 +175,7 @@ pub fn run() {
             hard_delete_task_command,
             soft_delete_resource_command,
             hard_delete_resource_command,
+            process_pending_resources_command,
             get_dashboard,
             get_all_resources,
             get_resource_by_id,
@@ -236,6 +239,7 @@ pub fn run() {
             // Search commands
             search_semantic,
             search_keyword,
+            warmup_embedding,
             // Node commands
             list_pinned_nodes,
             list_unreviewed_nodes,
