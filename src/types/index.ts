@@ -12,6 +12,7 @@ export {
   processingStageValues,
   relationTypeValues,
   // Schemas
+  sourceMetaSchema,
   nodeRecordSchema,
   edgeRecordSchema,
   dashboardSchema,
@@ -26,6 +27,7 @@ export type {
   EmbeddingStatus,
   ProcessingStage,
   RelationType,
+  SourceMeta,
   NodeRecord,
   EdgeRecord,
   DashboardData,

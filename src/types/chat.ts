@@ -117,7 +117,6 @@ export interface ChatSession {
 }
 
 export interface CreateChatSessionRequest {
-  node_id?: number;
   session_type?: "temporary" | "persistent";
   title?: string;
   summary?: string;
@@ -164,7 +163,9 @@ export interface CreateChatMessageResponse {
 export interface UpdateChatMessageRequest {
   message_id: number;
   user_content?: string;
+  thinking_summary?: string;
   assistant_content?: string;
+  thinking_effort?: string;
 }
 
 export interface DeleteChatMessageRequest {

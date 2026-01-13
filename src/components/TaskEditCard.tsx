@@ -159,7 +159,7 @@ export function TaskEditCard({
 
         await createTask({
           title: formData.title,
-          description: formData.description || undefined,
+          user_note: formData.description || undefined,
           status: formData.status,
           priority: formData.priority,
           due_date: dueDateValue,

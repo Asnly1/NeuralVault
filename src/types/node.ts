@@ -32,6 +32,15 @@ export type RelationType = (typeof relationTypeValues)[number];
 // Zod Schemas
 // ============================================
 
+export const sourceMetaSchema = z.object({
+  url: z.string().nullable().optional(),
+  window_title: z.string().nullable().optional(),
+  process_name: z.string().nullable().optional(),
+  captured_at: z.string().nullable().optional(),
+});
+
+export type SourceMeta = z.infer<typeof sourceMetaSchema>;
+
 export const nodeRecordSchema = z.object({
   node_id: z.number(),
   uuid: z.string(),
@@ -48,7 +57,7 @@ export const nodeRecordSchema = z.object({
   file_content: z.string().nullable(),
   user_note: z.string().nullable(),
   resource_subtype: z.enum(resourceSubtypeValues).nullable(),
-  source_meta: z.string().nullable(),
+  source_meta: sourceMetaSchema.nullable(),
   embedded_hash: z.string().nullable(),
   processing_hash: z.string().nullable(),
   embedding_status: z.enum(embeddingStatusValues),

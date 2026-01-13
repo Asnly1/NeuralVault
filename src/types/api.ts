@@ -6,7 +6,7 @@ import type { TaskStatus, TaskPriority, RelationType, NodeRecord } from "./node"
 
 export interface CreateTaskRequest {
   title: string;
-  description?: string;
+  user_note?: string;
   status?: TaskStatus;
   priority?: TaskPriority;
   due_date?: string;
@@ -29,7 +29,6 @@ export interface CaptureSourceMeta {
 
 export interface CaptureRequest {
   content?: string;
-  title?: string;
   file_path?: string;
   file_type?: string;
   source_meta?: CaptureSourceMeta;

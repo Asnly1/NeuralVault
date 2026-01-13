@@ -68,7 +68,6 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
 
       // 创建新会话
       const response = await createChatSession({
-        node_id: nodeId,
         title: undefined,
         summary: undefined,
         chat_model: undefined,

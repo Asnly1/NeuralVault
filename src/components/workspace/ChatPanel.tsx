@@ -104,12 +104,10 @@ export function ChatPanel({
     try {
       // 1. 创建 Resource 保存对话内容
       const content = `## 提问\n${userMsg.content}\n\n## 回答\n${assistantMsg.content}`;
-      const title = userMsg.content.slice(0, 50) + (userMsg.content.length > 50 ? "..." : "");
 
       const response = await quickCapture({
         content,
         file_type: "text",
-        title: title,
       });
 
       // 2. 关联到当前上下文节点
