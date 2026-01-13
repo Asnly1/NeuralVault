@@ -24,8 +24,14 @@
 19. ✅ topic在workspace中的显示好像还是用的resource，能不能单独创建一个，就像task一样
 20. ✅搜索应该只搜索resource/topic/task，点击后要跳转
 21. ✅工作台的"编辑文本"和"附带文本"查看的应该是user_note,而不是file_content
-22. ✅ AI回复的内容应该流式显示，并且还要出thinking内容。采取Cursor一样的显示：用淡色显示思考内容。如果思考完成，则把思考内容折叠起来，用正常字体显示回答内容
 23. ✅topic和task要在左边显示summary，然后在summary下面显示关联的node
 24. 添加node之间的转换
 25. 在设置界面添加快捷键设置
 26. 切换rag搜索范围
+27. Dashboard标记任务已完成/取消
+28. Dashboard删除任务
+29. 仓库收藏Node
+30. 仓库删除Node
+31. Inbox显示关联的Edge，手动确定Edge
+32. Workspace添加上下文资源不能保存
+33. 对话时需要显示Token使用情况: Input / Output / Reasoning / Total
