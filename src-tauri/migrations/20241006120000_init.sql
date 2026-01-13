@@ -133,14 +133,14 @@ CREATE TABLE context_chunks (
     node_id INTEGER NOT NULL, -- 指向 nodes 表 (通常是 type='resource' 的节点)
     embedding_type TEXT NOT NULL CHECK (embedding_type IN ('summary', 'content')),
 
+    vector_kind TEXT NOT NULL CHECK (vector_kind IN ('text', 'image')),
     chunk_text TEXT NOT NULL,
     chunk_index INTEGER,
     token_count INTEGER,
-    qdrant_uuid TEXT UNIQUE,
+    vector_id TEXT UNIQUE,
     embedding_hash TEXT,
 
-    dense_embedding_model TEXT,
-    sparse_embedding_model TEXT,
+    embedding_model TEXT,
     embedding_at DATETIME,
     chunk_meta JSON,
 

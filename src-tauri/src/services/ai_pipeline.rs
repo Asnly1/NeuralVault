@@ -1,7 +1,6 @@
 use std::collections::HashSet;
+use std::path::Path;
 use std::sync::Arc;
-
-use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, Mutex};
 use uuid::Uuid;
 
@@ -14,8 +13,10 @@ use crate::db::{
     NewEdge, NewNode, NodeRecord, NodeType, ResourceEmbeddingStatus, ResourceProcessingStage,
     ResourceSubtype, ReviewStatus,
 };
-use crate::services::{AIConfigService, ClassificationMode};
-use crate::sidecar::PythonSidecar;
+use crate::services::{
+    AiServices, ClassifyTopicResponse, ClassificationMode, ParentTopicCandidate, ProviderConfig,
+    TopicCandidate, AIConfigService,
+};
 
 const AI_QUEUE_BUFFER: usize = 32;
 const SUMMARY_MAX_LENGTH: i32 = 100;
@@ -41,8 +42,9 @@ pub struct AiPipeline {
 impl AiPipeline {
     pub fn new(
         db: DbPool,
-        python: Arc<PythonSidecar>,
+        ai: Arc<AiServices>,
         ai_config: Arc<Mutex<AIConfigService>>,
+        app_data_dir: std::path::PathBuf,
     ) -> Self {
         // 创建一个mpsc通道，AI_QUEUE_BUFFER是通道的缓冲区大小
         // 如果超过AI_QUEUE_BUFFER，新的任务会阻塞，直到有空闲位置
@@ -53,7 +55,7 @@ impl AiPipeline {
         let inflight_worker = inflight.clone();
 
         tauri::async_runtime::spawn(async move {
-            run_pipeline(receiver, inflight_worker, db, python, ai_config).await;
+            run_pipeline(receiver, inflight_worker, db, ai, ai_config, app_data_dir).await;
         });
 
         Self { sender, inflight }
@@ -96,8 +98,9 @@ async fn run_pipeline(
     mut receiver: mpsc::Receiver<AiPipelineJob>,
     inflight: Arc<Mutex<HashSet<i64>>>,
     db: DbPool,
-    python: Arc<PythonSidecar>,
+    ai: Arc<AiServices>,
     ai_config: Arc<Mutex<AIConfigService>>,
+    app_data_dir: std::path::PathBuf,
 ) {
     // receiver.recv().await:
     // 空闲时等待：如果队列里没有任务，代码运行到这里会暂停，释放 CPU 资源，直到有新的 AiPipelineJob 被发送过来。
@@ -106,7 +109,9 @@ async fn run_pipeline(
     while let Some(job) = receiver.recv().await {
         // 串行处理每个文件，如果某个文件出错了，也不会panic，而是只打印错误信息，继续处理下一个文件
         // TODO: 改造为Pipeline，可以并行处理多个文件
-        if let Err(err) = process_resource_job(&db, &python, &ai_config, job.node_id).await {
+        if let Err(err) =
+            process_resource_job(&db, &ai, &ai_config, &app_data_dir, job.node_id).await
+        {
             eprintln!("[AiPipeline] node {} failed: {}", job.node_id, err);
         }
 
@@ -117,8 +122,9 @@ async fn run_pipeline(
 
 async fn process_resource_job(
     db: &DbPool,
-    python: &PythonSidecar,
+    ai: &AiServices,
     ai_config: &Arc<Mutex<AIConfigService>>,
+    app_data_dir: &Path,
     node_id: i64,
 ) -> Result<(), String> {
     // 1. 获取node
@@ -127,19 +133,39 @@ async fn process_resource_job(
         return Ok(());
     }
 
-    // 2. 确保content不为空
+    let resource_subtype_str = node.resource_subtype.map(|s| match s {
+        ResourceSubtype::Text => "text",
+        ResourceSubtype::Image => "image",
+        ResourceSubtype::Pdf => "pdf",
+        ResourceSubtype::Url => "url",
+        ResourceSubtype::Epub => "epub",
+        ResourceSubtype::Other => "other",
+    });
+    // 非 Text 类型才传递 file_path
+    let file_path_for_summary = match node.resource_subtype {
+        Some(ResourceSubtype::Text) | None => None,
+        _ => node.file_path.as_deref(),
+    }
+    .map(|path| resolve_resource_path(app_data_dir, path));
+    let image_path_for_embedding = match node.resource_subtype {
+        Some(ResourceSubtype::Image) => node.file_path.as_deref(),
+        _ => None,
+    }
+    .map(|path| resolve_resource_path(app_data_dir, path));
+
+    // 2. 确保content不为空（除非有可用文件回退）
     let content = node
         .file_content // Option<String>
         .as_deref() // Option<&str>
         .unwrap_or("") // &str
         .trim() // &str
         .to_string(); // String
-    if content.is_empty() {
+    if content.is_empty() && file_path_for_summary.is_none() {
         mark_resource_error(db, node_id, &node, "resource content is empty").await?;
         return Ok(());
     }
 
-    let processing_result: Result<(String, String, ClassificationMode, String), String> = async {
+    let processing_result: Result<(String, String, ClassificationMode, ProviderConfig, String), String> = async {
         // 3. 更新状态为Pending
         update_resource_sync_status(
             db,
@@ -152,32 +178,24 @@ async fn process_resource_job(
         .map_err(|e| e.to_string())?;
 
         // 4. 获取processing provider和processing model
-        let (provider, model, classification_mode) = get_processing_config(ai_config).await?;
+        let (provider, model, classification_mode, provider_config) =
+            get_processing_config(ai_config).await?;
 
         // 5. 获取summary
         // 根据资源类型决定是否传递 file_path
-        let resource_subtype_str = node.resource_subtype.map(|s| match s {
-            ResourceSubtype::Text => "text",
-            ResourceSubtype::Image => "image",
-            ResourceSubtype::Pdf => "pdf",
-            ResourceSubtype::Url => "url",
-            ResourceSubtype::Epub => "epub",
-            ResourceSubtype::Other => "other",
-        });
-        // 非 Text 类型才传递 file_path
-        let file_path_for_summary = match node.resource_subtype {
-            Some(ResourceSubtype::Text) | None => None,
-            _ => node.file_path.as_deref(),
-        };
-        let summary = request_summary(
-            python,
-            &provider,
-            &model,
-            &content,
-            node.user_note.as_deref(),
-            file_path_for_summary,
-            resource_subtype_str,
-        ).await?;
+        let summary = ai
+            .agent
+            .summarize(
+                &provider,
+                &model,
+                &provider_config,
+                &content,
+                node.user_note.as_deref(),
+                SUMMARY_MAX_LENGTH,
+                file_path_for_summary.as_deref(),
+                resource_subtype_str,
+            )
+            .await?;
         let summary = summary.trim().to_string();
         if summary.is_empty() {
             update_node_summary(db, node_id, None)
@@ -189,8 +207,6 @@ async fn process_resource_job(
                 .map_err(|e| e.to_string())?;
         }
 
-        ensure_python_ready(python).await?;
-        
         // 6. 更新处理阶段为Embedding，同时更新processing_hash
         update_resource_processing_stage(db, node_id, ResourceProcessingStage::Embedding, node.file_hash.as_deref())
             .await
@@ -199,20 +215,22 @@ async fn process_resource_job(
         // 7. 同步summary和content的embedding
         sync_embeddings_for_type(
             db,
-            python,
+            ai,
             node_id,
             EmbeddingType::Summary,
             summary.as_str(),
             false,
+            None,
         )
         .await?;
         sync_embeddings_for_type(
             db,
-            python,
+            ai,
             node_id,
             EmbeddingType::Content,
             content.as_str(),
             true,
+            image_path_for_embedding.as_deref(),
         )
         .await?;
 
@@ -229,12 +247,12 @@ async fn process_resource_job(
         .await
         .map_err(|e| e.to_string())?;
 
-        Ok((provider, model, classification_mode, summary))
+        Ok((provider, model, classification_mode, provider_config, summary))
     }
     .await;
 
     // 8. 更新检查处理结果
-    let (provider, model, classification_mode, summary) = match processing_result {
+    let (provider, model, classification_mode, provider_config, summary) = match processing_result {
         Ok(data) => data,
         Err(err) => {
             mark_resource_error(db, node_id, &node, &err).await?;
@@ -246,14 +264,15 @@ async fn process_resource_job(
     if !summary.is_empty() {
         if let Err(err) = classify_and_link_topic(
             db,
-            python,
+            ai,
             &provider,
             &model,
+            &provider_config,
             classification_mode,
             &node,
             &summary,
         )
-            .await
+        .await
         {
             eprintln!("[AiPipeline] topic classify failed: {}", err);
         }
@@ -264,65 +283,70 @@ async fn process_resource_job(
 
 async fn sync_embeddings_for_type(
     db: &DbPool,
-    python: &PythonSidecar,
+    ai: &AiServices,
     node_id: i64,
     embedding_type: EmbeddingType,
     text: &str,
     chunk: bool,
+    image_path: Option<&str>,
 ) -> Result<(), String> {
     delete_context_chunks_by_type(db, node_id, embedding_type)
         .await
         .map_err(|e| e.to_string())?;
 
-    if text.trim().is_empty() {
-        request_delete_embedding(python, node_id, embedding_type).await?;
+    ai.embedding
+        .delete_by_node(node_id, Some(embedding_type_label(embedding_type)), None)
+        .await?;
+
+    let mut chunks: Vec<EmbedChunkResult> = Vec::new();
+
+    if !text.trim().is_empty() {
+        let response = ai
+            .embedding
+            .embed_text(node_id, embedding_type, text, chunk)
+            .await?;
+        chunks.extend(response.chunks);
+    }
+
+    if embedding_type == EmbeddingType::Content {
+        if let Some(image_path) = image_path {
+            let preview_text = build_image_preview(text);
+            let image_chunk = ai
+                .embedding
+                .embed_image(node_id, embedding_type, image_path, preview_text.as_str())
+                .await?;
+            chunks.push(image_chunk);
+        }
+    }
+
+    if chunks.is_empty() {
         return Ok(());
     }
 
-    let response = request_embed(python, node_id, embedding_type, text, chunk).await?;
-    if response.chunks.is_empty() {
-        return Ok(());
-    }
-
-    let chunks: Vec<EmbedChunkResult> = response
-        .chunks
-        .into_iter()
-        .map(|chunk| EmbedChunkResult {
-            chunk_text: chunk.chunk_text,
-            chunk_index: chunk.chunk_index,
-            qdrant_uuid: chunk.qdrant_uuid,
-            embedding_hash: chunk.embedding_hash,
-            token_count: chunk.token_count,
-        })
-        .collect();
-
-    insert_context_chunks(
-        db,
-        node_id,
-        embedding_type,
-        &chunks,
-        response.dense_embedding_model.as_deref(),
-        response.sparse_embedding_model.as_deref(),
-    )
-    .await
-    .map_err(|e| e.to_string())?;
+    insert_context_chunks(db, node_id, embedding_type, &chunks)
+        .await
+        .map_err(|e| e.to_string())?;
 
     Ok(())
 }
 
 async fn classify_and_link_topic(
     db: &DbPool,
-    python: &PythonSidecar,
+    ai: &AiServices,
     provider: &str,
     model: &str,
+    provider_config: &ProviderConfig,
     classification_mode: ClassificationMode,
     node: &NodeRecord,
     summary: &str,
 ) -> Result<(), String> {
-    let similar_resources = search_similar_resources(python, summary, node.node_id).await?;
+    let similar_resources = search_similar_resources(ai, summary, node.node_id).await?;
     let candidates = build_topic_candidates(db, &similar_resources).await?;
 
-    let response = request_classify(python, provider, model, summary, candidates).await?;
+    let response = ai
+        .agent
+        .classify_topic(provider, model, provider_config, summary, candidates)
+        .await?;
     match response {
         ClassifyTopicResponse::Assign {
             payload,
@@ -419,44 +443,19 @@ async fn classify_and_link_topic(
 }
 
 async fn search_similar_resources(
-    python: &PythonSidecar,
+    ai: &AiServices,
     summary: &str,
     current_node_id: i64,
 ) -> Result<Vec<i64>, String> {
-    let url = format!("{}/search/hybrid", python.get_base_url());
-    let request = serde_json::json!({
-        "query": summary,
-        "embedding_type": "summary",
-        "limit": CLASSIFY_TOP_K,
-    });
-
-    #[derive(Deserialize)]
-    struct SearchResponse {
-        results: Vec<SearchResult>,
-    }
-
-    #[derive(Deserialize)]
-    struct SearchResult {
-        node_id: i64,
-        score: f64,
-    }
-
-    let response = python
-        .client
-        .post(url)
-        .json(&request)
-        .send()
+    let response = ai
+        .search
+        .search_hybrid(summary, "summary", None, CLASSIFY_TOP_K as u64)
         .await
-        .map_err(|e| format!("classify search request failed: {e}"))?
-        .error_for_status()
-        .map_err(|e| format!("classify search request failed: {e}"))?
-        .json::<SearchResponse>()
-        .await
-        .map_err(|e| format!("classify search response invalid: {e}"))?;
+        .map_err(|e| format!("classify search failed: {e}"))?;
 
     let mut seen = HashSet::new();
     let mut results = Vec::new();
-    for item in response.results {
+    for item in response {
         if item.node_id == current_node_id {
             continue;
         }
@@ -748,16 +747,9 @@ async fn mark_resource_error(
     .map_err(|e| e.to_string())
 }
 
-async fn ensure_python_ready(python: &PythonSidecar) -> Result<(), String> {
-    if python.check_health().await.is_ok() {
-        return Ok(());
-    }
-    python.wait_for_health(2).await
-}
-
 async fn get_processing_config(
     ai_config: &Arc<Mutex<AIConfigService>>,
-) -> Result<(String, String, ClassificationMode), String> {
+) -> Result<(String, String, ClassificationMode, ProviderConfig), String> {
     let service = ai_config.lock().await;
     let config = service.load()?;
     drop(service);
@@ -772,7 +764,8 @@ async fn get_processing_config(
     let provider_config = config
         .providers
         .get(&provider)
-        .ok_or_else(|| format!("provider {provider} not configured"))?;
+        .ok_or_else(|| format!("provider {provider} not configured"))?
+        .clone();
     if provider_config.api_key.is_empty() {
         return Err(format!("provider {provider} missing api key"));
     }
@@ -780,241 +773,28 @@ async fn get_processing_config(
         return Err(format!("provider {provider} is disabled"));
     }
 
-    Ok((provider, model, config.classification_mode))
+    Ok((provider, model, config.classification_mode, provider_config))
 }
 
-async fn request_summary(
-    python: &PythonSidecar,
-    provider: &str,
-    model: &str,
-    content: &str,
-    user_note: Option<&str>,
-    file_path: Option<&str>,
-    resource_subtype: Option<&str>,
-) -> Result<String, String> {
-    let url = format!("{}/agent/summary", python.get_base_url());
-    let request = SummaryRequest {
-        provider,
-        model,
-        content,
-        user_note,
-        max_length: SUMMARY_MAX_LENGTH,
-        file_path,
-        resource_subtype,
-    };
-
-    let response = python
-        .client
-        .post(url)
-        .json(&request)
-        .send()
-        .await
-        .map_err(|e| format!("summary request failed: {e}"))?
-        // 将 HTTP 协议层面的“业务失败”（状态码 400-599）强制转换为 Rust 代码层面的 Result::Err
-        .error_for_status()
-        .map_err(|e| format!("summary request failed: {e}"))?
-        // 读取字节流
-        // 解析JSON
-        // 匹配字段
-        // 构造SummaryResponse
-        .json::<SummaryResponse>()
-        .await
-        .map_err(|e| format!("summary response invalid: {e}"))?;
-
-    Ok(response.summary)
+fn resolve_resource_path(app_data_dir: &Path, file_path: &str) -> String {
+    let path = Path::new(file_path);
+    if path.is_absolute() {
+        return path.to_string_lossy().to_string();
+    }
+    app_data_dir.join(path).to_string_lossy().to_string()
 }
 
-async fn request_embed(
-    python: &PythonSidecar,
-    node_id: i64,
-    embedding_type: EmbeddingType,
-    text: &str,
-    chunk: bool,
-) -> Result<EmbedResponse, String> {
-    let url = format!("{}/agent/embedding", python.get_base_url());
-    let request = EmbedRequest {
-        node_id,
-        text,
-        embedding_type,
-        replace: true,
-        chunk,
-    };
-
-    python
-        .client
-        .post(url)
-        .json(&request)
-        .send()
-        .await
-        .map_err(|e| format!("embedding request failed: {e}"))?
-        .error_for_status()
-        .map_err(|e| format!("embedding request failed: {e}"))?
-        .json::<EmbedResponse>()
-        .await
-        .map_err(|e| format!("embedding response invalid: {e}"))
+fn build_image_preview(text: &str) -> String {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    trimmed.chars().take(200).collect()
 }
 
-async fn request_delete_embedding(
-    python: &PythonSidecar,
-    node_id: i64,
-    embedding_type: EmbeddingType,
-) -> Result<(), String> {
-    let url = format!("{}/agent/embedding/delete", python.get_base_url());
-    let request = DeleteEmbeddingRequest {
-        node_id,
-        embedding_type,
-    };
-
-    python
-        .client
-        .post(url)
-        .json(&request)
-        .send()
-        .await
-        .map_err(|e| format!("embedding delete failed: {e}"))?
-        .error_for_status()
-        .map_err(|e| format!("embedding delete failed: {e}"))?;
-
-    Ok(())
-}
-
-async fn request_classify(
-    python: &PythonSidecar,
-    provider: &str,
-    model: &str,
-    summary: &str,
-    candidates: Vec<TopicCandidate>,
-) -> Result<ClassifyTopicResponse, String> {
-    let url = format!("{}/agent/classify", python.get_base_url());
-    let request = ClassifyTopicRequest {
-        provider: provider.to_string(),
-        model: model.to_string(),
-        resource_summary: summary.to_string(),
-        candidates,
-    };
-
-    python
-        .client
-        .post(url)
-        .json(&request)
-        .send()
-        .await
-        .map_err(|e| format!("classify request failed: {e}"))?
-        .error_for_status()
-        .map_err(|e| format!("classify request failed: {e}"))?
-        .json::<ClassifyTopicResponse>()
-        .await
-        .map_err(|e| format!("classify response invalid: {e}"))
-}
-
-#[derive(Debug, Serialize)]
-struct SummaryRequest<'a> {
-    provider: &'a str,
-    model: &'a str,
-    content: &'a str,
-    user_note: Option<&'a str>,
-    max_length: i32,
-    file_path: Option<&'a str>,
-    resource_subtype: Option<&'a str>,
-}
-
-#[derive(Debug, Deserialize)]
-struct SummaryResponse {
-    summary: String,
-}
-
-#[derive(Debug, Serialize)]
-struct EmbedRequest<'a> {
-    node_id: i64,
-    text: &'a str,
-    embedding_type: EmbeddingType,
-    replace: bool,
-    chunk: bool,
-}
-
-#[derive(Debug, Serialize)]
-struct DeleteEmbeddingRequest {
-    node_id: i64,
-    embedding_type: EmbeddingType,
-}
-
-#[derive(Debug, Deserialize)]
-struct EmbedResponse {
-    node_id: i64,
-    embedding_type: EmbeddingType,
-    chunks: Vec<EmbedChunkResult>,
-    dense_embedding_model: Option<String>,
-    sparse_embedding_model: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-struct ParentTopicCandidate {
-    node_id: i64,
-    title: String,
-    summary: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-struct TopicCandidate {
-    node_id: i64,
-    title: String,
-    summary: Option<String>,
-    parents: Vec<ParentTopicCandidate>,
-}
-
-#[derive(Debug, Serialize)]
-struct ClassifyTopicRequest {
-    provider: String,
-    model: String,
-    resource_summary: String,
-    candidates: Vec<TopicCandidate>,
-}
-
-#[derive(Debug, Deserialize)]
-struct NewTopicPayload {
-    title: String,
-    summary: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct AssignPayload {
-    target_topic_id: i64,
-}
-
-#[derive(Debug, Deserialize)]
-struct CreateNewPayload {
-    new_topic: NewTopicPayload,
-    parent_topic_id: Option<i64>,
-}
-
-#[derive(Debug, Deserialize)]
-struct TopicRevisionPayload {
-    topic_id: i64,
-    new_title: Option<String>,
-    new_summary: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct RestructurePayload {
-    topics_to_revise: Vec<TopicRevisionPayload>,
-    new_parent_topic: Option<NewTopicPayload>,
-    reparent_target_ids: Vec<i64>,
-    assign_current_resource_to_parent: Option<bool>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(tag = "action", rename_all = "snake_case")]
-enum ClassifyTopicResponse {
-    Assign {
-        payload: AssignPayload,
-        confidence_score: f64,
-    },
-    CreateNew {
-        payload: CreateNewPayload,
-        confidence_score: f64,
-    },
-    Restructure {
-        payload: RestructurePayload,
-        confidence_score: f64,
-    },
+fn embedding_type_label(embedding_type: EmbeddingType) -> &'static str {
+    match embedding_type {
+        EmbeddingType::Summary => "summary",
+        EmbeddingType::Content => "content",
+    }
 }

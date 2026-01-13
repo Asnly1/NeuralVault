@@ -3,9 +3,13 @@
 ## 总览
 
 - Rust 负责 SQLite、Node/Edge、文件解析与 AI Pipeline 调度。
-- Python Sidecar 无状态：摘要、Embedding、主题分类、Qdrant 写入。
+- AI 逻辑内置 Rust：Gemini LLM、fastembed-rs、LanceDB（内嵌）。
+- LanceDB 运行在进程内，无需单独服务或端口。
 - 统一数据模型：`nodes` + `edges`，覆盖 topic/task/resource。
-
+- Qdrant 相关代码视为遗留待清理，本文件按 LanceDB 目标形态描述。
+- dense模型选用BAAI/bge-m3量化版本和Qdrant/clip-ViT-B-32-text，image模型选用Qdrant/clip-ViT-B-32-vision
+- Embedding别的资源时，只使用bge-m3量化版本；但是在Embedding Image类型时，用bge-m3embedding计算OCR出来的文本，用clip-ViT-B-32-vision计算Image的向量。
+- 在每次搜索时，实时计算bge-m3的embedding和clip-ViT-B-32-text的embedding，然后进行搜索
 ---
 
 ## 目录结构（关键）
@@ -16,10 +20,17 @@ src-tauri/
 │   ├── lib.rs               # 应用组装与启动
 │   ├── app_state.rs         # 全局状态
 │   ├── error.rs             # 错误类型定义
-│   ├── sidecar.rs           # Python Sidecar
+│   ├── sidecar.rs           # Python Sidecar（遗留，未接入）
 │   ├── services/
-│   │   ├── ai_config.rs     # API Key 配置
-│   │   └── ai_pipeline.rs   # Rust AI 队列与管线
+│   │   ├── ai_config.rs     # API Key + VectorConfig 配置
+│   │   ├── ai_pipeline.rs   # Rust AI 队列与管线
+│   │   ├── qdrant_sidecar.rs# Qdrant 进程管理（遗留，待移除）
+│   │   └── ai/              # Rust AI 服务实现
+│   │       ├── llm.rs       # Gemini LLM（流式 + 结构化输出）
+│   │       ├── embedding.rs # fastembed + text-splitter + LanceDB
+│   │       ├── agent.rs     # Summary + Topic 分类
+│   │       ├── search.rs    # LanceDB Hybrid Search
+│   │       └── types.rs     # AI DTO
 │   ├── db/
 │   │   ├── pool.rs          # SQLx 连接池
 │   │   ├── types.rs         # 节点/边/枚举/结构体
@@ -33,7 +44,6 @@ src-tauri/
 │   │   ├── dashboard.rs     # Dashboard 数据
 │   │   ├── edges.rs         # 关系连接
 │   │   ├── nodes.rs         # 节点通用操作（收藏/审核）
-│   │   ├── python.rs        # Python 状态检查
 │   │   ├── resources.rs     # 资源捕获/解析
 │   │   ├── search.rs        # 语义搜索与精确搜索
 │   │   ├── tasks.rs         # 任务节点
@@ -53,13 +63,10 @@ src-tauri/
 ## 启动流程（`lib.rs`）
 
 1. 初始化应用数据目录与 SQLite 连接池。
-2. 初始化 `AIConfigService`（加密存储 API Key）。
-3. 启动 Python Sidecar，并在后台等待健康检查结果。
+2. 初始化 `AIConfigService`（加密存储 API Key / VectorConfig）。
+3. 初始化 `AiServices`（Embedding / LLM / Agent / Search）。
 4. 初始化 `AiPipeline` 队列并写入 `AppState`。
 5. 注册 Tauri 命令与窗口事件。
-
-关键事件：
-- `python-status`：Sidecar ready / error。
 
 ---
 
@@ -68,7 +75,7 @@ src-tauri/
 ```rust
 pub struct AppState {
     pub db: DbPool,
-    pub python: Arc<PythonSidecar>,
+    pub ai: Arc<AiServices>,
     pub ai_config: Arc<Mutex<AIConfigService>>,
     pub ai_pipeline: Arc<AiPipeline>,
 }
@@ -76,12 +83,58 @@ pub struct AppState {
 
 ---
 
-## Python Sidecar（`sidecar.rs`）
+## LanceDB（内嵌向量库）
 
-- 启动命令：`uv run python -m app.main --port <port> --qdrant-path <path>`
-- 动态分配端口，`get_base_url()` 提供给 Rust 请求。
-- `check_health()` / `wait_for_health()` 进行健康检查。
-- 主窗口销毁时调用 `shutdown()` 关闭进程。
+- 连接路径：本地目录（如 `${app_data_dir}/lancedb`）。
+- 运行方式：同进程内嵌，无需端口、无需 sidecar。
+- 向量列：Arrow `FixedSizeList<Float32>`。
+  - Dense 向量维度：1024
+  - Image 向量维度：512
+- 使用 FTS 索引（`chunk_text`）以支持 Hybrid Search（文本检索 + 向量检索）。
+
+---
+
+## AI 配置（`ai_config.enc`）
+
+配置由 `AIConfigService` 加密存储，主要包含：
+
+- `providers`: 各 LLM provider 的 `api_key` / `base_url` / `enabled`。
+- `processing_provider` / `processing_model`: Pipeline 使用的默认 provider/model。
+- `classification_mode`: `manual` 或 `aggressive`。
+- `vector_config`（建议字段）：
+  - `lancedb_path`, `lancedb_table_name`
+  - `dense_embedding_model`, `image_embedding_model`
+  - `dense_vector_size`, `image_vector_size`
+  - `chunk_size`, `chunk_overlap`
+
+---
+
+## AI 服务（`services/ai/*`）
+
+### LLM（`llm.rs`）
+
+- Gemini REST：`streamGenerateContent`（SSE 流式）+ `generateContent`（结构化 JSON）。
+- 支持文件上传（resumable upload），等待文件 `ACTIVE` 后再调用模型。
+- `thinking_effort` -> Gemini `thinkingLevel`，流式时可包含 thought delta。
+
+### Embedding（`embedding.rs`）
+
+- `fastembed-rs`：
+  - Dense: `BAAI/bge-m3`（1024）
+  - Image: `Qdrant/clip-ViT-B-32-vision`（512）
+- 使用 Hugging Face tokenizer（`BAAI/bge-m3`）+ `text-splitter` 做分段与 token 计数。
+- LanceDB 表保存向量与元数据；不再计算 sparse embedding。
+- `embedding_type` 仍区分 `summary` / `content`。
+
+### Agent（`agent.rs`）
+
+- Summary：非文本资源优先文件上传；上传失败时回退到文本。
+- Topic 分类：使用结构化 JSON 输出（assign / create_new / restructure）。
+
+### Search（`search.rs`）
+
+- Hybrid Search：LanceDB FTS + dense 向量检索，`execute_hybrid` 融合。
+- 若 FTS 不可用，可退化为纯向量检索。
 
 ---
 
@@ -99,7 +152,7 @@ pub struct AppState {
    - PDF：文本优先，失败后 PDFium + OCR。
 6. 写入 `nodes.file_content` / `nodes.file_hash`。
 7. 触发 `parse-progress` 事件。
-8. 内容存在则入队 AI Pipeline。
+8. 内容存在或有 file_path 则入队 AI Pipeline（文件上传优先）。
 
 ### 资源命令
 
@@ -123,18 +176,21 @@ pub struct AppState {
 
 ### 处理步骤
 
-1. `embedding_status = pending`，`processing_stage = embedding`。
-2. 调用 `/agent/summary` 更新 `nodes.summary`。
-3. 调用 `/agent/embedding` 两次：
-   - `summary`：不切分（chunk=false）。
-   - `content`：按 SentenceSplitter 切分（chunk=true）。
-   - 先按 `embedding_type` 清理旧 `context_chunks`。
-   - 写入新的 `context_chunks`（含 `embedding_type`、`dense_embedding_model`、`sparse_embedding_model`）。
-4. `embedding_status = synced`，`processing_stage = done`。
-5. 调用 `/agent/classify`：
-   - 用 Summary 在 Qdrant 搜索 Top-10 相似资源（阈值 0.7）。
-   - 获取候选 Topic 及其父级 Topic 作为上下文输入。
-   - 结构化决策：assign / create_new / restructure。
+1. `embedding_status = pending`。
+2. 读取 `processing_provider` / `processing_model` / `classification_mode`。
+3. Summary：
+   - 基于 `content + user_note` 生成摘要。
+   - 非文本资源优先文件上传；失败则回退文本。
+4. `processing_stage = embedding` 后进行 embedding。
+5. Embedding：
+   - 清理旧 `context_chunks` + LanceDB 记录（按 `node_id` + `embedding_type`）。
+   - `summary`：不切分；`content`：使用 `text-splitter` 分段。
+   - 写入 LanceDB（dense 向量；image 向量按资源类型可选）并回写 `context_chunks`。
+6. `embedding_status = synced`，`processing_stage = done`。
+7. Topic 分类：
+   - 用 Summary 做 LanceDB hybrid search（Top-10，阈值 0.7）。
+   - 构建候选 Topic + 父级上下文。
+   - LLM 结构化输出：assign / create_new / restructure。
    - 去重：新 Topic 创建前做标题相似性检查。
    - 插入 `contains` 边（DAG 环检测，失败则拒绝）。
    - `classification_mode` 决定 review_status（manual 全部进 Inbox；aggressive 置信度≥0.8 自动 reviewed）。
@@ -160,7 +216,7 @@ pub struct AppState {
 | `processing_hash` | 正在处理的内容 hash |
 | `processing_stage` | todo / embedding / done |
 | `last_embedding_error` | 最后一次错误信息 |
-| `done_date` | 任务完成日期（仅 task） |
+| `done_date` | 任务完成日期（仅 task，保持现有时间类型） |
 
 ### edges
 
@@ -170,7 +226,8 @@ pub struct AppState {
 ### context_chunks
 
 - `node_id` + `embedding_type`（summary/content）。
-- 每个 chunk 记录 `qdrant_uuid`、`embedding_hash`、`dense_embedding_model`、`sparse_embedding_model` 等。
+- 记录 `embedding_hash`、`dense_embedding_model`、`image_embedding_model` 等。
+- 保存 LanceDB 行 ID（若字段名仍为 `qdrant_uuid`，仅属历史残留）。
 
 ### node_revision_logs
 
@@ -254,7 +311,7 @@ API Key 管理、processing provider/model 配置、chat 调用。
 
 ### search_semantic
 
-语义搜索，调用 Python `/search/hybrid` 进行混合检索。
+语义搜索，调用 Rust LanceDB hybrid search（FTS + dense 向量）。
 
 ```rust
 #[tauri::command]
@@ -323,12 +380,11 @@ pub enum ClipboardContent {
 ## 事件
 
 - `parse-progress`：文件解析/OCR 进度。
-- `python-status`：Python Sidecar 启动状态。
 
 ---
 
 ## 说明
 
-- Rust 写入 SQLite；Python 仅写入 Qdrant。
+- Rust 写入 SQLite 与 LanceDB（无 Python sidecar 依赖）。
 - AI Pipeline 依赖 processing provider/model 已配置且启用。
-- 目前队列为内存队列，应用重启会清空；Python ready 后会扫描 `embedding_status=pending/dirty/error` 或 `processing_stage!=done` 且内容非空的资源并重新入队。
+- 目前队列为内存队列，应用重启会清空；启动后会扫描 `embedding_status=pending/dirty/error` 或 `processing_stage!=done` 且内容非空的资源并重新入队。

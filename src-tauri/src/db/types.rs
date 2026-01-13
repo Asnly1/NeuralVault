@@ -299,7 +299,9 @@ pub struct SessionBindingRecord {
 pub struct EmbedChunkResult {
     pub chunk_text: String,
     pub chunk_index: i32,
-    pub qdrant_uuid: String,
+    pub vector_id: String,
     pub embedding_hash: String,
     pub token_count: Option<i32>,
+    pub vector_kind: String,
+    pub embedding_model: String,
 }

@@ -5,7 +5,6 @@
 mod ai_config;
 mod clipboard;
 mod dashboard;
-mod python;
 mod chat;
 mod edges;
 mod nodes;
@@ -63,7 +62,6 @@ macro_rules! simple_void_command {
 pub use ai_config::*;
 pub use clipboard::*;
 pub use dashboard::*;
-pub use python::*;
 pub use chat::*;
 pub use edges::*;
 pub use nodes::*;

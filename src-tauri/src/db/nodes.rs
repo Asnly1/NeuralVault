@@ -359,23 +359,21 @@ pub async fn insert_context_chunks(
     node_id: i64,
     embedding_type: EmbeddingType,
     chunks: &[super::EmbedChunkResult],
-    dense_embedding_model: Option<&str>,
-    sparse_embedding_model: Option<&str>,
 ) -> Result<(), sqlx::Error> {
     for chunk in chunks {
         sqlx::query(
             "INSERT INTO context_chunks \
-             (node_id, embedding_type, chunk_text, chunk_index, qdrant_uuid, embedding_hash, dense_embedding_model, sparse_embedding_model, embedding_at, token_count) \
+             (node_id, embedding_type, vector_kind, chunk_text, chunk_index, vector_id, embedding_hash, embedding_model, embedding_at, token_count) \
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)",
         )
         .bind(node_id)
         .bind(embedding_type)
+        .bind(&chunk.vector_kind)
         .bind(&chunk.chunk_text)
         .bind(chunk.chunk_index)
-        .bind(&chunk.qdrant_uuid)
+        .bind(&chunk.vector_id)
         .bind(&chunk.embedding_hash)
-        .bind(dense_embedding_model)
-        .bind(sparse_embedding_model)
+        .bind(&chunk.embedding_model)
         .bind(chunk.token_count)
         .execute(pool)
         .await?;

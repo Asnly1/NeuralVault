@@ -16,9 +16,9 @@ pub struct SemanticSearchResult {
     pub score: f64,
 }
 
-/// 语义搜索（调用 Python /search/hybrid）
+/// 语义搜索
 ///
-/// 使用 Qdrant 进行 dense + sparse 混合检索（RRF 融合）
+/// 使用 LanceDB 进行混合检索（FTS + dense 向量）
 #[tauri::command]
 pub async fn search_semantic(
     state: tauri::State<'_, AppState>,
@@ -27,57 +27,15 @@ pub async fn search_semantic(
     embedding_type: Option<String>,
     limit: Option<i32>,
 ) -> AppResult<Vec<SemanticSearchResult>> {
-    let python = &state.python;
+    let embedding_type = embedding_type.unwrap_or_else(|| "content".to_string());
+    let limit = limit.unwrap_or(20).max(1) as u64;
 
-    // 构建请求体
-    let mut payload = serde_json::json!({
-        "query": query,
-        "embedding_type": embedding_type.unwrap_or_else(|| "content".to_string()),
-        "limit": limit.unwrap_or(20),
-    });
-
-    // 如果有 scope_node_ids，添加到请求中（Local scope）
-    if let Some(node_ids) = &scope_node_ids {
-        payload["node_ids"] = serde_json::json!(node_ids);
-    }
-
-    // 调用 Python 搜索 API
-    let base_url = python.get_base_url();
-    let url = format!("{}/search/hybrid", base_url);
-
-    let response = python
-        .client
-        .post(&url)
-        .json(&payload)
-        .send()
+    let search_response = state
+        .ai
+        .search
+        .search_hybrid(&query, &embedding_type, scope_node_ids.as_deref(), limit)
         .await
-        .map_err(|e| crate::AppError::Custom(format!("Failed to call search API: {}", e)))?;
-
-    if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-        return Err(crate::AppError::Custom(format!(
-            "Search API returned {}: {}",
-            status, body
-        )));
-    }
-
-    #[derive(Deserialize)]
-    struct SearchResponse {
-        results: Vec<SearchResultItem>,
-    }
-
-    #[derive(Deserialize)]
-    struct SearchResultItem {
-        node_id: i64,
-        chunk_index: i32,
-        chunk_text: String,
-        score: f64,
-    }
-
-    let search_response: SearchResponse = response.json().await.map_err(|e| {
-        crate::AppError::Custom(format!("Failed to parse search response: {}", e))
-    })?;
+        .map_err(|e| crate::AppError::Custom(format!("Search failed: {}", e)))?;
 
     // 应用 Scope 权重
     // Local scope (有 scope_node_ids): × 1.5
@@ -85,7 +43,6 @@ pub async fn search_semantic(
     let weight = if scope_node_ids.is_some() { 1.5 } else { 1.0 };
 
     let results: Vec<SemanticSearchResult> = search_response
-        .results
         .into_iter()
         .map(|r| SemanticSearchResult {
             node_id: r.node_id,

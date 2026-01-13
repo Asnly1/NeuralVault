@@ -3,14 +3,13 @@ mod commands;
 mod db;
 mod error;
 mod services;
-mod sidecar;
 mod utils;
 mod window;
 
 use std::fs;
 use std::sync::Arc;
 
-use tauri::{Emitter, Manager};
+use tauri::{Manager};
 use tokio::sync::Mutex;
 
 pub use app_state::AppState;
@@ -24,7 +23,7 @@ pub use commands::{
     update_resource_content_command, update_resource_title_command, update_resource_summary_command,
     soft_delete_resource_command, hard_delete_resource_command,
     link_nodes_command, unlink_nodes_command, list_target_nodes_command, list_source_nodes_command,
-    read_clipboard, check_python_health, is_python_running, get_ai_config_status, save_api_key,
+    read_clipboard, get_ai_config_status, save_api_key,
     remove_api_key, set_processing_provider_model, set_classification_mode, send_chat_message, create_chat_session, get_chat_session,
     list_chat_sessions, update_chat_session_command, delete_chat_session, create_chat_message,
     list_chat_messages_command, list_message_attachments_command, list_session_bound_resources_command,
@@ -43,7 +42,6 @@ pub use commands::{
     list_node_revision_logs, convert_resource_to_topic_command, convert_resource_to_task_command,
     convert_topic_to_task_command, convert_task_to_topic_command,
 };
-pub use sidecar::PythonSidecar;
 pub use window::{hide_hud, toggle_hud};
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -78,94 +76,42 @@ pub fn run() {
             let ai_config_service = services::AIConfigService::new(&app_dir)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
-            // ========== Python Sidecar 初始化 ==========
-            let python_sidecar = Arc::new(PythonSidecar::new());
-            // 名称含义： Arc = Atomic Reference Counting。
-            // 内存模型： 当你用 Arc::new(data) 时，数据会被分配在堆（Heap）上。除了数据本身，堆上还会维护一个原子计数器（Atomic Counter）。
-            // 所有权机制： Rust 的核心规则是“一个值只能有一个所有者”。但在多线程场景下（比如多个 Tauri Command 都要访问同一个数据库连接池），你需要多重所有权。
-            // 每次调用 Arc::clone(&ptr)，原子计数器 +1（这是一个浅拷贝，只复制指针和增加计数，不复制底层数据，开销极小）。
-            // 每次 Arc 离开作用域被 drop，原子计数器 -1。
-            // 当计数器归零时，底层数据被物理释放。
+            let ai_services = Arc::new(
+                tauri::async_runtime::block_on(services::AiServices::new(&ai_config_service))
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?,
+            );
 
-            // 启动 Python 进程（非阻塞）
-            python_sidecar.start(app)?;
-            
-            // 在后台等待 Python 就绪（不阻塞 UI 显示）
-            // 需要先 clone pool，因为下面会把 pool 移动到 AppState 中
-            let python_for_health = python_sidecar.clone();
-            let app_handle = app.handle().clone();
-
-            // 初始化好的 AppState（包含数据库连接池、Python sidecar 和 AI 配置服务）注入到 Tauri 的全局管理器中
-            // 注意：此时不等待 Python 健康检查，让 UI 先显示
+            // 初始化好的 AppState（包含数据库连接池和 AI 服务）注入到 Tauri 的全局管理器中
             let ai_config = Arc::new(Mutex::new(ai_config_service));
             let ai_pipeline = Arc::new(services::AiPipeline::new(
                 pool.clone(),
-                python_sidecar.clone(),
+                ai_services.clone(),
                 ai_config.clone(),
+                app_dir.clone(),
             ));
 
             app.manage(AppState {
                 db: pool,
-                python: python_sidecar.clone(),
+                ai: ai_services.clone(),
                 ai_config,
                 ai_pipeline,
             });
-            // move 关键字强制将该闭包（closure）内部使用到的外部变量（如 client, url, app_handle）的所有权（Ownership） 从外部环境"移动"到这个异步任务内部
+
+            let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                println!("[Tauri] Waiting for Python backend in background...");
-                match python_for_health.wait_for_health(20).await {
-                    Ok(_) => {
-                        println!("[Tauri] Python backend is ready");
-                        // 通知前端 Python 已就绪
-                        let _ = app_handle.emit("python-status", serde_json::json!({
-                            "status": "ready"
-                        }));
-
-                        if let Some(state) = app_handle.try_state::<AppState>() {
-                            let config_service = state.ai_config.lock().await;
-                            let config = config_service.load();
-                            drop(config_service);
-                            if let Ok(config) = config {
-                                let client = python_for_health.client.clone();
-                                let base_url = python_for_health.get_base_url();
-                                for (provider, provider_config) in config.providers {
-                                    if provider_config.api_key.is_empty() || !provider_config.enabled {
-                                        continue;
-                                    }
-                                    let payload = serde_json::json!({
-                                        "api_key": provider_config.api_key,
-                                        "base_url": provider_config.base_url,
-                                    });
-                                    let url = format!("{}/providers/{}", base_url, provider);
-                                    if let Err(err) = client.put(&url).json(&payload).send().await {
-                                        eprintln!("[Tauri] Failed to sync provider {}: {}", provider, err);
-                                    }
-                                }
-                            }
-
-                            let db = state.db.clone();
-                            let pipeline = state.ai_pipeline.clone();
-                            match pipeline.enqueue_pending_resources(&db).await {
-                                Ok(count) => {
-                                    println!("[Tauri] Requeued {} resource(s) after restart", count);
-                                }
-                                Err(err) => {
-                                    eprintln!(
-                                        "[Tauri] Failed to requeue resources after restart: {}",
-                                        err
-                                    );
-                                }
-                            }
+                if let Some(state) = app_handle.try_state::<AppState>() {
+                    let db = state.db.clone();
+                    let pipeline = state.ai_pipeline.clone();
+                    match pipeline.enqueue_pending_resources(&db).await {
+                        Ok(count) => {
+                            println!("[Tauri] Requeued {} resource(s) after restart", count);
                         }
-
-                    }
-                    Err(e) => {
-                        eprintln!("[Tauri] Python backend failed to start: {}", e);
-                        // 通知前端 Python 启动失败
-                        let _ = app_handle.emit("python-status", serde_json::json!({
-                            "status": "error",
-                            "message": e.to_string()
-                        }));
+                        Err(err) => {
+                            eprintln!(
+                                "[Tauri] Failed to requeue resources after restart: {}",
+                                err
+                            );
+                        }
                     }
                 }
             });
@@ -214,8 +160,6 @@ pub fn run() {
             get_active_tasks,
             update_resource_content_command,
             update_resource_title_command,
-            check_python_health,
-            is_python_running,
             get_ai_config_status,
             save_api_key,
             remove_api_key,
@@ -266,19 +210,6 @@ pub fn run() {
             convert_topic_to_task_command,
             convert_task_to_topic_command
         ])
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::Destroyed = event {
-                // 当主窗口关闭时，关闭 Python sidecar
-                if let Some(state) = window.try_state::<AppState>() {
-                    let python = state.python.clone();
-                    tauri::async_runtime::spawn(async move {
-                        // Tokio 维护了一个专门用来处理笨重任务的线程池（Blocking Thread Pool）。
-                        //spawn_blocking 会把花括号里的代码扔到那个池子里去跑，让核心线程继续去接待别的请求
-                        let _ = python.shutdown().await;
-                    });
-                }
-            }
-        })
         // 启动应用
         // tauri::generate_context!()：这个宏会读取你的 tauri.conf.json 配置文件，并在编译时将其转化为代码。它告诉构建器应用的名称、版本、图标等信息。
         // 一旦调用 .run()，程序就会进入事件循环（Event Loop），直到你关闭窗口，程序才会退出。

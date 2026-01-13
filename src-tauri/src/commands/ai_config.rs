@@ -3,8 +3,9 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tauri::{AppHandle, State, Emitter};
-use futures_util::StreamExt;
+use std::sync::Arc;
+use tauri::{AppHandle, Emitter, State};
+use tokio::sync::Mutex;
 
 use crate::{
     app_state::AppState,
@@ -14,8 +15,7 @@ use crate::{
         list_message_attachments_with_node, list_session_bound_resources,
         update_chat_session, update_chat_message_contents,
     },
-    services::{ClassificationMode, ProviderConfig},
-    sidecar::PythonSidecar,
+    services::{ChatMessage, ChatRole, ChatStreamEvent, ClassificationMode},
     utils::resolve_file_path,
 };
 
@@ -70,53 +70,6 @@ pub struct ChatStreamAck {
     pub ok: bool,
 }
 
-async fn sync_provider_config(
-    python: &PythonSidecar,
-    provider: &str,
-    config: &ProviderConfig,
-) -> Result<(), String> {
-    let response = python
-        .client
-        .put(format!("{}/providers/{}", python.get_base_url(), provider))
-        .json(&serde_json::json!({
-            "api_key": config.api_key,
-            "base_url": config.base_url,
-        }))
-        .send()
-        .await
-        .map_err(|e| format!("Failed to sync provider to Python: {}", e))?;
-
-    if response.status().is_success() {
-        Ok(())
-    } else {
-        Err(format!(
-            "Python provider sync failed: {}",
-            response.status()
-        ))
-    }
-}
-
-async fn remove_provider_config(
-    python: &PythonSidecar,
-    provider: &str,
-) -> Result<(), String> {
-    let response = python
-        .client
-        .delete(format!("{}/providers/{}", python.get_base_url(), provider))
-        .send()
-        .await
-        .map_err(|e| format!("Failed to remove provider from Python: {}", e))?;
-
-    if response.status().is_success() {
-        Ok(())
-    } else {
-        Err(format!(
-            "Python provider remove failed: {}",
-            response.status()
-        ))
-    }
-}
-
 // ========== Commands ==========
 
 /// 获取 AI 配置状态（不返回明文 key）
@@ -157,23 +110,14 @@ pub async fn save_api_key(
     request: SetApiKeyRequest,
 ) -> Result<(), String> {
     let config_service = state.ai_config.lock().await;
-    config_service.set_api_key(&request.provider, &request.api_key, request.base_url.clone())?;
-    let provider_config = config_service
-        .get_provider_config(&request.provider)?
-        .ok_or_else(|| format!("Provider {} not configured", request.provider))?;
-    drop(config_service);
-
-    sync_provider_config(&state.python, &request.provider, &provider_config).await
+    config_service.set_api_key(&request.provider, &request.api_key, request.base_url.clone())
 }
 
 /// 删除 API Key
 #[tauri::command]
 pub async fn remove_api_key(state: State<'_, AppState>, provider: String) -> Result<(), String> {
     let config_service = state.ai_config.lock().await;
-    config_service.remove_provider(&provider)?;
-    drop(config_service);
-
-    remove_provider_config(&state.python, &provider).await
+    config_service.remove_provider(&provider)
 }
 
 /// 设置processing provider和model
@@ -200,7 +144,7 @@ pub async fn set_classification_mode(
     config_service.set_classification_mode(mode)
 }
 
-/// 发送聊天消息（通过 Python 调用 LLM）
+/// 发送聊天消息（调用内置 LLM）
 #[tauri::command]
 pub async fn send_chat_message(
     app: AppHandle,
@@ -323,206 +267,170 @@ pub async fn send_chat_message(
         }
     }
 
-    let mut python_messages: Vec<serde_json::Value> = Vec::with_capacity(messages.len() * 2 + 1);
+    let mut chat_messages: Vec<ChatMessage> = Vec::with_capacity(messages.len() * 2 + 1);
     if !context_images.is_empty() || !context_files.is_empty() || !context_lines.is_empty() {
         let content = if context_lines.is_empty() {
             "Context files attached.".to_string()
         } else {
             format!("Context resources:\n{}", context_lines.join("\n"))
         };
-        python_messages.push(serde_json::json!({
-            "role": "user",
-            "content": content,
-            "images": context_images,
-            "files": context_files,
-        }));
+        let mut message = ChatMessage::new(ChatRole::User, content);
+        message.images = context_images;
+        message.files = context_files;
+        chat_messages.push(message);
     }
     for message in messages {
         let (images, files) = attachment_map.remove(&message.message_id).unwrap_or_default();
         if !message.user_content.is_empty() {
-            python_messages.push(serde_json::json!({
-                "role": "user",
-                "content": message.user_content,
-                "images": images,
-                "files": files,
-            }));
+            let mut chat_message = ChatMessage::new(ChatRole::User, message.user_content.clone());
+            chat_message.images = images;
+            chat_message.files = files;
+            chat_messages.push(chat_message);
         }
         if let Some(assistant_content) = message.assistant_content.as_deref() {
             if !assistant_content.is_empty() {
-                python_messages.push(serde_json::json!({
-                    "role": "assistant",
-                    "content": assistant_content,
-                    "images": [],
-                    "files": [],
-                }));
+                chat_messages.push(ChatMessage::new(ChatRole::Assistant, assistant_content));
             }
         }
     }
 
-    // 3. 调用 Python /chat/completions
-    let python_request = serde_json::json!({
-        "provider": request.provider,
-        "model": request.model,
-        "messages": python_messages,
-        "thinking_effort": request.thinking_effort,
-    });
+    let session_id = request.session_id;
+    let provider = request.provider.clone();
+    let model = request.model.clone();
+    let thinking_effort = request.thinking_effort.clone();
 
-    let python_base_url = state.python.get_base_url();
-    let response = state
-        .python
-        .stream_client
-        .post(&format!("{}/chat/completions", python_base_url))
-        .json(&python_request)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to send request to Python: {}", e))?;
+    let assistant_accum = Arc::new(Mutex::new(String::new()));
+    let thinking_accum = Arc::new(Mutex::new(String::new()));
+    let usage_tokens: Arc<Mutex<Option<(i64, i64, i64, i64)>>> = Arc::new(Mutex::new(None));
+    let stream_app = app.clone();
 
-    if !response.status().is_success() {
-        let status = response.status();
-        let error_text = response
-            .text()
-            .await
-            .unwrap_or_else(|_| "Unknown error".to_string());
-        return Err(format!("Python API error ({}): {}", status, error_text));
-    }
-
-    let mut stream = response.bytes_stream();
-    let mut buffer: Vec<u8> = Vec::new();
-    let mut assistant_content: Option<String> = None;
-    let mut assistant_accum = String::new();
-    let mut thinking_content: Option<String> = None;
-    let mut thinking_accum = String::new();
-    let mut usage_tokens: Option<(i64, i64, i64, i64)> = None;
-    let mut done = false;
-
-    while let Some(chunk_result) = stream.next().await {
-        let bytes = chunk_result
-            .map_err(|e| format!("Stream read error: {}", e))?;
-        buffer.extend_from_slice(&bytes);
-
-        while let Some(pos) = buffer.iter().position(|&b| b == b'\n') {
-            let line_bytes = &buffer[..pos];
-            let line = String::from_utf8_lossy(line_bytes).to_string();
-            buffer.drain(..pos + 1);
-
-            let data = line.trim();
-            if data.is_empty() {
-                continue;
-            }
-
-            let event: serde_json::Value = serde_json::from_str(data)
-                .map_err(|e| format!("Failed to parse SSE payload: {}", e))?;
-            let event_type = event
-                .get("type")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-
-            match event_type {
-                "answer_delta" => {
-                    if let Some(delta) = event.get("delta").and_then(|v| v.as_str()) {
-                        assistant_accum.push_str(delta);
+    let stream_result = state
+        .ai
+        .llm
+        .stream_chat(
+            &provider,
+            &model,
+            &provider_config,
+            &chat_messages,
+            thinking_effort.as_deref(),
+            {
+                let assistant_accum = assistant_accum.clone();
+                let thinking_accum = thinking_accum.clone();
+                let usage_tokens = usage_tokens.clone();
+                let stream_app = stream_app.clone();
+                move |event| {
+                    let assistant_accum = assistant_accum.clone();
+                    let thinking_accum = thinking_accum.clone();
+                    let usage_tokens = usage_tokens.clone();
+                    let stream_app = stream_app.clone();
+                    async move {
+                match event {
+                    ChatStreamEvent::AnswerDelta(delta) => {
+                        let mut guard = assistant_accum
+                            .lock()
+                            .await;
+                        guard.push_str(&delta);
                         let payload = serde_json::json!({
-                            "session_id": request.session_id,
+                            "session_id": session_id,
                             "type": "answer_delta",
                             "delta": delta,
                         });
-                        let _ = app.emit("chat-stream", payload);
+                        let _ = stream_app.emit("chat-stream", payload);
                     }
-                }
-                "thinking_delta" => {
-                    if let Some(delta) = event.get("delta").and_then(|v| v.as_str()) {
-                        thinking_accum.push_str(delta);
+                    ChatStreamEvent::ThinkingDelta(delta) => {
+                        let mut guard = thinking_accum
+                            .lock()
+                            .await;
+                        guard.push_str(&delta);
                         let payload = serde_json::json!({
-                            "session_id": request.session_id,
+                            "session_id": session_id,
                             "type": "thinking_delta",
                             "delta": delta,
                         });
-                        let _ = app.emit("chat-stream", payload);
+                        let _ = stream_app.emit("chat-stream", payload);
                     }
-                }
-                "answer_full_text" => {
-                    if let Some(full_text) = event.get("full_text").and_then(|v| v.as_str()) {
-                        assistant_content = Some(full_text.to_string());
+                    ChatStreamEvent::AnswerFullText(full_text) => {
+                        let mut guard = assistant_accum
+                            .lock()
+                            .await;
+                        *guard = full_text;
                     }
-                }
-                "thinking_full_text" => {
-                    if let Some(full_text) = event.get("full_text").and_then(|v| v.as_str()) {
-                        thinking_content = Some(full_text.to_string());
+                    ChatStreamEvent::ThinkingFullText(full_text) => {
+                        let mut guard = thinking_accum
+                            .lock()
+                            .await;
+                        *guard = full_text;
                     }
-                }
-                "usage" => {
-                    if let Some(usage_value) = event.get("usage") {
-                        let input_tokens = usage_value
-                            .get("input_tokens")
-                            .and_then(|v| v.as_i64());
-                        let output_tokens = usage_value
-                            .get("output_tokens")
-                            .and_then(|v| v.as_i64());
-                        let reasoning_tokens = usage_value
-                            .get("reasoning_tokens")
-                            .and_then(|v| v.as_i64())
-                            .unwrap_or(0);
-                        let total_tokens = usage_value
-                            .get("total_tokens")
-                            .and_then(|v| v.as_i64());
-                        if let (Some(input), Some(output), Some(total)) =
-                            (input_tokens, output_tokens, total_tokens)
-                        {
-                            usage_tokens = Some((input, output, reasoning_tokens, total));
-                        }
+                    ChatStreamEvent::Usage(usage) => {
+                        let mut guard = usage_tokens
+                            .lock()
+                            .await;
+                        *guard = Some((
+                            usage.input_tokens,
+                            usage.output_tokens,
+                            usage.reasoning_tokens,
+                            usage.total_tokens,
+                        ));
                         let payload = serde_json::json!({
-                            "session_id": request.session_id,
+                            "session_id": session_id,
                             "type": "usage",
-                            "usage": usage_value,
+                            "usage": {
+                                "input_tokens": usage.input_tokens,
+                                "output_tokens": usage.output_tokens,
+                                "reasoning_tokens": usage.reasoning_tokens,
+                                "total_tokens": usage.total_tokens,
+                            }
                         });
-                        let _ = app.emit("chat-stream", payload);
-                        done = true;
-                        break;
+                        let _ = stream_app.emit("chat-stream", payload);
+                    }
+                    ChatStreamEvent::Error(message) => {
+                        let payload = serde_json::json!({
+                            "session_id": session_id,
+                            "type": "error",
+                            "message": message,
+                        });
+                        let _ = stream_app.emit("chat-stream", payload);
+                        return Err("LLM stream error".to_string());
                     }
                 }
-                "error" => {
-                    let payload = serde_json::json!({
-                        "session_id": request.session_id,
-                        "type": "error",
-                        "message": event.get("message"),
-                    });
-                    let _ = app.emit("chat-stream", payload);
-                    return Err("Python stream error".to_string());
+                Ok(())
+                    }
                 }
-                _ => {}
-            }
-        }
-        if done {
-            break;
-        }
+            },
+        )
+        .await;
+
+    if let Err(err) = stream_result {
+        let payload = serde_json::json!({
+            "session_id": session_id,
+            "type": "error",
+            "message": err,
+        });
+        let _ = app.emit("chat-stream", payload);
+        return Err("LLM stream failed".to_string());
     }
 
-    let final_assistant = match assistant_content {
-        Some(text) => Some(text),
-        None => {
-            if assistant_accum.is_empty() {
-                None
-            } else {
-                Some(assistant_accum)
-            }
+    let final_assistant = {
+        let guard = assistant_accum.lock().await;
+        let trimmed = guard.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(guard.clone())
         }
     };
-    let final_thinking = match thinking_content {
-        Some(text) => Some(text),
-        None => {
-            if thinking_accum.is_empty() {
-                None
-            } else {
-                Some(thinking_accum)
-            }
+    let final_thinking = {
+        let guard = thinking_accum.lock().await;
+        let trimmed = guard.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(guard.clone())
         }
-    };
-    let usage = match usage_tokens {
-        Some((input, output, reasoning, total)) => Some((input, output, reasoning, total)),
-        None => None,
     };
 
-    let usage_refs = usage
+    let usage_tokens = *usage_tokens.lock().await;
+    let usage_refs = usage_tokens
         .as_ref()
         .map(|(input, output, reasoning, total)| (input, output, reasoning, total));
 

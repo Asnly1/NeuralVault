@@ -16,6 +16,50 @@ pub struct ProviderConfig {
     pub enabled: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VectorConfig {
+    #[serde(default)]
+    pub lancedb_path: String,
+    #[serde(default)]
+    pub lancedb_table_name: String,
+    pub dense_embedding_model: String,
+    #[serde(default)]
+    pub clip_text_embedding_model: String,
+    pub image_embedding_model: String,
+    pub dense_vector_size: u64,
+    #[serde(default)]
+    pub clip_text_vector_size: u64,
+    pub image_vector_size: u64,
+    pub chunk_size: usize,
+    pub chunk_overlap: usize,
+}
+
+impl Default for VectorConfig {
+    fn default() -> Self {
+        Self {
+            dense_embedding_model: "BAAI/bge-m3".to_string(),
+            clip_text_embedding_model: "Qdrant/clip-ViT-B-32-text".to_string(),
+            image_embedding_model: "Qdrant/clip-ViT-B-32-vision".to_string(),
+            dense_vector_size: 1024,
+            clip_text_vector_size: 512,
+            image_vector_size: 512,
+            chunk_size: 512,
+            chunk_overlap: 50,
+            lancedb_path: String::new(),
+            lancedb_table_name: "neuralvault_vectors".to_string(),
+        }
+    }
+}
+
+impl VectorConfig {
+    fn apply_defaults(&mut self, app_data_dir: &PathBuf) {
+        if self.lancedb_path.trim().is_empty() {
+            let path = app_data_dir.join("lancedb");
+            self.lancedb_path = path.to_string_lossy().to_string();
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ClassificationMode {
@@ -38,6 +82,8 @@ pub struct AIConfigData {
     pub processing_model: Option<String>, // 处理任务（summary/topic）的model
     #[serde(default)]
     pub classification_mode: ClassificationMode,
+    #[serde(default)]
+    pub vector_config: VectorConfig,
 }
 
 impl Default for AIConfigData {
@@ -48,7 +94,14 @@ impl Default for AIConfigData {
             processing_provider: None,
             processing_model: None,
             classification_mode: ClassificationMode::Manual,
+            vector_config: VectorConfig::default(),
         }
+    }
+}
+
+impl AIConfigData {
+    fn apply_defaults(&mut self, app_data_dir: &PathBuf) {
+        self.vector_config.apply_defaults(app_data_dir);
     }
 }
 
@@ -56,6 +109,7 @@ impl Default for AIConfigData {
 pub struct AIConfigService {
     config_path: PathBuf,
     crypto: CryptoService,
+    app_data_dir: PathBuf,
 }
 
 impl AIConfigService {
@@ -64,19 +118,31 @@ impl AIConfigService {
         let crypto = CryptoService::new()?;
         let config_path = app_data_dir.join("ai_config.enc");
 
-        Ok(Self { config_path, crypto })
+        Ok(Self {
+            config_path,
+            crypto,
+            app_data_dir: app_data_dir.clone(),
+        })
+    }
+
+    fn default_config(&self) -> AIConfigData {
+        let mut config = AIConfigData::default();
+        config.apply_defaults(&self.app_data_dir);
+        config
     }
 
     /// 加载配置（如果文件不存在则返回默认配置）
     pub fn load(&self) -> Result<AIConfigData, String> {
         if !self.config_path.exists() {
-            return Ok(AIConfigData::default());
+            return Ok(self.default_config());
         }
 
         let encrypted = fs::read(&self.config_path).map_err(|e| e.to_string())?;
         let decrypted = self.crypto.decrypt(&encrypted)?;
 
-        serde_json::from_slice(&decrypted).map_err(|e| e.to_string())
+        let mut config: AIConfigData = serde_json::from_slice(&decrypted).map_err(|e| e.to_string())?;
+        config.apply_defaults(&self.app_data_dir);
+        Ok(config)
     }
 
     /// 保存配置
@@ -138,6 +204,11 @@ impl AIConfigService {
     pub fn get_provider_config(&self, provider: &str) -> Result<Option<ProviderConfig>, String> {
         let config = self.load()?;
         Ok(config.providers.get(provider).cloned())
+    }
+
+    pub fn get_vector_config(&self) -> Result<VectorConfig, String> {
+        let config = self.load()?;
+        Ok(config.vector_config)
     }
 
     /// 设置processing provider和model

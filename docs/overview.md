@@ -21,34 +21,12 @@ Edge采用DAG模式，即一个Node可以有多个Parent Node，每次插入Edge
 
 技术栈（尽量轻量化）：
     1. 前端： React + Typescript
-    2. 后端： Tauri(Rust) + FastAPI(Python)（处理AI相关，无状态微服务）+ Llamaindex + FastEmbed
-    3. 数据库：SQLite + Qdrant
+    2. 后端： Tauri(Rust)
+    3. 数据库：SQLite + LanceDB
 
 平台依赖（只考虑MacOS + Windows）：
     1. pdfium
     2. libc
-
-TODO：使用Rust代替Python
-    1. fastembed-rs: dense选择BAAI/bge-m3量化版本; sparse选择BAAI/bge-m3量化版本; Image选择Qdrant/clip-ViT-B-32-vision
-    2. qdrant-client
-    3. 自行实现API调用(reqwest + serde)。参考src-python/test/gemini_file_example.py, src-python/test/gemini_stream_multi_example.py, src-python/test/gemini_structure_example.py。
-    4. SentenceSpliter 使用 text-splitter()。使用Hugging Face Tokenizer
-
-Python依赖：
-    requires-python = ">=3.12"
-    dependencies = [
-        "anthropic>=0.75.0",
-        "fastapi>=0.125.0",
-        "fastembed>=0.7.4",
-        "google-genai>=1.56.0",
-        "llama-index-core>=0.14.10",
-        "openai>=2.14.0",
-        "pydantic-settings>=2.12.0",
-        "pyinstaller>=6.17.0",
-        "qdrant-client>=1.16.2",
-        "uvicorn[standard]>=0.38.0",
-        "xai-sdk>=1.5.0",
-    ]
 
 页面：
     1. HUD：一键唤醒（类似Raycast）+ 捕获Resource。同时捕获 Window Title 和 Process Name (如 "Chrome") 和 当前时间 作为 Context
