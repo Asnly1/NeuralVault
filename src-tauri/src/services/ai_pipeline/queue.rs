@@ -7,7 +7,7 @@ use tokio::sync::{mpsc, Mutex};
 use super::processor::process_resource_job;
 use super::AI_QUEUE_BUFFER;
 use crate::db::{list_resources_for_requeue, DbPool};
-use crate::services::{AiServices, AIConfigService};
+use crate::services::{AiServices, AiServicesHandle, AIConfigService};
 
 #[derive(Debug)]
 pub(crate) struct AiPipelineJob {
@@ -23,7 +23,7 @@ pub struct AiPipeline {
 impl AiPipeline {
     pub fn new(
         db: DbPool,
-        ai: Arc<AiServices>,
+        ai: AiServicesHandle,
         ai_config: Arc<Mutex<AIConfigService>>,
         app_data_dir: std::path::PathBuf,
     ) -> Self {
@@ -32,7 +32,25 @@ impl AiPipeline {
         let inflight_worker = inflight.clone();
 
         tauri::async_runtime::spawn(async move {
-            run_pipeline(receiver, inflight_worker, db, ai, ai_config, app_data_dir).await;
+            let ai_services = match ai.wait_ready().await {
+                Ok(services) => services,
+                Err(err) => {
+                    tracing::error!(
+                        error = %err,
+                        "AI services init failed; pipeline stopped"
+                    );
+                    return;
+                }
+            };
+            run_pipeline(
+                receiver,
+                inflight_worker,
+                db,
+                ai_services,
+                ai_config,
+                app_data_dir,
+            )
+            .await;
         });
 
         Self { sender, inflight }

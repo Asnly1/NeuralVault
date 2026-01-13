@@ -6,6 +6,8 @@ mod types;
 
 use std::sync::Arc;
 
+use tokio::sync::watch;
+
 use crate::services::AIConfigService;
 
 pub use agent::AgentService;
@@ -36,5 +38,47 @@ impl AiServices {
             agent,
             search,
         })
+    }
+}
+
+#[derive(Clone)]
+enum AiServicesStatus {
+    Pending,
+    Ready(Arc<AiServices>),
+    Error(String),
+}
+
+#[derive(Clone)]
+pub struct AiServicesHandle {
+    sender: watch::Sender<AiServicesStatus>,
+}
+
+impl AiServicesHandle {
+    pub fn new_pending() -> Self {
+        let (sender, _receiver) = watch::channel(AiServicesStatus::Pending);
+        Self { sender }
+    }
+
+    pub fn set_ready(&self, services: Arc<AiServices>) {
+        let _ = self.sender.send(AiServicesStatus::Ready(services));
+    }
+
+    pub fn set_error(&self, error: String) {
+        let _ = self.sender.send(AiServicesStatus::Error(error));
+    }
+
+    pub async fn wait_ready(&self) -> Result<Arc<AiServices>, String> {
+        let mut receiver = self.sender.subscribe();
+        loop {
+            let status = receiver.borrow().clone();
+            match status {
+                AiServicesStatus::Ready(services) => return Ok(services),
+                AiServicesStatus::Error(err) => return Err(err),
+                AiServicesStatus::Pending => receiver
+                    .changed()
+                    .await
+                    .map_err(|_| "AI services init channel closed".to_string())?,
+            }
+        }
     }
 }

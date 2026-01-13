@@ -29,9 +29,13 @@ pub async fn search_semantic(
 ) -> AppResult<Vec<SemanticSearchResult>> {
     let embedding_type = embedding_type.unwrap_or_else(|| "content".to_string());
     let limit = limit.unwrap_or(20).max(1) as u64;
-
-    let search_response = state
+    let ai = state
         .ai
+        .wait_ready()
+        .await
+        .map_err(|e| crate::AppError::Custom(format!("AI services not ready: {}", e)))?;
+
+    let search_response = ai
         .search
         .search_hybrid(&query, &embedding_type, scope_node_ids.as_deref(), limit)
         .await

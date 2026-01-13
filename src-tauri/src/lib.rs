@@ -52,15 +52,12 @@ fn greet(name: &str) -> String {
 }
 
 fn init_tracing() {
-    let filter = match std::env::var("RUST_LOG") {
-        Ok(value) if !value.trim().is_empty() => value,
-        _ => return,
-    };
-
-    let env_filter = EnvFilter::try_new(filter).unwrap_or_else(|_| EnvFilter::new("info"));
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
     let _ = tracing_subscriber::fmt()
         .with_env_filter(env_filter)
         .with_target(false)
+        .with_writer(std::io::stdout)
         .try_init();
 }
 
@@ -92,23 +89,44 @@ pub fn run() {
             let ai_config_service = services::AIConfigService::new(&app_dir)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
-            let ai_services = Arc::new(
-                tauri::async_runtime::block_on(services::AiServices::new(&ai_config_service))
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?,
-            );
-
             // 初始化好的 AppState（包含数据库连接池和 AI 服务）注入到 Tauri 的全局管理器中
             let ai_config = Arc::new(Mutex::new(ai_config_service));
+            let ai_handle = services::AiServicesHandle::new_pending();
+
+            let ai_handle_init = ai_handle.clone();
+            let app_dir_for_ai = app_dir.clone();
+            tauri::async_runtime::spawn(async move {
+                let config_service = match services::AIConfigService::new(&app_dir_for_ai) {
+                    Ok(service) => service,
+                    Err(err) => {
+                        tracing::error!(error = %err, "AI config init failed");
+                        ai_handle_init.set_error(err);
+                        return;
+                    }
+                };
+
+                match services::AiServices::new(&config_service).await {
+                    Ok(services) => {
+                        ai_handle_init.set_ready(Arc::new(services));
+                        tracing::info!("AI services ready");
+                    }
+                    Err(err) => {
+                        tracing::error!(error = %err, "AI services init failed");
+                        ai_handle_init.set_error(err);
+                    }
+                }
+            });
+
             let ai_pipeline = Arc::new(services::AiPipeline::new(
                 pool.clone(),
-                ai_services.clone(),
+                ai_handle.clone(),
                 ai_config.clone(),
                 app_dir.clone(),
             ));
 
             app.manage(AppState {
                 db: pool,
-                ai: ai_services.clone(),
+                ai: ai_handle,
                 ai_config,
                 ai_pipeline,
             });

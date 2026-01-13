@@ -58,6 +58,8 @@ pub async fn send_chat_message(
     // Release lock to avoid holding it during HTTP requests
     drop(config_service);
 
+    let ai = state.ai.wait_ready().await?;
+
     let mut attachment_ids: Vec<i64> = Vec::new();
     if let Some(images) = request.images.clone() {
         attachment_ids.extend(images);
@@ -192,8 +194,7 @@ pub async fn send_chat_message(
     let usage_tokens: Arc<Mutex<Option<(i64, i64, i64, i64)>>> = Arc::new(Mutex::new(None));
     let stream_app = app.clone();
 
-    let stream_result = state
-        .ai
+    let stream_result = ai
         .llm
         .stream_chat(
             &provider,
