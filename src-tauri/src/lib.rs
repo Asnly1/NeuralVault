@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 use tauri::{Manager};
 use tokio::sync::Mutex;
+use tracing_subscriber::EnvFilter;
 
 pub use app_state::AppState;
 pub use error::{AppError, AppResult};
@@ -50,8 +51,23 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+fn init_tracing() {
+    let filter = match std::env::var("RUST_LOG") {
+        Ok(value) if !value.trim().is_empty() => value,
+        _ => return,
+    };
+
+    let env_filter = EnvFilter::try_new(filter).unwrap_or_else(|_| EnvFilter::new("info"));
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(env_filter)
+        .with_target(false)
+        .try_init();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    init_tracing();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
@@ -104,12 +120,15 @@ pub fn run() {
                     let pipeline = state.ai_pipeline.clone();
                     match pipeline.enqueue_pending_resources(&db).await {
                         Ok(count) => {
-                            println!("[Tauri] Requeued {} resource(s) after restart", count);
+                            tracing::info!(
+                                requeued = count,
+                                "Requeued resources after restart"
+                            );
                         }
                         Err(err) => {
-                            eprintln!(
-                                "[Tauri] Failed to requeue resources after restart: {}",
-                                err
+                            tracing::error!(
+                                error = %err,
+                                "Failed to requeue resources after restart"
                             );
                         }
                     }

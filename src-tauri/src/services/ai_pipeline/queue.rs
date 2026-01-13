@@ -42,6 +42,7 @@ impl AiPipeline {
         {
             let mut inflight = self.inflight.lock().await;
             if inflight.contains(&node_id) {
+                tracing::debug!(node_id, "AiPipeline job already inflight");
                 return Ok(());
             }
             inflight.insert(node_id);
@@ -50,7 +51,10 @@ impl AiPipeline {
         self.sender
             .send(AiPipelineJob { node_id })
             .await
-            .map_err(|_| "AI pipeline stopped".to_string())
+            .map_err(|_| "AI pipeline stopped".to_string())?;
+
+        tracing::debug!(node_id, "AiPipeline job enqueued");
+        Ok(())
     }
 
     pub async fn enqueue_pending_resources(&self, db: &DbPool) -> Result<usize, String> {
@@ -78,7 +82,11 @@ async fn run_pipeline(
         if let Err(err) =
             process_resource_job(&db, &ai, &ai_config, &app_data_dir, job.node_id).await
         {
-            eprintln!("[AiPipeline] node {} failed: {}", job.node_id, err);
+            tracing::error!(
+                node_id = job.node_id,
+                error = %err,
+                "AiPipeline job failed"
+            );
         }
 
         let mut inflight = inflight.lock().await;

@@ -48,6 +48,8 @@ tokenizers = { version = "0.22.2", features = ["http"] }
 lancedb = "0.23.1"
 arrow-array = "56.2.0"
 arrow-schema = "56.2.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
 
 # 只有在目标平台是 Unix 系列（Linux / macOS / BSD 等）时，才会安装 libc
 [target.'cfg(unix)'.dependencies]

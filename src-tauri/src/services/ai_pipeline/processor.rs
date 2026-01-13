@@ -27,6 +27,8 @@ pub(crate) async fn process_resource_job(
         return Ok(());
     }
 
+    tracing::info!(node_id, "AiPipeline processing resource");
+
     let resource_subtype_str = node.resource_subtype.map(|s| match s {
         ResourceSubtype::Text => "text",
         ResourceSubtype::Image => "image",
@@ -57,6 +59,7 @@ pub(crate) async fn process_resource_job(
         .trim()
         .to_string();
     if content.is_empty() && file_path_for_summary.is_none() {
+        tracing::warn!(node_id, "Resource content empty and no file fallback");
         mark_resource_error(db, node_id, &node, "resource content is empty").await?;
         return Ok(());
     }
@@ -170,7 +173,11 @@ pub(crate) async fn process_resource_job(
         )
         .await
         {
-            eprintln!("[AiPipeline] topic classify failed: {}", err);
+            tracing::warn!(
+                node_id,
+                error = %err,
+                "AiPipeline topic classify failed"
+            );
         }
     }
 
