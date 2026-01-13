@@ -24,6 +24,34 @@ Edge采用DAG模式，即一个Node可以有多个Parent Node，每次插入Edge
     2. 后端： Tauri(Rust)
     3. 数据库：SQLite + LanceDB
 
+Rust依赖：
+    serde = { version = "1", features = ["derive"] }
+    serde_json = "1"
+    chrono = { version = "0.4", features = ["serde"] }
+    sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "macros", "migrate"] }
+    uuid = { version = "1", features = ["v4"] }
+    sha2 = "0.10"
+    reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+    futures-util = "0.3"
+    tauri-plugin-dialog = "2"
+    clipboard-rs = "0.2"
+    tokio = { version = "1", features = ["time"] }
+    aes-gcm = "0.10"
+    rand = "0.8"
+    directories = "5"
+    thiserror = "2.0.17"
+    pdf_oxide = "0.2.3"
+    active-win-pos-rs = "0.9.1"
+    ocr_rs = { git = "https://github.com/Asnly1/rust-paddle-ocr.git", rev = "ab7ac86", package = "ocr-rs" }
+    pdfium-render = "0.8.37"
+    image = "0.25"
+    fastembed = "5.7.0"
+    text-splitter = { version = "0.29.3", features = ["markdown", "tokenizers"] }
+    tokenizers = { version = "0.22.2", features = ["http"] }
+    lancedb = "0.23.1"
+    arrow-array = "56.2.0"
+    arrow-schema = "56.2.0"
+
 平台依赖（只考虑MacOS + Windows）：
     1. pdfium
     2. libc

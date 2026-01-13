@@ -9,6 +9,7 @@
 - dense模型选用BAAI/bge-m3量化版本和Qdrant/clip-ViT-B-32-text，image模型选用Qdrant/clip-ViT-B-32-vision
 - Embedding别的资源时，只使用bge-m3量化版本；但是在Embedding Image类型时，用bge-m3embedding计算OCR出来的文本，用clip-ViT-B-32-vision计算Image的向量。
 - 在每次搜索时，实时计算bge-m3的embedding和clip-ViT-B-32-text的embedding，然后进行搜索
+
 ---
 
 ## 目录结构（关键）
@@ -21,27 +22,44 @@ src-tauri/
 │   ├── error.rs             # 错误类型定义
 │   ├── services/
 │   │   ├── ai_config.rs     # API Key + VectorConfig 配置
-│   │   ├── ai_pipeline.rs   # Rust AI 队列与管线
+│   │   ├── ai_pipeline/     # AI 队列与管线
+│   │   │   ├── mod.rs       # 常量定义与导出
+│   │   │   ├── queue.rs     # AiPipeline 结构体与任务队列
+│   │   │   ├── processor.rs # 资源处理逻辑
+│   │   │   └── classifier.rs# 主题分类逻辑
+│   │   ├── parser/          # 文件解析模块
+│   │   │   ├── mod.rs       # 解析入口与导出
+│   │   │   ├── ocr.rs       # OCR 引擎与图片识别
+│   │   │   ├── pdf.rs       # PDF 解析（文本 + OCR）
+│   │   │   └── text.rs      # 文本文件解析
 │   │   └── ai/              # Rust AI 服务实现
 │   │       ├── llm.rs       # Gemini LLM（流式 + 结构化输出）
-│   │       ├── embedding.rs # fastembed + text-splitter + LanceDB
+│   │       ├── embedding/   # Embedding 服务
+│   │       │   ├── mod.rs   # 常量定义与导出
+│   │       │   ├── model.rs # EmbeddingService 结构体与方法
+│   │       │   └── store.rs # LanceDB 存储操作
 │   │       ├── agent.rs     # Summary + Topic 分类
 │   │       ├── search.rs    # LanceDB Hybrid Search
 │   │       └── types.rs     # AI DTO
 │   ├── db/
 │   │   ├── pool.rs          # SQLx 连接池
 │   │   ├── types.rs         # 节点/边/枚举/结构体
-│   │   ├── nodes.rs         # Node CRUD
+│   │   ├── nodes/           # Node 操作
+│   │   │   ├── mod.rs       # NODE_FIELDS 常量与导出
+│   │   │   ├── crud.rs      # 基本 CRUD 操作
+│   │   │   ├── status.rs    # 状态更新操作
+│   │   │   └── query.rs     # 查询操作
 │   │   ├── edges.rs         # Edge CRUD
 │   │   └── chat.rs          # Chat 相关
 │   ├── commands/
-│   │   ├── ai_config.rs     # AI 配置与聊天
+│   │   ├── ai_config.rs     # AI 配置命令
+│   │   ├── chat_stream.rs   # 聊天流式命令
 │   │   ├── chat.rs          # 会话/消息/绑定
 │   │   ├── clipboard.rs     # 剪贴板读取
 │   │   ├── dashboard.rs     # Dashboard 数据
 │   │   ├── edges.rs         # 关系连接
 │   │   ├── nodes.rs         # 节点通用操作（收藏/审核）
-│   │   ├── resources.rs     # 资源捕获/解析
+│   │   ├── resources.rs     # 资源捕获（调用 parser 模块）
 │   │   ├── search.rs        # 语义搜索与精确搜索
 │   │   ├── tasks.rs         # 任务节点
 │   │   ├── topics.rs        # 主题节点
@@ -114,8 +132,14 @@ pub struct AppState {
 - 支持文件上传（resumable upload），等待文件 `ACTIVE` 后再调用模型。
 - `thinking_effort` -> Gemini `thinkingLevel`，流式时可包含 thought delta。
 
-### Embedding（`embedding.rs`）
+### Embedding（`embedding/`）
 
+模块结构：
+- `mod.rs`：常量定义（向量维度、分块参数等）与导出
+- `model.rs`：`EmbeddingService` 结构体与方法（`embed_text`、`embed_image`、`embed_query`、`search_hybrid`）
+- `store.rs`：LanceDB 存储操作（表创建、向量写入、搜索结果收集）
+
+技术栈：
 - `fastembed-rs`：
   - Dense: `BAAI/bge-m3`（1024）
   - Image: `Qdrant/clip-ViT-B-32-vision`（512）
@@ -135,7 +159,24 @@ pub struct AppState {
 
 ---
 
-## 资源捕获与解析（`commands/resources.rs`）
+## 文件解析（`services/parser/`）
+
+模块结构：
+- `mod.rs`：导出 `parse_resource_content()` 入口函数与 `ProgressCallback` 类型
+- `ocr.rs`：OCR 引擎构建（`ocr_rs`）与图片识别
+- `pdf.rs`：PDF 解析（文本优先，失败后 PDFium + OCR）
+- `text.rs`：文本文件解析与标题生成
+
+解析流程根据 `ResourceSubtype` 分发：
+- `Text`：直接读取文件内容
+- `Image`：OCR 识别
+- `Pdf`：文本提取优先，失败后逐页 OCR
+- `Epub`：文本提取
+- `Url` / `Other`：返回空
+
+---
+
+## 资源捕获（`commands/resources.rs`）
 
 ### capture_resource 流程
 
@@ -143,10 +184,7 @@ pub struct AppState {
 2. 计算 `file_hash`。
 3. 生成 title（文件名或文本前 10 字）。
 4. 合并 `source_meta`（window_title/process_name/captured_at）。
-5. Rust 解析内容：
-   - 文本：直接读取。
-   - 图片：OCR。
-   - PDF：文本优先，失败后 PDFium + OCR。
+5. 调用 `services::parser::parse_resource_content()` 解析内容。
 6. 写入 `nodes.file_content` / `nodes.file_hash`。
 7. 触发 `parse-progress` 事件。
 8. 内容存在或有 file_path 则入队 AI Pipeline（文件上传优先）。
@@ -166,8 +204,15 @@ pub struct AppState {
 
 ---
 
-## AI Pipeline（`services/ai_pipeline.rs`）
+## AI Pipeline（`services/ai_pipeline/`）
 
+模块结构：
+- `mod.rs`：常量定义（队列大小、摘要长度、分类阈值等）与导出
+- `queue.rs`：`AiPipeline` 结构体、任务入队与去重、`run_pipeline` 循环
+- `processor.rs`：`process_resource_job`、`sync_embeddings_for_type`、错误处理
+- `classifier.rs`：`classify_and_link_topic`、相似资源搜索、主题候选构建、主题创建与修订
+
+核心特性：
 - 内存队列（`mpsc`）+ inflight 去重。
 - 只处理 `node_type = resource` 的节点。
 
@@ -201,7 +246,14 @@ pub struct AppState {
 
 ## 数据模型（SQLite）
 
-### nodes
+### db/nodes/ 模块结构
+
+- `mod.rs`：`NODE_FIELDS` 常量（查询字段列表）与导出
+- `crud.rs`：基本 CRUD 操作（`insert_node`、`get_node_by_id`、`update_node_*`、`delete_node`）
+- `status.rs`：状态更新（`update_task_status`、`mark_task_done`、`update_resource_sync_status`、`insert_context_chunks`）
+- `query.rs`：查询操作（`list_nodes_by_type`、`list_active_tasks`、`search_nodes_by_keyword`）
+
+### nodes 表
 
 | 字段 | 说明 |
 |------|------|
@@ -296,7 +348,11 @@ pub struct AppState {
 
 ### ai_config.rs
 
-API Key 管理、processing provider/model 配置、chat 调用。
+API Key 管理、processing provider/model 配置。
+
+### chat_stream.rs
+
+聊天流式命令（`send_chat_message`），处理 SSE 流式响应。
 
 ### search.rs
 

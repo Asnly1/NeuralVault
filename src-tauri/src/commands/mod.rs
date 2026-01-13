@@ -3,9 +3,10 @@
 // 提供前端可调用的所有命令函数。
 
 mod ai_config;
+mod chat;
+mod chat_stream;
 mod clipboard;
 mod dashboard;
-mod chat;
 mod edges;
 mod nodes;
 mod resources;
@@ -60,9 +61,10 @@ macro_rules! simple_void_command {
 }
 
 pub use ai_config::*;
+pub use chat::*;
+pub use chat_stream::*;
 pub use clipboard::*;
 pub use dashboard::*;
-pub use chat::*;
 pub use edges::*;
 pub use nodes::*;
 pub use resources::*;

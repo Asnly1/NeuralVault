@@ -1,6 +1,6 @@
 //! AI 配置服务
 //! 使用 AES-256-GCM 加密存储 API Key 配置
-
+// TODO: 默认是否太复杂？
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -18,16 +18,12 @@ pub struct ProviderConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VectorConfig {
-    #[serde(default)]
     pub lancedb_path: String,
-    #[serde(default)]
     pub lancedb_table_name: String,
     pub dense_embedding_model: String,
-    #[serde(default)]
+    pub dense_vector_size: u64,
     pub clip_text_embedding_model: String,
     pub image_embedding_model: String,
-    pub dense_vector_size: u64,
-    #[serde(default)]
     pub clip_text_vector_size: u64,
     pub image_vector_size: u64,
     pub chunk_size: usize,
@@ -37,16 +33,16 @@ pub struct VectorConfig {
 impl Default for VectorConfig {
     fn default() -> Self {
         Self {
+            lancedb_path: String::new(),
+            lancedb_table_name: "neuralvault_vectors".to_string(),
             dense_embedding_model: "BAAI/bge-m3".to_string(),
+            dense_vector_size: 1024,
             clip_text_embedding_model: "Qdrant/clip-ViT-B-32-text".to_string(),
             image_embedding_model: "Qdrant/clip-ViT-B-32-vision".to_string(),
-            dense_vector_size: 1024,
             clip_text_vector_size: 512,
             image_vector_size: 512,
             chunk_size: 512,
             chunk_overlap: 50,
-            lancedb_path: String::new(),
-            lancedb_table_name: "neuralvault_vectors".to_string(),
         }
     }
 }

@@ -52,7 +52,6 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "../src-python": "./",
       "../third_party_model": "./"
     }
   }

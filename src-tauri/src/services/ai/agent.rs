@@ -7,9 +7,6 @@ use crate::services::ProviderConfig;
 
 use super::llm::LlmService;
 use super::types::{ClassifyTopicResponse, CreateNewPayload, NewTopicPayload, TopicCandidate};
-
-const MIN_SUMMARY_LENGTH: i32 = 10;
-
 pub struct AgentService {
     llm: Arc<LlmService>,
 }
@@ -26,12 +23,13 @@ impl AgentService {
         provider_config: &ProviderConfig,
         content: &str,
         user_note: Option<&str>,
+        min_length: i32,
         max_length: i32,
         file_path: Option<&str>,
         resource_subtype: Option<&str>,
     ) -> Result<String, String> {
         let content = content.trim();
-        let max_length = std::cmp::max(MIN_SUMMARY_LENGTH, max_length);
+        let max_length = std::cmp::max(min_length, max_length);
         let should_use_file = file_path.is_some() && resource_subtype != Some("text");
 
         let prompt = build_summary_prompt(content, user_note, max_length, should_use_file);

@@ -1,12 +1,9 @@
 use std::{
     fs,
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 use active_win_pos_rs::get_active_window;
-use image::DynamicImage;
-use ocr_rs::OcrEngine;
-use pdfium_render::prelude::*;
 use serde::Serialize;
 use sqlx::types::Json;
 use tauri::{AppHandle, Emitter, State};
@@ -19,6 +16,7 @@ use crate::{
         update_node_summary, update_node_title, update_resource_sync_status, NewNode, NodeType,
         ResourceProcessingStage, ResourceSubtype, ResourceEmbeddingStatus, ReviewStatus, SourceMeta,
     },
+    services::parser::{build_text_title, parse_resource_content, ProgressCallback},
     utils::{compute_sha256, get_assets_dir, get_extension, parse_file_type, resolve_file_path},
     AppResult,
 };
@@ -93,73 +91,6 @@ fn emit_parse_progress(
     let _ = app.emit("parse-progress", payload);
 }
 
-fn third_party_model_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("Missing project root")
-        .join("third_party_model")
-}
-
-fn build_ocr_engine() -> Result<OcrEngine, String> {
-    let model_dir = third_party_model_dir();
-    let det_path = model_dir.join("PP-OCRv5_mobile_det.mnn");
-    let rec_path = model_dir.join("PP-OCRv5_mobile_rec.mnn");
-    let charset_path = model_dir.join("ppocr_keys_v5.txt");
-
-    let det_path = det_path
-        .to_str()
-        .ok_or_else(|| "OCR 检测模型路径不可用".to_string())?;
-    let rec_path = rec_path
-        .to_str()
-        .ok_or_else(|| "OCR 识别模型路径不可用".to_string())?;
-    let charset_path = charset_path
-        .to_str()
-        .ok_or_else(|| "OCR 字符集路径不可用".to_string())?;
-
-    OcrEngine::new(det_path, rec_path, charset_path, None).map_err(|e| e.to_string())
-}
-
-fn build_pdfium() -> Result<Pdfium, String> {
-    let model_dir = third_party_model_dir();
-    let bindings = Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(
-        &model_dir,
-    ))
-    .or_else(|_| Pdfium::bind_to_system_library())
-    .map_err(|e| e.to_string())?;
-
-    Ok(Pdfium::new(bindings))
-}
-
-fn ocr_image_with_engine(engine: &OcrEngine, image: &DynamicImage) -> Result<String, String> {
-    let results = engine.recognize(image).map_err(|e| e.to_string())?;
-    let text = results
-        .into_iter()
-        .map(|result| result.text)
-        .filter(|line| !line.trim().is_empty())
-        .collect::<Vec<_>>()
-        .join("\n");
-
-    Ok(text)
-}
-
-fn parse_image_file(path: &str) -> Result<String, String> {
-    let image = image::open(path).map_err(|e| e.to_string())?;
-    let engine = build_ocr_engine()?;
-    let text = ocr_image_with_engine(&engine, &image)?;
-    if text.trim().is_empty() {
-        Err("OCR 未识别到文本".to_string())
-    } else {
-        Ok(text)
-    }
-}
-
-fn build_text_title(text: &str) -> String {
-    let trimmed = text.trim();
-    if trimmed.is_empty() {
-        return "Untitled".to_string();
-    }
-    trimmed.chars().take(10).collect()
-}
 
 fn merge_source_meta(payload: Option<super::CaptureSourceMeta>) -> SourceMeta {
     let mut meta = SourceMeta {
@@ -187,131 +118,6 @@ fn merge_source_meta(payload: Option<super::CaptureSourceMeta>) -> SourceMeta {
     meta
 }
 
-fn parse_text_file(path: &str) -> Result<String, String> {
-    let bytes = fs::read(path).map_err(|e| e.to_string())?;
-    Ok(String::from_utf8_lossy(&bytes).to_string())
-}
-
-// TODO:PDF转成markdown
-fn parse_pdf_text(path: &str) -> Result<String, String> {
-    let mut doc = pdf_oxide::PdfDocument::open(path).map_err(|e| e.to_string())?;
-    let mut output = String::new();
-    let page_count = doc.page_count().map_err(|e| e.to_string())?;
-    for page_index in 0..page_count {
-        let text = doc.extract_text(page_index).map_err(|e| e.to_string())?;
-        if !text.trim().is_empty() {
-            output.push_str(&format!("[Page {}]\n", page_index + 1));
-            output.push_str(&text);
-            output.push('\n');
-        }
-    }
-    if output.trim().is_empty() {
-        return Err("PDF 无可提取文本".to_string());
-    }
-    Ok(output)
-}
-
-// TODO:PDF添加页数,存入chunk_meta
-fn parse_pdf_with_ocr(
-    path: &str,
-    app: Option<&AppHandle>,
-    node_id: Option<i64>,
-) -> Result<String, String> {
-    let pdfium = build_pdfium()?;
-    let document = pdfium
-        .load_pdf_from_file(path, None)
-        .map_err(|e| e.to_string())?;
-    let total_pages = document.pages().iter().count();
-    if total_pages == 0 {
-        return Err("PDF 没有可渲染页面".to_string());
-    }
-
-    emit_parse_progress(app, node_id, "ocr", Some(0), None);
-
-    let render_config = PdfRenderConfig::new()
-        .set_target_width(2000)
-        .set_maximum_height(2000);
-    let engine = build_ocr_engine()?;
-    let mut output = String::new();
-
-    for (index, page) in document.pages().iter().enumerate() {
-        let image = page
-            .render_with_config(&render_config)
-            .map_err(|e| e.to_string())?
-            .as_image();
-        let text = ocr_image_with_engine(&engine, &image)?;
-        if !text.trim().is_empty() {
-            output.push_str(&format!("[Page {}]\n", index + 1));
-            output.push_str(&text);
-            output.push('\n');
-        }
-
-        let percentage = ((index + 1) * 100 / total_pages) as u8;
-        emit_parse_progress(app, node_id, "ocr", Some(percentage), None);
-    }
-
-    if output.trim().is_empty() {
-        return Err("PDF OCR 未识别到文本".to_string());
-    }
-
-    Ok(output)
-}
-
-fn parse_pdf_file(
-    path: &str,
-    app: Option<&AppHandle>,
-    node_id: Option<i64>,
-) -> Result<String, String> {
-    let text_result = parse_pdf_text(path);
-    if let Ok(text) = &text_result {
-        if !text.trim().is_empty() {
-            return Ok(text.clone());
-        }
-    }
-
-    let ocr_result = parse_pdf_with_ocr(path, app, node_id);
-    match (text_result, ocr_result) {
-        (_, Ok(text)) => Ok(text),
-        (Err(text_err), Err(ocr_err)) => Err(format!(
-            "PDF 解析失败: {}; OCR 失败: {}",
-            text_err, ocr_err
-        )),
-        (Ok(_), Err(ocr_err)) => Err(ocr_err),
-    }
-}
-
-fn parse_resource_content(
-    app: Option<&AppHandle>,
-    node_id: Option<i64>,
-    subtype: ResourceSubtype,
-    content: Option<&str>,
-    file_path: Option<&str>,
-) -> Result<Option<String>, String> {
-    match subtype {
-        ResourceSubtype::Text => {
-            if let Some(text) = content {
-                Ok(Some(text.to_string()))
-            } else if let Some(path) = file_path {
-                Ok(Some(parse_text_file(path)?))
-            } else {
-                Err("缺少文本内容".to_string())
-            }
-        }
-        ResourceSubtype::Pdf => {
-            let path = file_path.ok_or_else(|| "缺少 PDF 路径".to_string())?;
-            Ok(Some(parse_pdf_file(path, app, node_id)?))
-        }
-        ResourceSubtype::Image => {
-            let path = file_path.ok_or_else(|| "缺少图片路径".to_string())?;
-            emit_parse_progress(app, node_id, "ocr", Some(0), None);
-            let text = parse_image_file(path)?;
-            emit_parse_progress(app, node_id, "ocr", Some(100), None);
-            Ok(Some(text))
-        }
-        ResourceSubtype::Url => Ok(content.map(|c| c.to_string())),
-        ResourceSubtype::Epub | ResourceSubtype::Other => Err("暂不支持该类型".to_string()),
-    }
-}
 
 #[tauri::command]
 pub async fn capture_resource(
@@ -400,12 +206,17 @@ pub async fn capture_resource(
 
     emit_parse_progress(Some(&app), Some(node_id), "parsing", Some(0), None);
 
+    // Create progress callback for parser
+    let app_clone = app.clone();
+    let progress_callback: ProgressCallback = Box::new(move |status, percentage, error| {
+        emit_parse_progress(Some(&app_clone), Some(node_id), status, percentage, error);
+    });
+
     let file_content_result = parse_resource_content(
-        Some(&app),
-        Some(node_id),
         subtype,
         content.as_deref(),
         resolved_path.as_deref(),
+        Some(&progress_callback),
     );
 
     let mut should_enqueue = false;
