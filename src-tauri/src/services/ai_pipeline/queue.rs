@@ -134,7 +134,7 @@ async fn run_pipeline(
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 struct EmbeddingStatusPayload {
     status: String,
 }
