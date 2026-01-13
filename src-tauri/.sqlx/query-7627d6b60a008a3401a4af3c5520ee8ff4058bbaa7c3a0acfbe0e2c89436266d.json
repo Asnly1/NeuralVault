@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO context_chunks (node_id, embedding_type, vector_kind, chunk_text, chunk_index, vector_id, embedding_hash, embedding_model, embedding_at, token_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 9
+    },
+    "nullable": []
+  },
+  "hash": "7627d6b60a008a3401a4af3c5520ee8ff4058bbaa7c3a0acfbe0e2c89436266d"
+}

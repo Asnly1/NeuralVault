@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE nodes SET task_status = 'todo', done_date = NULL, updated_at = CURRENT_TIMESTAMP WHERE node_id = ? AND node_type = 'task'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "1c94073a6c26b31ea3afb0ee41ed824a3e2e2722b80100721237f080054584f8"
+}

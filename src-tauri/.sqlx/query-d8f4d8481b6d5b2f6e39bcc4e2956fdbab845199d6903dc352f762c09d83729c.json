@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE chat_sessions SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE session_id = ? AND is_deleted = 0",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "d8f4d8481b6d5b2f6e39bcc4e2956fdbab845199d6903dc352f762c09d83729c"
+}

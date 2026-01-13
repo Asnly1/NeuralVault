@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM context_chunks WHERE node_id = ? AND embedding_type = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "68ff288884e31cc51de768ffb308a3c2809509ce057fb1815a8c6e3ccf8d0148"
+}

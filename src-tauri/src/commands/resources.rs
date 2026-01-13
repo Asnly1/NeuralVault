@@ -14,7 +14,7 @@ use crate::{
     db::{
         get_node_by_id, insert_node, list_all_resources, update_node_content,
         update_node_summary, update_node_title, update_resource_sync_status, NewNode, NodeType,
-        ResourceProcessingStage, ResourceSubtype, ResourceEmbeddingStatus, ReviewStatus, SourceMeta,
+        ResourceProcessingStage, ResourceEmbeddingStatus, ReviewStatus, SourceMeta,
     },
     services::parser::{build_text_title, parse_resource_content, ProgressCallback},
     utils::{compute_sha256, get_assets_dir, get_extension, parse_file_type, resolve_file_path},

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM edges WHERE source_node_id = ? AND target_node_id = ? AND relation_type = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "960c630f7939029f810dffb0de713c11b17cf3475be3ee31d895379fe9909e95"
+}

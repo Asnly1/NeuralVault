@@ -86,12 +86,12 @@ pub async fn convert_topic_to_task_command(
     state: State<'_, AppState>,
     node_id: i64,
 ) -> AppResult<NodeRecord> {
-    sqlx::query(
+    sqlx::query!(
         "UPDATE nodes SET node_type = 'task', task_status = 'todo', priority = 'medium', \
          due_date = NULL, done_date = NULL, updated_at = CURRENT_TIMESTAMP \
          WHERE node_id = ? AND node_type = 'topic'",
+        node_id,
     )
-    .bind(node_id)
     .execute(&state.db)
     .await?;
 
@@ -103,12 +103,12 @@ pub async fn convert_task_to_topic_command(
     state: State<'_, AppState>,
     node_id: i64,
 ) -> AppResult<NodeRecord> {
-    sqlx::query(
+    sqlx::query!(
         "UPDATE nodes SET node_type = 'topic', task_status = NULL, priority = NULL, \
          due_date = NULL, done_date = NULL, updated_at = CURRENT_TIMESTAMP \
          WHERE node_id = ? AND node_type = 'task'",
+        node_id,
     )
-    .bind(node_id)
     .execute(&state.db)
     .await?;
 
@@ -137,35 +137,38 @@ async fn convert_resource_to_container(
         _ => (None, None),
     };
 
-    let insert_result = sqlx::query(
+    let uuid_value = uuid.as_str();
+    let title = resource.title.as_str();
+    let summary = resource.summary.as_deref();
+    let insert_result = sqlx::query!(
         "INSERT INTO nodes (\
             uuid, user_id, title, summary, node_type, task_status, priority, due_date, done_date, \
             file_hash, file_path, file_content, user_note, resource_subtype, source_meta, embedded_hash, processing_hash, \
             embedding_status, last_embedding_at, last_embedding_error, processing_stage, review_status\
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        uuid_value,
+        1,
+        title,
+        summary,
+        target_type,
+        task_status,
+        priority,
+        None::<String>,
+        None::<String>,
+        None::<String>,
+        None::<String>,
+        None::<String>,
+        None::<String>,
+        None::<String>,
+        None::<String>,
+        None::<String>,
+        None::<String>,
+        crate::db::ResourceEmbeddingStatus::Pending,
+        None::<String>,
+        None::<String>,
+        crate::db::ResourceProcessingStage::Todo,
+        ReviewStatus::Reviewed,
     )
-    .bind(&uuid)
-    .bind(1)
-    .bind(resource.title.as_str())
-    .bind(resource.summary.as_deref())
-    .bind(target_type)
-    .bind(task_status)
-    .bind(priority)
-    .bind(None::<String>)
-    .bind(None::<String>)
-    .bind(None::<String>)
-    .bind(None::<String>)
-    .bind(None::<String>)
-    .bind(None::<String>)
-    .bind(None::<String>)
-    .bind(None::<String>)
-    .bind(None::<String>)
-    .bind(None::<String>)
-    .bind(crate::db::ResourceEmbeddingStatus::Pending)
-    .bind(None::<String>)
-    .bind(None::<String>)
-    .bind(crate::db::ResourceProcessingStage::Todo)
-    .bind(ReviewStatus::Reviewed)
     .execute(tx.as_mut())
     .await?;
 
@@ -174,14 +177,14 @@ async fn convert_resource_to_container(
     if contains_creates_cycle(tx.as_mut(), new_node_id, resource.node_id).await? {
         return Err("contains edge would create a cycle".into());
     }
-    sqlx::query(
+    sqlx::query!(
         "INSERT OR IGNORE INTO edges (source_node_id, target_node_id, relation_type, confidence_score, is_manual) \
          VALUES (?, ?, 'contains', ?, ?)",
+        new_node_id,
+        resource.node_id,
+        None::<f64>,
+        true,
     )
-    .bind(new_node_id)
-    .bind(resource.node_id)
-    .bind(None::<f64>)
-    .bind(true)
     .execute(tx.as_mut())
     .await?;
 
@@ -200,19 +203,18 @@ async fn convert_resource_to_container(
             return Err("contains edge would create a cycle".into());
         }
 
-        sqlx::query(
+        sqlx::query!(
             "INSERT OR IGNORE INTO edges (source_node_id, target_node_id, relation_type, confidence_score, is_manual) \
              VALUES (?, ?, 'contains', ?, ?)",
+            edge.source_node_id,
+            new_node_id,
+            edge.confidence_score,
+            edge.is_manual,
         )
-        .bind(edge.source_node_id)
-        .bind(new_node_id)
-        .bind(edge.confidence_score)
-        .bind(edge.is_manual)
         .execute(tx.as_mut())
         .await?;
 
-        sqlx::query("DELETE FROM edges WHERE edge_id = ?")
-            .bind(edge.edge_id)
+        sqlx::query!("DELETE FROM edges WHERE edge_id = ?", edge.edge_id)
             .execute(tx.as_mut())
             .await?;
     }
@@ -238,19 +240,18 @@ async fn convert_resource_to_container(
             (other_id, new_node_id)
         };
 
-        sqlx::query(
+        sqlx::query!(
             "INSERT OR IGNORE INTO edges (source_node_id, target_node_id, relation_type, confidence_score, is_manual) \
              VALUES (?, ?, 'related_to', ?, ?)",
+            source_id,
+            target_id,
+            edge.confidence_score,
+            edge.is_manual,
         )
-        .bind(source_id)
-        .bind(target_id)
-        .bind(edge.confidence_score)
-        .bind(edge.is_manual)
         .execute(tx.as_mut())
         .await?;
 
-        sqlx::query("DELETE FROM edges WHERE edge_id = ?")
-            .bind(edge.edge_id)
+        sqlx::query!("DELETE FROM edges WHERE edge_id = ?", edge.edge_id)
             .execute(tx.as_mut())
             .await?;
     }

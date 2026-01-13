@@ -29,15 +29,15 @@ where
 }
 
 pub async fn insert_edge(pool: &DbPool, params: NewEdge) -> Result<i64, sqlx::Error> {
-    let result = sqlx::query(
+    let result = sqlx::query!(
         "INSERT INTO edges (source_node_id, target_node_id, relation_type, confidence_score, is_manual) \
          VALUES (?, ?, ?, ?, ?)",
+        params.source_node_id,
+        params.target_node_id,
+        params.relation_type,
+        params.confidence_score,
+        params.is_manual,
     )
-    .bind(params.source_node_id)
-    .bind(params.target_node_id)
-    .bind(params.relation_type)
-    .bind(params.confidence_score)
-    .bind(params.is_manual)
     .execute(pool)
     .await?;
 
@@ -48,15 +48,15 @@ pub async fn insert_edge_if_missing(
     pool: &DbPool,
     params: NewEdge,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query(
+    sqlx::query!(
         "INSERT OR IGNORE INTO edges (source_node_id, target_node_id, relation_type, confidence_score, is_manual) \
          VALUES (?, ?, ?, ?, ?)",
+        params.source_node_id,
+        params.target_node_id,
+        params.relation_type,
+        params.confidence_score,
+        params.is_manual,
     )
-    .bind(params.source_node_id)
-    .bind(params.target_node_id)
-    .bind(params.relation_type)
-    .bind(params.confidence_score)
-    .bind(params.is_manual)
     .execute(pool)
     .await?;
 
@@ -69,12 +69,12 @@ pub async fn delete_edge(
     target_node_id: i64,
     relation_type: EdgeRelationType,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query(
+    sqlx::query!(
         "DELETE FROM edges WHERE source_node_id = ? AND target_node_id = ? AND relation_type = ?",
+        source_node_id,
+        target_node_id,
+        relation_type,
     )
-    .bind(source_node_id)
-    .bind(target_node_id)
-    .bind(relation_type)
     .execute(pool)
     .await?;
     Ok(())

@@ -28,7 +28,7 @@ pub async fn init_pool(db_path: impl AsRef<Path>) -> Result<DbPool, sqlx::Error>
     // 检查数据库里的 _sqlx_migrations 表，看看哪些 SQL 脚本还没跑过，然后依次执行它们
 
     // Seed default user for MVP (user_id = 1) to satisfy FK defaults.
-    sqlx::query("INSERT OR IGNORE INTO users (user_id, user_name) VALUES (1, 'default')")
+    sqlx::query!("INSERT OR IGNORE INTO users (user_id, user_name) VALUES (1, 'default')")
         .execute(&pool)
         .await?;
     Ok(pool)

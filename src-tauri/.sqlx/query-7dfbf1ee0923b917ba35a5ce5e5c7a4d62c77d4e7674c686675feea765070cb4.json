@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE nodes SET embedding_status = ?, embedded_hash = ?, last_embedding_error = ?, last_embedding_at = CASE WHEN ? = 'synced' THEN CURRENT_TIMESTAMP ELSE last_embedding_at END, updated_at = CURRENT_TIMESTAMP WHERE node_id = ? AND node_type = 'resource'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "7dfbf1ee0923b917ba35a5ce5e5c7a4d62c77d4e7674c686675feea765070cb4"
+}

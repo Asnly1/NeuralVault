@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM message_attachments WHERE message_id = ? AND node_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "3b98608c17b531faaff33dfc653095f8cd8521077317bc7e617833cc91146c1a"
+}

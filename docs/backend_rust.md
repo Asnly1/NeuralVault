@@ -8,7 +8,7 @@
 - 统一数据模型：`nodes` + `edges`，覆盖 topic/task/resource。
 - dense模型选用BAAI/bge-m3量化版本和Qdrant/clip-ViT-B-32-text，image模型选用Qdrant/clip-ViT-B-32-vision
 - Embedding别的资源时，只使用bge-m3量化版本；但是在Embedding Image类型时，用bge-m3embedding计算OCR出来的文本，用clip-ViT-B-32-vision计算Image的向量。
-- 在每次搜索时，实时计算bge-m3的embedding和clip-ViT-B-32-text的embedding，然后进行搜索
+- 在每次搜索时，实时计算bge-m3的embedding和clip-ViT-B-32-text的embedding，然后进行搜索。bge-m3搜索文字，clip-ViT-B-32-text搜索图片。
 
 ---
 
@@ -441,3 +441,16 @@ pub enum ClipboardContent {
 - Rust 写入 SQLite 与 LanceDB。
 - AI Pipeline 依赖 processing provider/model 已配置且启用。
 - 目前队列为内存队列，应用重启会清空；启动后会扫描 `embedding_status=pending/dirty/error` 或 `processing_stage!=done` 且内容非空的资源并重新入队。
+
+---
+
+## 开发命令与 SQLx 校验
+
+- 启动开发（前端 + Tauri）：`npm run tauri dev`
+- `sqlx::query!` 依赖离线元数据，需提交 `src-tauri/.sqlx/` 到版本控制。
+- 当新增/修改 SQL 时，在 `src-tauri/` 下更新元数据（按需替换数据库路径）：
+
+```bash
+DATABASE_URL="sqlite:///Users/hovsco/Library/Application Support/com.hovsco.neuralvault/neuralvault.sqlite3" \
+cargo sqlx prepare -- --lib
+```

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE nodes SET review_status = ?, updated_at = CURRENT_TIMESTAMP WHERE node_id = ? AND node_type = 'resource'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "847264ef3ad19a0a43870a49e5140f591b75811eca810e4bd5b5413a1d292496"
+}
