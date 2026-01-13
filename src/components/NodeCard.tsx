@@ -38,6 +38,8 @@ interface NodeCardProps {
   onConvert?: (targetType: "task" | "topic") => void;
   edgeItems?: EdgeWithNode[];
   onConfirmEdge?: (edge: EdgeWithNode) => void;
+  containedNodes?: NodeRecord[]; // Contains 关联的子节点
+  onContainedNodeClick?: (node: NodeRecord) => void;
 }
 
 export function NodeCard({
@@ -51,6 +53,8 @@ export function NodeCard({
   onConvert,
   edgeItems,
   onConfirmEdge,
+  containedNodes,
+  onContainedNodeClick,
 }: NodeCardProps) {
   const convertOptions = (() => {
     if (!onConvert) return [];
@@ -301,6 +305,37 @@ export function NodeCard({
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Contains 关联的子节点 */}
+        {containedNodes && containedNodes.length > 0 && (
+          <div className="mt-2 pt-2 border-t text-xs">
+            <div className="text-muted-foreground mb-1">包含 ({containedNodes.length})</div>
+            <div className="space-y-1">
+              {containedNodes.slice(0, 3).map((childNode) => (
+                <button
+                  key={childNode.node_id}
+                  className="w-full flex items-center gap-2 px-1 py-0.5 rounded hover:bg-muted transition-colors text-left"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onContainedNodeClick?.(childNode);
+                  }}
+                >
+                  <span className="text-[10px]">
+                    {getEdgeNodeIcon(childNode)}
+                  </span>
+                  <span className="truncate flex-1">
+                    {childNode.title || "未命名"}
+                  </span>
+                </button>
+              ))}
+              {containedNodes.length > 3 && (
+                <div className="text-muted-foreground text-[10px] px-1">
+                  +{containedNodes.length - 3} 更多...
+                </div>
+              )}
+            </div>
           </div>
         )}
       </CardContent>

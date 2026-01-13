@@ -29,6 +29,7 @@ interface SidebarProps {
   onToggleCollapse: () => void;
   onWidthChange: (width: number) => void;
   onSelectNode?: (node: NodeRecord) => void;
+  refreshKey?: number; // 用于强制刷新收藏节点
 }
 
 const MIN_WIDTH = 150;
@@ -42,6 +43,7 @@ export function Sidebar({
   onToggleCollapse,
   onWidthChange,
   onSelectNode,
+  refreshKey,
 }: SidebarProps) {
   const { t } = useLanguage();
   const { isProcessing } = useEmbeddingStatus();
@@ -70,7 +72,7 @@ export function Sidebar({
 
   useEffect(() => {
     loadPinnedNodes();
-  }, [loadPinnedNodes]);
+  }, [loadPinnedNodes, refreshKey]);
 
   // Icon mapping for each page type
   const iconMap: Record<PageType, React.ReactNode> = {

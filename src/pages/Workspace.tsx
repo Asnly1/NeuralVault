@@ -17,6 +17,13 @@ interface WorkspacePageProps {
 
 const LEFT_PANEL = { min: 150, max: 400, initial: 256 };
 const RIGHT_PANEL = { min: 200, max: 500, initial: 288 };
+const MAX_TITLE_LENGTH = 15;
+
+// 截断过长的标题
+const truncateTitle = (title: string | undefined | null, maxLength = MAX_TITLE_LENGTH): string => {
+  if (!title) return "";
+  return title.length > maxLength ? title.slice(0, maxLength) + "..." : title;
+};
 
 export function WorkspacePage({
   selectedTask,
@@ -105,8 +112,8 @@ export function WorkspacePage({
             <>
               <span className="text-muted-foreground">{t("warehouse", "topics")}</span>
               <span className="text-muted-foreground">/</span>
-              <span className="font-medium">
-                📁 {propSelectedResource?.title || t("common", "untitled")}
+              <span className="font-medium" title={propSelectedResource?.title}>
+                📁 {truncateTitle(propSelectedResource?.title) || t("common", "untitled")}
               </span>
             </>
           ) : isResourceMode ? (
@@ -115,11 +122,11 @@ export function WorkspacePage({
               <span className="text-muted-foreground">{t("workspace", "resourceBreadcrumb")}</span>
               <span className="text-muted-foreground">/</span>
               {currentResource ? (
-                <span className="font-medium">
+                <span className="font-medium" title={currentResource.title}>
                   {currentResource.resource_subtype
                     ? resourceSubtypeIcons[currentResource.resource_subtype]
                     : "📎"}{" "}
-                  {currentResource.title || "未命名资源"}
+                  {truncateTitle(currentResource.title) || "未命名资源"}
                 </span>
               ) : (
                 <span className="font-medium text-muted-foreground">未选择资源</span>
@@ -130,17 +137,17 @@ export function WorkspacePage({
             <>
               <span className="text-muted-foreground">{t("dashboard", "tasks")}</span>
               <span className="text-muted-foreground">/</span>
-              <span className="font-medium">
-                {selectedTask!.title || t("common", "untitled")}
+              <span className="font-medium" title={selectedTask!.title}>
+                {truncateTitle(selectedTask!.title) || t("common", "untitled")}
               </span>
               {currentResource && (
                 <>
                   <span className="text-muted-foreground">/</span>
-                  <span className="text-muted-foreground">
+                  <span className="text-muted-foreground" title={currentResource.title}>
                     {currentResource.resource_subtype
                       ? resourceSubtypeIcons[currentResource.resource_subtype]
                       : "📎"}{" "}
-                    {currentResource.title || "未命名文件"}
+                    {truncateTitle(currentResource.title) || "未命名文件"}
                   </span>
                 </>
               )}
@@ -184,6 +191,12 @@ export function WorkspacePage({
           onResourceClick={context.setSelectedResource}
           onAddToContext={context.addToContext}
           onRemoveFromContext={context.removeFromContext}
+          onNodeClick={(node) => {
+            // 点击关联节点时设置为当前资源
+            if (node.node_type === "resource") {
+              context.setSelectedResource(node);
+            }
+          }}
         />
 
         {/* Center: Editor Area */}

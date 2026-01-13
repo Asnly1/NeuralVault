@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { fetchAllResources, fetchTaskResources, linkNodes, unlinkNodes } from "@/api";
+import { fetchAllResources, listTargetNodes, linkNodes, unlinkNodes } from "@/api";
 import type { NodeRecord } from "@/types";
 
 export interface ContextResourcesState {
-  contextResources: NodeRecord[];
+  contextResources: NodeRecord[]; // 包括Topic/Task/Resource
   allResources: NodeRecord[];
   availableResources: NodeRecord[];
   loadingResources: boolean;
@@ -95,16 +95,17 @@ export function useContextResources({
     const loadResources = async () => {
       setLoadingResources(true);
       try {
-        const resources = await fetchTaskResources(selectedTask.node_id);
+        // 加载所有 contains 关系的节点（包括 Topic/Task/Resource）
+        const result = await listTargetNodes(selectedTask.node_id, "contains");
         if (!ignore) {
-          setContextResources(resources);
+          setContextResources(result.nodes);
           // 如果当前选中的资源不在列表中，清除选择
-          if (selectedResource && !resources.find((r) => r.node_id === selectedResource.node_id)) {
+          if (selectedResource && !result.nodes.find((r) => r.node_id === selectedResource.node_id)) {
             setSelectedResource(null);
           }
         }
       } catch (err) {
-        console.error("加载关联资源失败:", err);
+        console.error("加载关联节点失败:", err);
         if (!ignore) {
           setContextResources([]);
         }
@@ -166,10 +167,11 @@ export function useContextResources({
   const refreshContext = useCallback(async () => {
     if (!isResourceMode && selectedTask) {
       try {
-        const resources = await fetchTaskResources(selectedTask.node_id);
-        setContextResources(resources);
+        // 加载所有 contains 关系的节点
+        const result = await listTargetNodes(selectedTask.node_id, "contains");
+        setContextResources(result.nodes);
       } catch (err) {
-        console.error("刷新上下文资源失败:", err);
+        console.error("刷新上下文节点失败:", err);
       }
     }
   }, [isResourceMode, selectedTask]);

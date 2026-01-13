@@ -1,8 +1,11 @@
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,9 +15,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { NodeRecord, priorityConfig, resourceSubtypeIcons } from "@/types";
-import { Minus, Plus } from "lucide-react";
+import { Plus, Pencil, Check, X } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { RelatedNodesList } from "./RelatedNodesList";
+import { ContextNodeTree } from "./ContextNodeTree";
+import { updateTaskTitle, updateTaskSummary, updateTopicTitle, updateTopicSummary } from "@/api";
 
 interface ContextPanelProps {
   isResourceMode: boolean;
@@ -35,6 +40,8 @@ interface ContextPanelProps {
   onAddToContext: (resource: NodeRecord) => Promise<void>;
   onRemoveFromContext: (resourceId: number) => Promise<void>;
   onNodeClick?: (node: NodeRecord) => void;
+  onTaskUpdate?: (task: NodeRecord) => void;
+  onTopicUpdate?: (topic: NodeRecord) => void;
 }
 
 export function ContextPanel({
@@ -54,11 +61,91 @@ export function ContextPanel({
   onMouseDown,
   onResourceClick,
   onAddToContext,
-  onRemoveFromContext,
+  onRemoveFromContext: _onRemoveFromContext,
   onNodeClick,
+  onTaskUpdate,
+  onTopicUpdate,
 }: ContextPanelProps) {
   const { t } = useLanguage();
   const currentWidth = tempWidth !== null ? tempWidth : width;
+
+  // Task 编辑状态
+  const [isEditingTaskTitle, setIsEditingTaskTitle] = useState(false);
+  const [isEditingTaskSummary, setIsEditingTaskSummary] = useState(false);
+  const [editTaskTitle, setEditTaskTitle] = useState("");
+  const [editTaskSummary, setEditTaskSummary] = useState("");
+
+  // Topic 编辑状态
+  const [isEditingTopicTitle, setIsEditingTopicTitle] = useState(false);
+  const [isEditingTopicSummary, setIsEditingTopicSummary] = useState(false);
+  const [editTopicTitle, setEditTopicTitle] = useState("");
+  const [editTopicSummary, setEditTopicSummary] = useState("");
+
+  // Task 编辑处理
+  const handleTaskTitleEdit = () => {
+    setEditTaskTitle(selectedTask?.title || "");
+    setIsEditingTaskTitle(true);
+  };
+
+  const handleTaskTitleSave = async () => {
+    if (!selectedTask) return;
+    try {
+      await updateTaskTitle(selectedTask.node_id, editTaskTitle);
+      onTaskUpdate?.({ ...selectedTask, title: editTaskTitle });
+      setIsEditingTaskTitle(false);
+    } catch (err) {
+      console.error("Failed to update task title:", err);
+    }
+  };
+
+  const handleTaskSummaryEdit = () => {
+    setEditTaskSummary(selectedTask?.summary || "");
+    setIsEditingTaskSummary(true);
+  };
+
+  const handleTaskSummarySave = async () => {
+    if (!selectedTask) return;
+    try {
+      await updateTaskSummary(selectedTask.node_id, editTaskSummary || null);
+      onTaskUpdate?.({ ...selectedTask, summary: editTaskSummary || null });
+      setIsEditingTaskSummary(false);
+    } catch (err) {
+      console.error("Failed to update task summary:", err);
+    }
+  };
+
+  // Topic 编辑处理
+  const handleTopicTitleEdit = () => {
+    setEditTopicTitle(selectedTopic?.title || "");
+    setIsEditingTopicTitle(true);
+  };
+
+  const handleTopicTitleSave = async () => {
+    if (!selectedTopic) return;
+    try {
+      await updateTopicTitle(selectedTopic.node_id, editTopicTitle);
+      onTopicUpdate?.({ ...selectedTopic, title: editTopicTitle });
+      setIsEditingTopicTitle(false);
+    } catch (err) {
+      console.error("Failed to update topic title:", err);
+    }
+  };
+
+  const handleTopicSummaryEdit = () => {
+    setEditTopicSummary(selectedTopic?.summary || "");
+    setIsEditingTopicSummary(true);
+  };
+
+  const handleTopicSummarySave = async () => {
+    if (!selectedTopic) return;
+    try {
+      await updateTopicSummary(selectedTopic.node_id, editTopicSummary || null);
+      onTopicUpdate?.({ ...selectedTopic, summary: editTopicSummary || null });
+      setIsEditingTopicSummary(false);
+    } catch (err) {
+      console.error("Failed to update topic summary:", err);
+    }
+  };
 
   return (
     <aside
@@ -79,14 +166,69 @@ export function ContextPanel({
               <h3 className="text-sm font-semibold mb-3">{t("workspace", "taskDetails")}</h3>
               <Card>
                 <CardContent className="p-3 space-y-3">
-                  <h4 className="font-medium">
-                    {selectedTask.title || "未命名任务"}
-                  </h4>
-                  {selectedTask.summary && (
-                    <p className="text-sm text-muted-foreground">
-                      {selectedTask.summary}
-                    </p>
-                  )}
+                  {/* Title */}
+                  <div className="group">
+                    {isEditingTaskTitle ? (
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={editTaskTitle}
+                          onChange={(e) => setEditTaskTitle(e.target.value)}
+                          className="h-8 text-sm font-medium"
+                          autoFocus
+                        />
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleTaskTitleSave}>
+                          <Check className="h-4 w-4 text-green-600" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setIsEditingTaskTitle(false)}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-medium flex-1">{selectedTask.title || "未命名任务"}</h4>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                          onClick={handleTaskTitleEdit}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  {/* Summary */}
+                  <div className="group">
+                    {isEditingTaskSummary ? (
+                      <div className="space-y-2">
+                        <Textarea
+                          value={editTaskSummary}
+                          onChange={(e) => setEditTaskSummary(e.target.value)}
+                          className="text-sm resize-none"
+                          rows={3}
+                          autoFocus
+                        />
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" onClick={handleTaskSummarySave}>保存</Button>
+                          <Button size="sm" variant="ghost" onClick={() => setIsEditingTaskSummary(false)}>取消</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-2">
+                        <p className="text-sm text-muted-foreground flex-1">
+                          {selectedTask.summary || <span className="italic">无摘要</span>}
+                        </p>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100 shrink-0"
+                          onClick={handleTaskSummaryEdit}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     <Badge variant="outline">{selectedTask.task_status}</Badge>
                     {selectedTask.priority && (
@@ -121,14 +263,69 @@ export function ContextPanel({
               <h3 className="text-sm font-semibold mb-3">{t("workspace", "topicDetails")}</h3>
               <Card>
                 <CardContent className="p-3 space-y-3">
-                  <h4 className="font-medium">
-                    📁 {selectedTopic.title || "未命名主题"}
-                  </h4>
-                  {selectedTopic.summary && (
-                    <p className="text-sm text-muted-foreground">
-                      {selectedTopic.summary}
-                    </p>
-                  )}
+                  {/* Title */}
+                  <div className="group">
+                    {isEditingTopicTitle ? (
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={editTopicTitle}
+                          onChange={(e) => setEditTopicTitle(e.target.value)}
+                          className="h-8 text-sm font-medium"
+                          autoFocus
+                        />
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleTopicTitleSave}>
+                          <Check className="h-4 w-4 text-green-600" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setIsEditingTopicTitle(false)}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-medium flex-1">📁 {selectedTopic.title || "未命名主题"}</h4>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                          onClick={handleTopicTitleEdit}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  {/* Summary */}
+                  <div className="group">
+                    {isEditingTopicSummary ? (
+                      <div className="space-y-2">
+                        <Textarea
+                          value={editTopicSummary}
+                          onChange={(e) => setEditTopicSummary(e.target.value)}
+                          className="text-sm resize-none"
+                          rows={3}
+                          autoFocus
+                        />
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" onClick={handleTopicSummarySave}>保存</Button>
+                          <Button size="sm" variant="ghost" onClick={() => setIsEditingTopicSummary(false)}>取消</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-2">
+                        <p className="text-sm text-muted-foreground flex-1">
+                          {selectedTopic.summary || <span className="italic">无摘要</span>}
+                        </p>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100 shrink-0"
+                          onClick={handleTopicSummaryEdit}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                   {/* 关联节点列表 */}
                   <RelatedNodesList
                     nodeId={selectedTopic.node_id}
@@ -189,45 +386,17 @@ export function ContextPanel({
             {loadingResources ? (
               <p className="text-sm text-muted-foreground">Loading...</p>
             ) : contextResources.length > 0 ? (
-              <div className="space-y-1">
-                {contextResources.map((resource) => {
-                  const isCurrent =
-                    currentResource?.node_id === resource.node_id;
-                  return (
-                    <div
-                      key={resource.node_id}
-                      className="flex items-center gap-2"
-                    >
-                      <button
-                        className={cn(
-                          "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left text-sm transition-colors",
-                          isCurrent ? "bg-secondary" : "hover:bg-muted"
-                        )}
-                        onClick={() => onResourceClick(resource)}
-                      >
-                        {isCurrent && (
-                          <span>{resource.resource_subtype ? resourceSubtypeIcons[resource.resource_subtype] : "📎"}</span>
-                        )}
-                        <span className="truncate flex-1">
-                          {resource.title || "未命名文件"}
-                        </span>
-                      </button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void onRemoveFromContext(resource.node_id);
-                        }}
-                        title={t("workspace", "removeFromContext")}
-                      >
-                        <Minus className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
+              <ContextNodeTree
+                nodes={contextResources}
+                currentResourceId={currentResource?.node_id}
+                onNodeClick={(node) => {
+                  if (node.node_type === "resource") {
+                    onResourceClick(node);
+                  } else {
+                    onNodeClick?.(node);
+                  }
+                }}
+              />
             ) : (
               <p className="text-sm text-muted-foreground">
                 {t("workspace", "noContextResources")}

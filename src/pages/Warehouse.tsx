@@ -15,6 +15,7 @@ import {
   fetchAllResources,
   fetchUnreviewedNodes,
   listEdgesForTarget,
+  listTargetNodes,
   softDeleteResource,
   softDeleteTask,
   softDeleteTopic,
@@ -31,6 +32,7 @@ type WarehouseTab = "all" | "topics" | "tasks" | "resources" | "inbox";
 
 interface WarehousePageProps {
   onSelectNode: (node: NodeRecord) => void;
+  onPinnedChange?: () => void; // 收藏状态变更后通知父组件
 }
 
 // Tab 配置
@@ -42,28 +44,45 @@ const tabConfig: { key: WarehouseTab; icon: React.ReactNode }[] = [
   { key: "inbox", icon: <Inbox className="h-4 w-4" /> },
 ];
 
-export function WarehousePage({ onSelectNode }: WarehousePageProps) {
+export function WarehousePage({ onSelectNode, onPinnedChange }: WarehousePageProps) {
   const [activeTab, setActiveTab] = useState<WarehouseTab>("all");
   const [nodes, setNodes] = useState<NodeRecord[]>([]);
   const [inboxCount, setInboxCount] = useState(0);
   const [edgeMap, setEdgeMap] = useState<Map<number, EdgeWithNode[]>>(new Map());
+  const [containedNodesMap, setContainedNodesMap] = useState<Map<number, NodeRecord[]>>(new Map());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { t } = useLanguage();
 
   const loadInboxEdges = useCallback(async (inboxNodes: NodeRecord[]) => {
-    const entries = await Promise.all(
-      inboxNodes.map(async (node) => {
+    const entries: [number, EdgeWithNode[]][] = await Promise.all(
+      inboxNodes.map(async (node): Promise<[number, EdgeWithNode[]]> => {
         try {
           const edges = await listEdgesForTarget(node.node_id, "contains");
-          return [node.node_id, edges] as const;
+          return [node.node_id, edges];
         } catch (err) {
           console.error("Failed to load edges for inbox node:", err);
-          return [node.node_id, []] as const;
+          return [node.node_id, []];
         }
       })
     );
     setEdgeMap(new Map(entries));
+  }, []);
+
+  // 加载每个节点的 contains 关联子节点
+  const loadContainedNodes = useCallback(async (nodeList: NodeRecord[]) => {
+    const entries: [number, NodeRecord[]][] = await Promise.all(
+      nodeList.map(async (node): Promise<[number, NodeRecord[]]> => {
+        try {
+          const result = await listTargetNodes(node.node_id, "contains");
+          return [node.node_id, result.nodes];
+        } catch (err) {
+          console.error("Failed to load contained nodes:", err);
+          return [node.node_id, []];
+        }
+      })
+    );
+    setContainedNodesMap(new Map(entries));
   }, []);
 
   // 加载数据
@@ -71,6 +90,7 @@ export function WarehousePage({ onSelectNode }: WarehousePageProps) {
     setLoading(true);
     setError(null);
     try {
+      let loadedNodes: NodeRecord[] = [];
       switch (tab) {
         case "all": {
           // 并行获取所有类型的节点
@@ -80,22 +100,25 @@ export function WarehousePage({ onSelectNode }: WarehousePageProps) {
             fetchAllResources(),
           ]);
           // 按创建时间倒序排列
-          const allNodes = [...topics, ...tasks, ...resources].sort((a, b) => {
+          loadedNodes = [...topics, ...tasks, ...resources].sort((a, b) => {
             const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
             const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
             return dateB - dateA;
           });
-          setNodes(allNodes);
+          setNodes(loadedNodes);
           break;
         }
         case "topics":
-          setNodes(await fetchAllTopics());
+          loadedNodes = await fetchAllTopics();
+          setNodes(loadedNodes);
           break;
         case "tasks":
-          setNodes(await fetchAllTasks());
+          loadedNodes = await fetchAllTasks();
+          setNodes(loadedNodes);
           break;
         case "resources":
-          setNodes(await fetchAllResources());
+          loadedNodes = await fetchAllResources();
+          setNodes(loadedNodes);
           break;
         case "inbox": {
           const inboxNodes = await fetchUnreviewedNodes();
@@ -106,6 +129,10 @@ export function WarehousePage({ onSelectNode }: WarehousePageProps) {
       }
       if (tab !== "inbox") {
         setEdgeMap(new Map());
+        // 加载每个节点的 contains 关联子节点
+        if (loadedNodes.length > 0) {
+          await loadContainedNodes(loadedNodes);
+        }
       }
     } catch (err) {
       console.error("Failed to load warehouse data:", err);
@@ -113,7 +140,7 @@ export function WarehousePage({ onSelectNode }: WarehousePageProps) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadContainedNodes, loadInboxEdges]);
 
   // 获取 Inbox 计数（用于显示徽章）
   const loadInboxCount = useCallback(async () => {
@@ -162,14 +189,16 @@ export function WarehousePage({ onSelectNode }: WarehousePageProps) {
     try {
       await updateNodePinned(node.node_id, !node.is_pinned);
       await loadData(activeTab);
+      onPinnedChange?.(); // 通知侧边栏刷新
     } catch (err) {
       console.error("Failed to toggle pinned:", err);
     }
   };
 
   const handleDeleteNode = async (node: NodeRecord) => {
-    if (!confirm("确定要删除该节点吗？")) return;
+    if (!window.confirm("确定要删除该节点吗？")) return;
     try {
+      console.log("Deleting node:", node.node_id, node.node_type);
       if (node.node_type === "task") {
         await softDeleteTask(node.node_id);
       } else if (node.node_type === "resource") {
@@ -177,10 +206,12 @@ export function WarehousePage({ onSelectNode }: WarehousePageProps) {
       } else if (node.node_type === "topic") {
         await softDeleteTopic(node.node_id);
       }
+      console.log("Delete successful");
       await loadData(activeTab);
       await loadInboxCount();
     } catch (err) {
-      console.error("Failed to delete node:", err);
+      console.error("Failed to delete node:", node.node_type, node.node_id, err);
+      alert(`删除失败: ${err}`);
     }
   };
 
@@ -299,6 +330,10 @@ export function WarehousePage({ onSelectNode }: WarehousePageProps) {
                     activeTab === "inbox" ? edgeMap.get(node.node_id) : undefined
                   }
                   onConfirmEdge={activeTab === "inbox" ? handleConfirmEdge : undefined}
+                  containedNodes={
+                    activeTab !== "inbox" ? containedNodesMap.get(node.node_id) : undefined
+                  }
+                  onContainedNodeClick={onSelectNode}
                 />
               ))}
             </div>

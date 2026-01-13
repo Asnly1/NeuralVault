@@ -44,6 +44,9 @@ export const updateTaskTitle = (nodeId: number, title: string): Promise<void> =>
 export const updateTaskDescription = (nodeId: number, description: string | null): Promise<void> =>
   apiCallVoid("update_task_description_command", { nodeId, description });
 
+export const updateTaskSummary = (nodeId: number, summary: string | null): Promise<void> =>
+  apiCallVoid("update_task_summary_command", { nodeId, summary });
+
 // ============================================
 // Task 查询
 // ============================================

@@ -42,6 +42,7 @@ export {
   updateTaskDueDate,
   updateTaskTitle,
   updateTaskDescription,
+  updateTaskSummary,
   fetchTasksByDate,
   fetchAllTasks,
   fetchActiveTasks,
