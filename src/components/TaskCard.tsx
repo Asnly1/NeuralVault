@@ -3,10 +3,10 @@ import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Trash2, Calendar, AlertCircle, MoreVertical } from "lucide-react";
+import { Trash2, Calendar, AlertCircle, MoreVertical, Ban, RotateCcw } from "lucide-react";
 import { NodeRecord, priorityConfig } from "../types";
 import { TaskEditCard } from "./TaskEditCard";
-import { markTaskAsDone, markTaskAsTodo } from "../api";
+import { markTaskAsDone, markTaskAsTodo, markTaskAsCancelled } from "../api";
 
 interface TaskCardProps {
   task: NodeRecord;
@@ -19,6 +19,8 @@ export function TaskCard({ task, onClick, onDelete, onUpdate }: TaskCardProps) {
   const [editOpen, setEditOpen] = useState(false);
   const isOverdue = task.due_date && new Date(task.due_date) < new Date();
   const priority = priorityConfig[task.priority ?? "medium"];
+  const isInactive = task.task_status !== "todo";
+  const isCancelled = task.task_status === "cancelled";
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation(); // 阻止事件冒泡，防止触发卡片的 onClick
@@ -46,6 +48,22 @@ export function TaskCard({ task, onClick, onDelete, onUpdate }: TaskCardProps) {
       }
     } catch (err) {
       console.error("切换任务状态失败:", err);
+    }
+  };
+
+  const handleCancelToggle = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      if (task.task_status === "cancelled") {
+        await markTaskAsTodo(task.node_id);
+      } else {
+        await markTaskAsCancelled(task.node_id);
+      }
+      if (onUpdate) {
+        onUpdate();
+      }
+    } catch (err) {
+      console.error("切换任务取消状态失败:", err);
     }
   };
 
@@ -83,6 +101,23 @@ export function TaskCard({ task, onClick, onDelete, onUpdate }: TaskCardProps) {
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
           )}
+
+          {/* Cancel/Restore Button */}
+          {task.task_status !== "done" && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-muted-foreground hover:text-foreground"
+              onClick={handleCancelToggle}
+              title={isCancelled ? "恢复为待办" : "取消任务"}
+            >
+              {isCancelled ? (
+                <RotateCcw className="h-3.5 w-3.5" />
+              ) : (
+                <Ban className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          )}
         </div>
 
         <CardHeader className="p-3 pb-1 flex-shrink-0">
@@ -92,7 +127,7 @@ export function TaskCard({ task, onClick, onDelete, onUpdate }: TaskCardProps) {
               className="mt-1 flex-shrink-0 transition-colors hover:border-foreground/40"
               title={task.task_status === "todo" ? "标记为完成" : "标记为待办"}
             >
-              {task.task_status === "done" ? (
+              {isInactive ? (
                 <div className="w-3.5 h-3.5 rounded-sm bg-foreground flex items-center justify-center">
                   <svg
                     className="w-2.5 h-2.5 text-background"
@@ -114,9 +149,7 @@ export function TaskCard({ task, onClick, onDelete, onUpdate }: TaskCardProps) {
             </button>
             <h4
               className={`text-sm font-medium leading-snug ${
-                task.task_status === "done"
-                  ? "line-through text-muted-foreground"
-                  : ""
+                isInactive ? "line-through text-muted-foreground" : ""
               }`}
             >
               {task.title || "Untitled"}
@@ -181,4 +214,3 @@ export function TaskCard({ task, onClick, onDelete, onUpdate }: TaskCardProps) {
     </>
   );
 }
-

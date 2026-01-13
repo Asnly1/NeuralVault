@@ -5,9 +5,11 @@ use crate::{
     app_state::AppState,
     db::{
         contains_creates_cycle, delete_edge, insert_edge, list_nodes_by_type, list_source_nodes,
-        list_target_nodes, update_node_pinned, update_node_summary, update_node_title,
-        update_resource_review_status, EdgeRelationType, NewEdge, NodeRecord, NodeType, ReviewStatus,
+        list_target_nodes, soft_delete_node, hard_delete_node, update_node_pinned,
+        update_node_summary, update_node_title, update_resource_review_status,
+        EdgeRelationType, NewEdge, NodeRecord, NodeType, ReviewStatus,
     },
+    simple_void_command,
     AppResult,
 };
 
@@ -53,6 +55,9 @@ fn parse_review_status(s: Option<&str>) -> ReviewStatus {
         _ => ReviewStatus::Unreviewed,
     }
 }
+
+simple_void_command!(soft_delete_topic_command, soft_delete_node, topic_id: i64);
+simple_void_command!(hard_delete_topic_command, hard_delete_node, topic_id: i64);
 
 #[tauri::command]
 pub async fn create_topic(

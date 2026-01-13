@@ -15,6 +15,7 @@ export {
   sourceMetaSchema,
   nodeRecordSchema,
   edgeRecordSchema,
+  edgeWithNodeSchema,
   dashboardSchema,
 } from "./node";
 
@@ -30,6 +31,7 @@ export type {
   SourceMeta,
   NodeRecord,
   EdgeRecord,
+  EdgeWithNode,
   DashboardData,
   IngestProgress,
   SemanticSearchResult,
@@ -73,6 +75,7 @@ export type {
   ChatUsage,
   ChatMessagePayload,
   ChatMessage,
+  RagScope,
   SendChatRequest,
   ChatStreamAck,
   ChatSession,

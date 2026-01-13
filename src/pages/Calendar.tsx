@@ -163,13 +163,13 @@ export function CalendarPage({ tasks, onRefresh }: CalendarPageProps) {
                         borderLeft: task.priority ? `2px solid ${priorityConfig[task.priority].color}` : undefined,
                       }}
                     >
-                      <div className={`flex items-center gap-1 ${task.task_status === "done" ? "line-through opacity-60" : ""}`}>
+                      <div className={`flex items-center gap-1 ${task.task_status !== "todo" ? "line-through opacity-60" : ""}`}>
                         <div
                           className={`w-3 h-3 rounded-sm border flex items-center justify-center flex-shrink-0
-                            ${task.task_status === "done" ? "bg-primary border-primary" : "border-muted-foreground"}
+                            ${task.task_status !== "todo" ? "bg-primary border-primary" : "border-muted-foreground"}
                           `}
                         >
-                          {task.task_status === "done" && (
+                          {task.task_status !== "todo" && (
                             <svg
                               className="w-2 h-2 text-primary-foreground"
                               fill="none"

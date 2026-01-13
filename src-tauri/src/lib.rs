@@ -18,7 +18,7 @@ pub use error::{AppError, AppResult};
 pub use commands::{
     capture_resource, get_all_resources, get_resource_by_id, get_assets_path, get_dashboard,
     create_task, soft_delete_task_command, hard_delete_task_command, mark_task_as_done_command,
-    mark_task_as_todo_command, update_task_priority_command, update_task_due_date_command,
+    mark_task_as_todo_command, mark_task_as_cancelled_command, update_task_priority_command, update_task_due_date_command,
     update_task_title_command, update_task_description_command, update_task_summary_command,
     get_tasks_by_date, get_all_tasks, get_active_tasks,
     update_resource_content_command, update_resource_title_command, update_resource_summary_command,
@@ -35,6 +35,7 @@ pub use commands::{
     // Topic commands
     create_topic, get_topic_command, list_topics_command,
     update_topic_title_command, update_topic_summary_command, update_topic_favourite_command,
+    soft_delete_topic_command, hard_delete_topic_command,
     link_resource_to_topic_command, unlink_resource_from_topic_command,
     update_topic_resource_review_status_command, get_topic_resources_command, get_resource_topics_command,
     link_task_to_topic_command, unlink_task_from_topic_command, get_topic_tasks_command, get_task_topics_command,
@@ -44,6 +45,7 @@ pub use commands::{
     list_pinned_nodes, list_unreviewed_nodes, update_node_review_status, update_node_pinned,
     list_node_revision_logs, convert_resource_to_topic_command, convert_resource_to_task_command,
     convert_topic_to_task_command, convert_task_to_topic_command,
+    confirm_edge_command, list_edges_for_target_command,
 };
 pub use window::{hide_hud, toggle_hud};
 
@@ -190,6 +192,7 @@ pub fn run() {
             get_assets_path,
             mark_task_as_done_command,
             mark_task_as_todo_command,
+            mark_task_as_cancelled_command,
             update_task_priority_command,
             update_task_due_date_command,
             update_task_title_command,
@@ -229,6 +232,8 @@ pub fn run() {
             update_topic_title_command,
             update_topic_summary_command,
             update_topic_favourite_command,
+            soft_delete_topic_command,
+            hard_delete_topic_command,
             link_resource_to_topic_command,
             unlink_resource_from_topic_command,
             update_topic_resource_review_status_command,
@@ -251,7 +256,9 @@ pub fn run() {
             convert_resource_to_topic_command,
             convert_resource_to_task_command,
             convert_topic_to_task_command,
-            convert_task_to_topic_command
+            convert_task_to_topic_command,
+            confirm_edge_command,
+            list_edges_for_target_command
         ])
         // 启动应用
         // tauri::generate_context!()：这个宏会读取你的 tauri.conf.json 配置文件，并在编译时将其转化为代码。它告诉构建器应用的名称、版本、图标等信息。

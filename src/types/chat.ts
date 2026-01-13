@@ -90,6 +90,8 @@ export interface ChatMessage {
   usage?: ChatUsage;
 }
 
+export type RagScope = "local" | "global";
+
 export interface SendChatRequest {
   session_id: number;
   provider: string;
@@ -98,6 +100,7 @@ export interface SendChatRequest {
   images?: number[];
   files?: number[];
   thinking_effort?: ThinkingEffort;
+  rag_scope?: RagScope;
 }
 
 export interface ChatStreamAck {

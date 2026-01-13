@@ -5,7 +5,7 @@ use crate::{
     app_state::AppState,
     db::{
         get_node_by_id, insert_node, list_all_tasks, list_active_tasks, list_tasks_by_date,
-        mark_task_done, mark_task_todo, update_node_summary, update_node_title,
+        mark_task_cancelled, mark_task_done, mark_task_todo, update_node_summary, update_node_title,
         update_node_user_note, update_task_due_date, update_task_priority,
         soft_delete_node, hard_delete_node, NewNode, NodeType, ResourceProcessingStage,
         ResourceEmbeddingStatus, ReviewStatus, TaskPriority, TaskStatus,
@@ -19,6 +19,7 @@ use super::{CreateTaskRequest, CreateTaskResponse};
 simple_void_command!(update_task_priority_command, update_task_priority, node_id: i64, priority: TaskPriority);
 simple_void_command!(soft_delete_task_command, soft_delete_node, node_id: i64);
 simple_void_command!(hard_delete_task_command, hard_delete_node, node_id: i64);
+simple_void_command!(mark_task_as_cancelled_command, mark_task_cancelled, node_id: i64);
 
 #[tauri::command]
 pub async fn update_task_title_command(

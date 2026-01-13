@@ -60,7 +60,7 @@ export function DashboardPage({
   // 使用统一的排序函数
   const sortedTasks = useMemo(() => sortTasksForDashboard(tasks), [tasks]);
 
-  const activeTasks = sortedTasks.filter((t) => t.task_status !== "done");
+  const activeTasks = sortedTasks.filter((t) => t.task_status === "todo");
   const unlinkedResources = resources.filter(
     (r) => r.review_status === "unreviewed"
   );

@@ -1,5 +1,12 @@
 import { apiCall, apiCallVoid, apiCallArray } from "./client";
-import { nodeRecordSchema, type NodeRecord, type ReviewStatus, type RelationType } from "../types";
+import {
+  nodeRecordSchema,
+  edgeWithNodeSchema,
+  type EdgeWithNode,
+  type NodeRecord,
+  type ReviewStatus,
+  type RelationType,
+} from "../types";
 import type { LinkNodesRequest, LinkNodesResponse, NodeListResponse } from "../types";
 
 // ============================================
@@ -21,6 +28,22 @@ export const updateNodePinned = (nodeId: number, isPinned: boolean): Promise<voi
 /** 更新节点审核状态 */
 export const updateNodeReviewStatus = (nodeId: number, reviewStatus: ReviewStatus): Promise<void> =>
   apiCallVoid("update_node_review_status", { node_id: nodeId, review_status: reviewStatus });
+
+/** 资源 -> 主题 */
+export const convertResourceToTopic = (nodeId: number): Promise<NodeRecord> =>
+  apiCall("convert_resource_to_topic_command", { node_id: nodeId }, nodeRecordSchema);
+
+/** 资源 -> 任务 */
+export const convertResourceToTask = (nodeId: number): Promise<NodeRecord> =>
+  apiCall("convert_resource_to_task_command", { node_id: nodeId }, nodeRecordSchema);
+
+/** 主题 -> 任务 */
+export const convertTopicToTask = (nodeId: number): Promise<NodeRecord> =>
+  apiCall("convert_topic_to_task_command", { node_id: nodeId }, nodeRecordSchema);
+
+/** 任务 -> 主题 */
+export const convertTaskToTopic = (nodeId: number): Promise<NodeRecord> =>
+  apiCall("convert_task_to_topic_command", { node_id: nodeId }, nodeRecordSchema);
 
 // ============================================
 // 节点关联操作
@@ -72,4 +95,28 @@ export const listSourceNodes = (
   apiCall("list_source_nodes_command", {
     target_node_id: targetNodeId,
     relation_type: relationType,
+  });
+
+/** 获取目标节点的边信息（含来源节点） */
+export const listEdgesForTarget = (
+  targetNodeId: number,
+  relationType: RelationType
+): Promise<EdgeWithNode[]> =>
+  apiCallArray("list_edges_for_target_command", edgeWithNodeSchema, {
+    target_node_id: targetNodeId,
+    relation_type: relationType,
+  });
+
+/** 确认边为人工 */
+export const confirmEdge = (
+  sourceNodeId: number,
+  targetNodeId: number,
+  relationType: RelationType
+): Promise<void> =>
+  apiCallVoid("confirm_edge_command", {
+    payload: {
+      source_node_id: sourceNodeId,
+      target_node_id: targetNodeId,
+      relation_type: relationType,
+    } as LinkNodesRequest,
   });

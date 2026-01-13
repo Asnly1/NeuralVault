@@ -6,7 +6,7 @@
 import { useCallback } from "react";
 import { useAIConfig } from "@/contexts/AIConfigContext";
 import { useChatMessage } from "@/contexts/ChatMessageContext";
-import type { ThinkingEffort, ModelOption, ChatMessage, AIProvider } from "@/types";
+import type { ThinkingEffort, ModelOption, ChatMessage, AIProvider, RagScope } from "@/types";
 
 interface ChatContext {
   task_id?: number;
@@ -15,6 +15,7 @@ interface ChatContext {
   files?: number[];
   thinking_effort?: ThinkingEffort;
   context_resource_ids?: number[];
+  rag_scope?: RagScope;
 }
 
 export interface UseChatReturn {

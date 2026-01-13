@@ -16,10 +16,16 @@ export {
   fetchUnreviewedNodes,
   updateNodePinned,
   updateNodeReviewStatus,
+  convertResourceToTopic,
+  convertResourceToTask,
+  convertTopicToTask,
+  convertTaskToTopic,
   linkNodes,
   unlinkNodes,
   listTargetNodes,
   listSourceNodes,
+  listEdgesForTarget,
+  confirmEdge,
 } from "./node";
 
 // ============================================
@@ -31,6 +37,7 @@ export {
   hardDeleteTask,
   markTaskAsDone,
   markTaskAsTodo,
+  markTaskAsCancelled,
   updateTaskPriority,
   updateTaskDueDate,
   updateTaskTitle,
@@ -63,6 +70,8 @@ export {
   createTopic,
   fetchAllTopics,
   getTopic,
+  softDeleteTopic,
+  hardDeleteTopic,
   updateTopicTitle,
   updateTopicSummary,
   updateTopicFavourite,

@@ -28,7 +28,7 @@ pub async fn list_nodes_by_type(
 
 pub async fn list_active_tasks(pool: &DbPool) -> Result<Vec<NodeRecord>, sqlx::Error> {
     let sql = format!(
-        "SELECT {} FROM nodes WHERE node_type = 'task' AND task_status != 'done' AND is_deleted = 0 ORDER BY updated_at DESC",
+        "SELECT {} FROM nodes WHERE node_type = 'task' AND task_status = 'todo' AND is_deleted = 0 ORDER BY updated_at DESC",
         NODE_FIELDS
     );
     sqlx::query_as::<_, NodeRecord>(&sql).fetch_all(pool).await

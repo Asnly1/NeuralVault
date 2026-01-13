@@ -102,6 +102,13 @@ export const edgeRecordSchema = z.object({
 
 export type EdgeRecord = z.infer<typeof edgeRecordSchema>;
 
+export const edgeWithNodeSchema = z.object({
+  edge: edgeRecordSchema,
+  node: nodeRecordSchema,
+});
+
+export type EdgeWithNode = z.infer<typeof edgeWithNodeSchema>;
+
 export const dashboardSchema = z.object({
   tasks: z.array(nodeRecordSchema).default([]),
   resources: z.array(nodeRecordSchema).default([]),

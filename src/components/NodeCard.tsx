@@ -4,15 +4,26 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Check,
   X,
   Star,
   StarOff,
+  Trash2,
+  MoreHorizontal,
 } from "lucide-react";
 import {
   NodeRecord,
   priorityConfig,
   resourceSubtypeIcons,
+  type EdgeWithNode,
 } from "../types";
 import { format } from "date-fns";
 
@@ -23,6 +34,10 @@ interface NodeCardProps {
   onApprove?: () => void;
   onReject?: () => void;
   onTogglePinned?: () => void;
+  onDelete?: () => void;
+  onConvert?: (targetType: "task" | "topic") => void;
+  edgeItems?: EdgeWithNode[];
+  onConfirmEdge?: (edge: EdgeWithNode) => void;
 }
 
 export function NodeCard({
@@ -32,7 +47,35 @@ export function NodeCard({
   onApprove,
   onReject,
   onTogglePinned,
+  onDelete,
+  onConvert,
+  edgeItems,
+  onConfirmEdge,
 }: NodeCardProps) {
+  const convertOptions = (() => {
+    if (!onConvert) return [];
+    if (node.node_type === "resource") {
+      return [
+        { type: "task" as const, label: "转为任务" },
+        { type: "topic" as const, label: "转为主题" },
+      ];
+    }
+    if (node.node_type === "task") {
+      return [{ type: "topic" as const, label: "转为主题" }];
+    }
+    if (node.node_type === "topic") {
+      return [{ type: "task" as const, label: "转为任务" }];
+    }
+    return [];
+  })();
+
+  const getEdgeNodeIcon = (edgeNode: NodeRecord) => {
+    if (edgeNode.node_type === "resource" && edgeNode.resource_subtype) {
+      return resourceSubtypeIcons[edgeNode.resource_subtype];
+    }
+    return getNodeTypeIcon(edgeNode.node_type);
+  };
+
   return (
     <Card
       className={cn(
@@ -114,6 +157,39 @@ export function NodeCard({
 
           {/* Actions */}
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            {convertOptions.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={(e) => e.stopPropagation()}
+                    title="转换类型"
+                  >
+                    <MoreHorizontal className="h-3.5 w-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-40">
+                  <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                    节点转换
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {convertOptions.map((option) => (
+                    <DropdownMenuItem
+                      key={option.type}
+                      className="cursor-pointer text-xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onConvert?.(option.type);
+                      }}
+                    >
+                      {option.label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             {onTogglePinned && (
               <Button
                 variant="ghost"
@@ -130,6 +206,21 @@ export function NodeCard({
                 ) : (
                   <Star className="h-3.5 w-3.5" />
                 )}
+              </Button>
+            )}
+
+            {onDelete && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete();
+                }}
+                title="删除"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
               </Button>
             )}
 
@@ -163,6 +254,55 @@ export function NodeCard({
             )}
           </div>
         </div>
+
+        {edgeItems && (
+          <div className="mt-2 pt-2 border-t text-xs">
+            <div className="text-muted-foreground mb-1">关联 Edge</div>
+            {edgeItems.length === 0 ? (
+              <div className="text-muted-foreground">暂无关联</div>
+            ) : (
+              <div className="space-y-1">
+                {edgeItems.map((edgeItem) => (
+                  <div
+                    key={edgeItem.edge.edge_id}
+                    className="flex items-center gap-2"
+                  >
+                    <span className="text-[10px]">
+                      {getEdgeNodeIcon(edgeItem.node)}
+                    </span>
+                    <span className="truncate flex-1">
+                      {edgeItem.node.title || "未命名"}
+                    </span>
+                    {edgeItem.edge.confidence_score !== null && (
+                      <span className="text-[10px] text-muted-foreground">
+                        {edgeItem.edge.confidence_score.toFixed(2)}
+                      </span>
+                    )}
+                    {edgeItem.edge.is_manual ? (
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                        已确认
+                      </Badge>
+                    ) : (
+                      onConfirmEdge && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-6 px-2 text-[10px]"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onConfirmEdge(edgeItem);
+                          }}
+                        >
+                          确认
+                        </Button>
+                      )
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

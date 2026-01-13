@@ -32,8 +32,8 @@ interface ContextPanelProps {
   isResizing: boolean;
   onMouseDown: (e: React.MouseEvent) => void;
   onResourceClick: (resource: NodeRecord) => void;
-  onAddToContext: (resource: NodeRecord) => void;
-  onRemoveFromContext: (resourceId: number) => void;
+  onAddToContext: (resource: NodeRecord) => Promise<void>;
+  onRemoveFromContext: (resourceId: number) => Promise<void>;
   onNodeClick?: (node: NodeRecord) => void;
 }
 
@@ -169,7 +169,7 @@ export function ContextPanel({
                     availableResources.map((resource) => (
                       <DropdownMenuItem
                         key={resource.node_id}
-                        onClick={() => onAddToContext(resource)}
+                        onClick={() => void onAddToContext(resource)}
                         className="cursor-pointer gap-2"
                       >
                         <span>{resource.resource_subtype ? resourceSubtypeIcons[resource.resource_subtype] : "📎"}</span>
@@ -218,7 +218,7 @@ export function ContextPanel({
                         className="h-7 w-7 text-muted-foreground hover:text-destructive"
                         onClick={(e) => {
                           e.stopPropagation();
-                          onRemoveFromContext(resource.node_id);
+                          void onRemoveFromContext(resource.node_id);
                         }}
                         title={t("workspace", "removeFromContext")}
                       >

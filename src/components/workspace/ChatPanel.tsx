@@ -12,10 +12,11 @@ import {
 } from "@/components/ui/select";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAIConfig, useChatMessage } from "@/contexts/AIContext";
-import { AI_PROVIDER_INFO, type ModelOption, type ThinkingEffort } from "@/types";
+import { AI_PROVIDER_INFO, type ModelOption, type ThinkingEffort, type RagScope } from "@/types";
 import { Send, Loader2, Settings, Pin } from "lucide-react";
 import { quickCapture, linkNodes } from "@/api";
 import { ThinkingBlock } from "./ThinkingBlock";
+import { useLocalStorageString } from "@/hooks";
 
 interface ChatPanelProps {
   width: number;
@@ -52,11 +53,20 @@ export function ChatPanel({
   } = useChatMessage();
   const [chatInput, setChatInput] = useState("");
   const [thinkingEffort, setThinkingEffort] = useState<ThinkingEffort>("low");
+  const [ragScopeValue, setRagScopeValue] = useLocalStorageString(
+    "neuralvault_rag_scope",
+    "local"
+  );
   const [pinningIndex, setPinningIndex] = useState<number | null>(null);
   const hasSessionContext = !!taskId || !!resourceId;
   const anchorNodeId = taskId || resourceId;
 
   const currentWidth = tempWidth !== null ? tempWidth : width;
+  const ragScope: RagScope = ragScopeValue === "global" ? "global" : "local";
+  const ragScopeLabel =
+    ragScope === "local"
+      ? t("workspace", "ragScopeLocal")
+      : t("workspace", "ragScopeGlobal");
 
   // 构建可用模型列表
   const availableModels: ModelOption[] = configuredProviders.flatMap(
@@ -99,6 +109,7 @@ export function ChatPanel({
         resource_id: resourceId,
         thinking_effort: thinkingEffort,
         context_resource_ids: contextResourceIds,
+        rag_scope: ragScope,
       });
     } catch (e) {
       console.error("Failed to send message:", e);
@@ -240,9 +251,20 @@ export function ChatPanel({
             </Select>
           </div>
         </div>
-        <p className="text-xs text-muted-foreground mt-1">
-          {t("workspace", "context")}
-        </p>
+        <div className="flex items-center gap-2 mt-1">
+          <p className="text-xs text-muted-foreground">
+            {t("workspace", "context")}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-6 px-2 text-[10px] rounded-full"
+            onClick={() => setRagScopeValue(ragScope === "local" ? "global" : "local")}
+            title={t("workspace", "ragScope")}
+          >
+            {t("workspace", "ragScope")}: {ragScopeLabel}
+          </Button>
+        </div>
       </div>
 
       {/* Messages area */}
@@ -295,8 +317,10 @@ export function ChatPanel({
                   {msg.role === "assistant" && msg.usage && (
                     <div className="mt-2 text-xs text-muted-foreground">
                       {t("workspace", "tokenUsage")}{" "}
-                      {msg.usage.input_tokens}/{msg.usage.output_tokens}/
-                      {msg.usage.total_tokens}
+                      {t("workspace", "tokenUsageInput")} {msg.usage.input_tokens} /{" "}
+                      {t("workspace", "tokenUsageOutput")} {msg.usage.output_tokens} /{" "}
+                      {t("workspace", "tokenUsageReasoning")} {msg.usage.reasoning_tokens} /{" "}
+                      {t("workspace", "tokenUsageTotal")} {msg.usage.total_tokens}
                     </div>
                   )}
                 </div>

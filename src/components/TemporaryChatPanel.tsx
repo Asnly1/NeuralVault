@@ -238,7 +238,11 @@ export function TemporaryChatPanel({
                 <p className="whitespace-pre-wrap">{msg.content}</p>
                 {msg.usage && (
                   <p className="text-[10px] opacity-60 mt-1">
-                    {t("workspace", "tokenUsage")} {msg.usage.total_tokens}
+                    {t("workspace", "tokenUsage")}{" "}
+                    {t("workspace", "tokenUsageInput")} {msg.usage.input_tokens} /{" "}
+                    {t("workspace", "tokenUsageOutput")} {msg.usage.output_tokens} /{" "}
+                    {t("workspace", "tokenUsageReasoning")} {msg.usage.reasoning_tokens} /{" "}
+                    {t("workspace", "tokenUsageTotal")} {msg.usage.total_tokens}
                   </p>
                 )}
               </div>

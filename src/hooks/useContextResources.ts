@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { fetchAllResources, fetchTaskResources } from "@/api";
+import { fetchAllResources, fetchTaskResources, linkNodes, unlinkNodes } from "@/api";
 import type { NodeRecord } from "@/types";
 
 export interface ContextResourcesState {
@@ -13,8 +13,8 @@ export interface ContextResourcesState {
 
 export interface ContextResourcesActions {
   setSelectedResource: (resource: NodeRecord | null) => void;
-  addToContext: (resource: NodeRecord) => void;
-  removeFromContext: (resourceId: number) => void;
+  addToContext: (resource: NodeRecord) => Promise<void>;
+  removeFromContext: (resourceId: number) => Promise<void>;
   refreshContext: () => Promise<void>;
   updateResource: (resource: NodeRecord) => void;
 }
@@ -122,17 +122,36 @@ export function useContextResources({
     };
   }, [selectedTask, isResourceMode]);
 
-  const addToContext = useCallback((resource: NodeRecord) => {
-    setContextResources((prev) => {
-      if (prev.some((r) => r.node_id === resource.node_id)) {
-        return prev;
+  const addToContext = useCallback(
+    async (resource: NodeRecord) => {
+      if (!isResourceMode && selectedTask) {
+        try {
+          await linkNodes(selectedTask.node_id, resource.node_id, "contains");
+        } catch (err) {
+          console.error("保存上下文资源失败:", err);
+          return;
+        }
       }
-      return [...prev, resource];
-    });
-  }, []);
+      setContextResources((prev) => {
+        if (prev.some((r) => r.node_id === resource.node_id)) {
+          return prev;
+        }
+        return [...prev, resource];
+      });
+    },
+    [isResourceMode, selectedTask]
+  );
 
   const removeFromContext = useCallback(
-    (resourceId: number) => {
+    async (resourceId: number) => {
+      if (!isResourceMode && selectedTask) {
+        try {
+          await unlinkNodes(selectedTask.node_id, resourceId, "contains");
+        } catch (err) {
+          console.error("移除上下文资源失败:", err);
+          return;
+        }
+      }
       setContextResources((prev) => {
         const next = prev.filter((r) => r.node_id !== resourceId);
         if (selectedResource?.node_id === resourceId) {
@@ -141,7 +160,7 @@ export function useContextResources({
         return next;
       });
     },
-    [selectedResource]
+    [isResourceMode, selectedTask, selectedResource]
   );
 
   const refreshContext = useCallback(async () => {

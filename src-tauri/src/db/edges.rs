@@ -80,6 +80,24 @@ pub async fn delete_edge(
     Ok(())
 }
 
+pub async fn confirm_edge(
+    pool: &DbPool,
+    source_node_id: i64,
+    target_node_id: i64,
+    relation_type: EdgeRelationType,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE edges SET is_manual = 1, updated_at = CURRENT_TIMESTAMP \
+         WHERE source_node_id = ? AND target_node_id = ? AND relation_type = ?",
+    )
+    .bind(source_node_id)
+    .bind(target_node_id)
+    .bind(relation_type)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 pub async fn list_edges_from(
     pool: &DbPool,
     source_node_id: i64,

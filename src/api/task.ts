@@ -25,6 +25,9 @@ export const markTaskAsDone = (nodeId: number): Promise<void> =>
 export const markTaskAsTodo = (nodeId: number): Promise<void> =>
   apiCallVoid("mark_task_as_todo_command", { node_id: nodeId });
 
+export const markTaskAsCancelled = (nodeId: number): Promise<void> =>
+  apiCallVoid("mark_task_as_cancelled_command", { node_id: nodeId });
+
 // ============================================
 // Task 字段更新
 // ============================================

@@ -35,6 +35,7 @@ import {
   updateTaskDueDate,
   markTaskAsDone,
   markTaskAsTodo,
+  markTaskAsCancelled,
 } from "../api";
 
 interface TaskEditCardProps {
@@ -144,6 +145,8 @@ export function TaskEditCard({
         if (formData.status !== task.task_status) {
           if (formData.status === "done") {
             updates.push(markTaskAsDone(task.node_id));
+          } else if (formData.status === "cancelled") {
+            updates.push(markTaskAsCancelled(task.node_id));
           } else {
             updates.push(markTaskAsTodo(task.node_id));
           }
@@ -235,6 +238,7 @@ export function TaskEditCard({
                 <SelectContent>
                   <SelectItem value="todo">Todo</SelectItem>
                   <SelectItem value="done">Done</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
             </div>

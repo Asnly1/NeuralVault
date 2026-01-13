@@ -17,6 +17,12 @@ export const fetchAllTopics = (): Promise<NodeRecord[]> =>
 export const getTopic = (nodeId: number): Promise<NodeRecord> =>
   apiCall("get_topic_command", { topic_id: nodeId }, nodeRecordSchema);
 
+export const softDeleteTopic = (nodeId: number): Promise<void> =>
+  apiCallVoid("soft_delete_topic_command", { topic_id: nodeId });
+
+export const hardDeleteTopic = (nodeId: number): Promise<void> =>
+  apiCallVoid("hard_delete_topic_command", { topic_id: nodeId });
+
 // ============================================
 // Topic 更新
 // ============================================

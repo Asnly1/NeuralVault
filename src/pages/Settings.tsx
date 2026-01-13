@@ -182,7 +182,6 @@ function APIKeyCard({
 export function SettingsPage({ theme, onThemeChange }: SettingsPageProps) {
   const [modelPath, setModelPath] = useState("");
   const [enableLocal, setEnableLocal] = useState(false);
-  const shortcut = "Alt + Space";
   const { language, setLanguage, t } = useLanguage();
   const {
     config,
@@ -197,6 +196,11 @@ export function SettingsPage({ theme, onThemeChange }: SettingsPageProps) {
   const [processingProvider, setProcessingProvider] = useState<AIProvider | "">("");
   const [processingModel, setProcessingModel] = useState("");
   const [processingSaving, setProcessingSaving] = useState(false);
+  const shortcuts = [
+    { label: t("settings", "shortcutQuickCapture"), keys: "Alt + Space" },
+    { label: t("settings", "shortcutSearch"), keys: "Ctrl/Cmd + K" },
+    { label: t("settings", "shortcutSave"), keys: "Ctrl/Cmd + S" },
+  ];
 
   const isKnownProvider = (provider: string): provider is AIProvider =>
     provider in AI_PROVIDER_INFO;
@@ -534,15 +538,18 @@ export function SettingsPage({ theme, onThemeChange }: SettingsPageProps) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <p className="text-sm font-medium">
-                  {t("settings", "quickCaptureDesc")}
-                </p>
-              </div>
-              <Badge variant="secondary" className="font-mono">
-                {shortcut}
-              </Badge>
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                {t("settings", "shortcutsHint")}
+              </p>
+              {shortcuts.map((item) => (
+                <div key={item.label} className="flex items-center justify-between">
+                  <p className="text-sm font-medium">{item.label}</p>
+                  <Badge variant="secondary" className="font-mono">
+                    {item.keys}
+                  </Badge>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>

@@ -37,11 +37,14 @@ export function sortTasks(
     priorityWeight = DEFAULT_PRIORITY_WEIGHT,
   } = options;
 
+  const isDone = (task: NodeRecord) =>
+    task.task_status === "done" || task.task_status === "cancelled";
+
   return [...tasks].sort((a, b) => {
     // 1. 已完成任务排到最后
     if (doneAtBottom) {
-      if (a.task_status === "done" && b.task_status !== "done") return 1;
-      if (a.task_status !== "done" && b.task_status === "done") return -1;
+      if (isDone(a) && !isDone(b)) return 1;
+      if (!isDone(a) && isDone(b)) return -1;
     }
 
     // 2. 按优先级排序 (高优先级在前)

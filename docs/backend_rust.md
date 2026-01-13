@@ -259,13 +259,14 @@ pub struct AppState {
 |------|------|
 | `node_type` | topic / task / resource |
 | `title` | 必填；资源默认文件名或前 10 字 |
+| `task_status` | todo / done / cancelled（仅 task） |
 | `review_status` | 仅资源可为 `unreviewed/reviewed/rejected`，其余强制 `reviewed` |
 | `embedding_status` | pending / synced / dirty / error |
 | `embedded_hash` | 最后成功 embedding 时的内容 hash |
 | `processing_hash` | 正在处理的内容 hash |
 | `processing_stage` | todo / embedding / done |
 | `last_embedding_error` | 最后一次错误信息 |
-| `done_date` | 任务完成日期（仅 task，保持现有时间类型） |
+| `done_date` | 任务完成/取消时间（仅 task，保持现有时间类型） |
 
 ### edges
 
@@ -301,10 +302,11 @@ pub struct AppState {
 |------|------|
 | `create_task` | 创建任务 |
 | `get_all_tasks` | 获取所有任务 |
-| `get_active_tasks` | 获取活跃任务（未完成/取消） |
+| `get_active_tasks` | 获取活跃任务（todo） |
 | `get_tasks_by_date` | 按日期获取任务 |
 | `mark_task_as_done_command` | 标记完成 |
 | `mark_task_as_todo_command` | 重置为待办 |
+| `mark_task_as_cancelled_command` | 标记取消 |
 | `update_task_title_command` | 更新标题 |
 | `update_task_due_date_command` | 更新截止日期 |
 | `update_task_description_command` | 更新描述（user_note） |
@@ -315,7 +317,7 @@ pub struct AppState {
 
 ### topics.rs
 
-创建 topic、更新标题/摘要、收藏、关联资源/任务。
+创建 topic、更新标题/摘要、收藏、关联资源/任务、删除 topic（软/硬删除）。
 
 ### nodes.rs
 
@@ -325,6 +327,10 @@ pub struct AppState {
 | `list_unreviewed_nodes` | 获取所有待审核节点 |
 | `update_node_review_status` | 更新审核状态 |
 | `update_node_pinned` | 更新收藏状态 |
+| `convert_resource_to_topic_command` | 资源 → 主题 |
+| `convert_resource_to_task_command` | 资源 → 任务 |
+| `convert_topic_to_task_command` | 主题 → 任务 |
+| `convert_task_to_topic_command` | 任务 → 主题 |
 
 ### clipboard.rs
 
@@ -340,7 +346,14 @@ pub struct AppState {
 
 ### edges.rs
 
-通用节点连接（`related_to` 自动规范化）。
+通用节点连接（`related_to` 自动规范化），支持 Edge 确认与 Inbox 查询。
+
+| 命令 | 说明 |
+|------|------|
+| `link_nodes_command` | 创建边 |
+| `unlink_nodes_command` | 删除边 |
+| `confirm_edge_command` | 标记边为人工确认（`is_manual = 1`） |
+| `list_edges_for_target_command` | 获取目标节点的边 + 来源节点（Inbox） |
 
 ### chat.rs
 
@@ -353,6 +366,7 @@ API Key 管理、processing provider/model 配置。
 ### chat_stream.rs
 
 聊天流式命令（`send_chat_message`），处理 SSE 流式响应。
+- 支持 `rag_scope`: `local`（当前上下文资源）/ `global`（全局资源），检索 Top-5 片段插入上下文。
 
 ### search.rs
 

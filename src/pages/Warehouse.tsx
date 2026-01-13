@@ -4,13 +4,22 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Inbox, Package, Tag, CheckSquare, FileText, RefreshCw } from "lucide-react";
 
-import { NodeRecord } from "../types";
+import { type EdgeWithNode, NodeRecord } from "../types";
 import { NodeCard } from "../components/NodeCard";
 import {
+  confirmEdge,
+  convertResourceToTask,
+  convertResourceToTopic,
   fetchAllTopics,
   fetchAllTasks,
   fetchAllResources,
   fetchUnreviewedNodes,
+  listEdgesForTarget,
+  softDeleteResource,
+  softDeleteTask,
+  softDeleteTopic,
+  convertTaskToTopic,
+  convertTopicToTask,
   updateNodeReviewStatus,
   updateNodePinned,
 } from "../api";
@@ -37,9 +46,25 @@ export function WarehousePage({ onSelectNode }: WarehousePageProps) {
   const [activeTab, setActiveTab] = useState<WarehouseTab>("all");
   const [nodes, setNodes] = useState<NodeRecord[]>([]);
   const [inboxCount, setInboxCount] = useState(0);
+  const [edgeMap, setEdgeMap] = useState<Map<number, EdgeWithNode[]>>(new Map());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { t } = useLanguage();
+
+  const loadInboxEdges = useCallback(async (inboxNodes: NodeRecord[]) => {
+    const entries = await Promise.all(
+      inboxNodes.map(async (node) => {
+        try {
+          const edges = await listEdgesForTarget(node.node_id, "contains");
+          return [node.node_id, edges] as const;
+        } catch (err) {
+          console.error("Failed to load edges for inbox node:", err);
+          return [node.node_id, []] as const;
+        }
+      })
+    );
+    setEdgeMap(new Map(entries));
+  }, []);
 
   // 加载数据
   const loadData = useCallback(async (tab: WarehouseTab) => {
@@ -72,9 +97,15 @@ export function WarehousePage({ onSelectNode }: WarehousePageProps) {
         case "resources":
           setNodes(await fetchAllResources());
           break;
-        case "inbox":
-          setNodes(await fetchUnreviewedNodes());
+        case "inbox": {
+          const inboxNodes = await fetchUnreviewedNodes();
+          setNodes(inboxNodes);
+          await loadInboxEdges(inboxNodes);
           break;
+        }
+      }
+      if (tab !== "inbox") {
+        setEdgeMap(new Map());
       }
     } catch (err) {
       console.error("Failed to load warehouse data:", err);
@@ -133,6 +164,65 @@ export function WarehousePage({ onSelectNode }: WarehousePageProps) {
       await loadData(activeTab);
     } catch (err) {
       console.error("Failed to toggle pinned:", err);
+    }
+  };
+
+  const handleDeleteNode = async (node: NodeRecord) => {
+    if (!confirm("确定要删除该节点吗？")) return;
+    try {
+      if (node.node_type === "task") {
+        await softDeleteTask(node.node_id);
+      } else if (node.node_type === "resource") {
+        await softDeleteResource(node.node_id);
+      } else if (node.node_type === "topic") {
+        await softDeleteTopic(node.node_id);
+      }
+      await loadData(activeTab);
+      await loadInboxCount();
+    } catch (err) {
+      console.error("Failed to delete node:", err);
+    }
+  };
+
+  const handleConvert = async (node: NodeRecord, targetType: "task" | "topic") => {
+    try {
+      if (node.node_type === "resource" && targetType === "task") {
+        await convertResourceToTask(node.node_id);
+      } else if (node.node_type === "resource" && targetType === "topic") {
+        await convertResourceToTopic(node.node_id);
+      } else if (node.node_type === "task" && targetType === "topic") {
+        await convertTaskToTopic(node.node_id);
+      } else if (node.node_type === "topic" && targetType === "task") {
+        await convertTopicToTask(node.node_id);
+      }
+      await loadData(activeTab);
+    } catch (err) {
+      console.error("Failed to convert node:", err);
+    }
+  };
+
+  const handleConfirmEdge = async (edge: EdgeWithNode) => {
+    try {
+      await confirmEdge(
+        edge.edge.source_node_id,
+        edge.edge.target_node_id,
+        edge.edge.relation_type
+      );
+      setEdgeMap((prev) => {
+        const next = new Map(prev);
+        const list = next.get(edge.edge.target_node_id) ?? [];
+        next.set(
+          edge.edge.target_node_id,
+          list.map((item) =>
+            item.edge.edge_id === edge.edge.edge_id
+              ? { ...item, edge: { ...item.edge, is_manual: true } }
+              : item
+          )
+        );
+        return next;
+      });
+    } catch (err) {
+      console.error("Failed to confirm edge:", err);
     }
   };
 
@@ -203,6 +293,12 @@ export function WarehousePage({ onSelectNode }: WarehousePageProps) {
                   onApprove={() => handleApprove(node)}
                   onReject={() => handleReject(node)}
                   onTogglePinned={() => handleTogglePinned(node)}
+                  onDelete={() => handleDeleteNode(node)}
+                  onConvert={(targetType) => handleConvert(node, targetType)}
+                  edgeItems={
+                    activeTab === "inbox" ? edgeMap.get(node.node_id) : undefined
+                  }
+                  onConfirmEdge={activeTab === "inbox" ? handleConfirmEdge : undefined}
                 />
               ))}
             </div>

@@ -18,11 +18,11 @@ src/
 ├── components/
 │   ├── index.ts          # 统一导出
 │   ├── Sidebar.tsx       # 侧边栏导航
-│   ├── TaskCard.tsx      # 任务卡片
+│   ├── TaskCard.tsx      # 任务卡片（完成/取消/编辑/删除）
 │   ├── TaskEditCard.tsx  # 任务编辑/创建
 │   ├── TasksDialog.tsx   # 通用任务对话框
 │   ├── ResourceCard.tsx  # 资源卡片
-│   ├── NodeCard.tsx      # 通用节点卡片（支持 topic/task/resource）
+│   ├── NodeCard.tsx      # 通用节点卡片（收藏/删除/类型转换/Inbox Edge 确认）
 │   ├── SearchBar.tsx     # 搜索栏（关键字 + 语义搜索）
 │   ├── QuickCapture.tsx  # 快速捕获
 │   ├── TiptapEditor.tsx  # Markdown 编辑器
@@ -98,17 +98,19 @@ public/
 核心数据模型：
 - `NodeRecord`：统一的节点数据模型
 - `EdgeRecord`：节点间的关系记录
+- `EdgeWithNode`：Edge + 关联节点（Inbox 用于展示/确认）
 
 #### `types/api.ts`
 API 请求/响应类型：
-- `CreateTaskRequest/Response`、`CaptureRequest/Response`、`LinkNodesRequest`
+- `CreateTaskRequest/Response`、`CaptureRequest/Response`、`LinkNodesRequest/Response`、`NodeListResponse`
 - 剪贴板类型：`ClipboardContent`、`ReadClipboardResponse`
 - 资源处理进度：`ProcessingStage`、`IngestProgress`
 
 #### `types/chat.ts`
 聊天相关类型：
 - `AIProvider`、`AI_PROVIDER_INFO`、`AIProviderStatus`、`AIConfigStatus`
-- `ChatMessage`、`ChatSession`、`SendChatRequest`
+- `ChatMessage`、`ChatSession`、`ChatUsage`（Input/Output/Reasoning/Total）
+- `RagScope`（local/global）与 `SendChatRequest`
 
 #### `types/constants.ts`
 常量与配置：
@@ -132,22 +134,24 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 #### `api/node.ts`
 节点通用 API：
 - `fetchPinnedNodes()`、`fetchUnreviewedNodes()`
-- `toggleNodePinned()`、`approveNode()`、`rejectNode()`
-- `linkNodes()`、`unlinkNodes()`
+- `updateNodePinned()`、`updateNodeReviewStatus()`
+- `convertResourceToTopic()`、`convertResourceToTask()`、`convertTopicToTask()`、`convertTaskToTopic()`
+- `linkNodes()`、`unlinkNodes()`、`listTargetNodes()`、`listSourceNodes()`
+- `listEdgesForTarget()`、`confirmEdge()`
 
 #### `api/task.ts`
 任务 API：
 - `createTask()`、`softDeleteTask()`、`hardDeleteTask()`
-- `markTaskAsDone()`、`markTaskAsTodo()`
+- `markTaskAsDone()`、`markTaskAsTodo()`、`markTaskAsCancelled()`
 - `updateTaskTitle()`、`updateTaskDescription()`、`updateTaskPriority()`、`updateTaskDueDate()`
-- `fetchTasksByDate()`、`fetchAllTasks()`
+- `fetchTasksByDate()`、`fetchAllTasks()`、`fetchActiveTasks()`
 
 #### `api/resource.ts`
 资源 API：
-- `quickCapture()`、`unlinkResource()`
+- `quickCapture()`、`processPendingResources()`
 - `fetchTaskResources()`、`fetchAllResources()`、`getResourceById()`
 - `softDeleteResource()`、`hardDeleteResource()`
-- `updateResourceContent()`、`updateResourceTitle()`
+- `updateResourceContent()`、`updateResourceTitle()`、`updateResourceUserNote()`
 
 #### `api/chat.ts`
 聊天 API：
@@ -161,7 +165,6 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 系统 API：
 - `toggleHUD()`、`hideHUD()`
 - `readClipboard()`、`getAssetsPath()`
-- `seedDemoData()`
 
 ---
 
@@ -246,9 +249,10 @@ const {
 ```typescript
 const {
   contextResources, selectedResource,
-  addContextResource, removeContextResource, ...
+  addToContext, removeFromContext, refreshContext, ...
 } = useContextResources({ selectedTask, propSelectedResource });
 ```
+> 在任务模式下，新增/移除会持久化为 `contains` 关系；资源模式仅更新本地状态。
 
 **`useDashboardData.ts`**
 Dashboard 数据加载与操作：
@@ -327,7 +331,7 @@ sortTasksForCalendar(tasks);   // todo 在 done 前面
 
 #### `TaskCard.tsx`
 - 接收 `NodeRecord` 类型
-- 点击切换状态、悬浮编辑/删除
+- 点击切换状态、支持取消/恢复、悬浮编辑/删除
 
 #### `ResourceCard.tsx`
 - 接收 `NodeRecord` 类型
@@ -341,7 +345,7 @@ sortTasksForCalendar(tasks);   // todo 在 done 前面
 #### `workspace/`
 - `ContextPanel.tsx`：上下文资源管理
 - `EditorPanel.tsx`：文本/PDF/图片编辑器
-- `ChatPanel.tsx`：AI 聊天面板
+- `ChatPanel.tsx`：AI 聊天面板（RAG scope 切换 + Token 用量）
 
 ---
 
@@ -361,6 +365,7 @@ sortTasksForCalendar(tasks);   // todo 在 done 前面
 
 #### `Settings.tsx`
 - 主题/语言/API Key/处理模型/归类模式管理
+- 快捷键列表展示（当前只读）
 
 ---
 

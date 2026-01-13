@@ -10,6 +10,7 @@ import type {
   ChatUsage,
   ChatMessagePayload,
   ThinkingEffort,
+  RagScope,
 } from "@/types";
 import { useChatSession } from "./ChatSessionContext";
 import { useAIConfig } from "./AIConfigContext";
@@ -21,6 +22,7 @@ interface SendMessageContext {
   files?: number[];
   thinking_effort?: ThinkingEffort;
   context_resource_ids?: number[];
+  rag_scope?: RagScope;
 }
 
 interface LoadContext {
@@ -262,6 +264,7 @@ export function ChatMessageProvider({ children }: { children: React.ReactNode })
           images: context.images,
           files: context.files,
           thinking_effort: context.thinking_effort,
+          rag_scope: context.rag_scope,
         });
       } catch (e) {
         setChatError(e instanceof Error ? e.message : "Chat failed");
