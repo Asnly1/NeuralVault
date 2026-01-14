@@ -55,6 +55,7 @@ pub struct DashboardData {
 // ========== 关系 ==========
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LinkNodesRequest {
     pub source_node_id: i64,
     pub target_node_id: i64,

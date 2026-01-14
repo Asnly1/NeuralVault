@@ -38,8 +38,9 @@ export function WorkspacePage({
   );
 
   // 检测模式
-  const isResourceMode = !selectedTask && !!propSelectedResource;
+  const isResourceMode = !selectedTask && propSelectedResource?.node_type === "resource";
   const isTopicMode = propSelectedResource?.node_type === "topic";
+  const containerNodeId = selectedTask?.node_id ?? (isTopicMode ? propSelectedResource?.node_id : undefined);
 
   // 面板拖拽
   const leftPanel = usePanelResize({
@@ -227,7 +228,7 @@ export function WorkspacePage({
           isResizing={rightPanel.isResizing}
           onMouseDown={rightPanel.onMouseDown}
           onNavigateToSettings={onNavigateToSettings}
-          taskId={!isResourceMode ? selectedTask?.node_id : undefined}
+          taskId={!isResourceMode ? containerNodeId : undefined}
           resourceId={
             isResourceMode
               ? sessionAnchorResourceId ?? currentResource?.node_id

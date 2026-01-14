@@ -39,11 +39,13 @@ export function useContextResources({
   const [allResources, setAllResources] = useState<NodeRecord[]>([]);
   const [loadingResources, setLoadingResources] = useState(false);
   const [selectedResource, setSelectedResource] = useState<NodeRecord | null>(
-    () => propSelectedResource ?? null
+    () => (propSelectedResource?.node_type === "resource" ? propSelectedResource : null)
   );
 
   // 检测模式：资源模式（直接从资源进入）或任务模式（从任务进入）
-  const isResourceMode = !selectedTask && !!propSelectedResource;
+  const isResourceMode = !selectedTask && propSelectedResource?.node_type === "resource";
+  const selectedContainer =
+    selectedTask ?? (propSelectedResource?.node_type === "topic" ? propSelectedResource : null);
 
   // 计算派生状态
   const contextResourceIds = useMemo(
@@ -80,9 +82,9 @@ export function useContextResources({
     }
   }, [isResourceMode, propSelectedResource]);
 
-  // 任务模式：加载任务的关联资源
+  // 任务/主题模式：加载关联资源
   useEffect(() => {
-    if (!selectedTask) {
+    if (!selectedContainer) {
       if (!isResourceMode) {
         setContextResources([]);
         setSelectedResource(null);
@@ -96,7 +98,7 @@ export function useContextResources({
       setLoadingResources(true);
       try {
         // 加载所有 contains 关系的节点（包括 Topic/Task/Resource）
-        const result = await listTargetNodes(selectedTask.node_id, "contains");
+        const result = await listTargetNodes(selectedContainer.node_id, "contains");
         if (!ignore) {
           setContextResources(result.nodes);
           // 如果当前选中的资源不在列表中，清除选择
@@ -121,13 +123,13 @@ export function useContextResources({
     return () => {
       ignore = true;
     };
-  }, [selectedTask, isResourceMode]);
+  }, [selectedContainer, selectedResource, isResourceMode]);
 
   const addToContext = useCallback(
     async (resource: NodeRecord) => {
-      if (!isResourceMode && selectedTask) {
+      if (!isResourceMode && selectedContainer) {
         try {
-          await linkNodes(selectedTask.node_id, resource.node_id, "contains");
+          await linkNodes(selectedContainer.node_id, resource.node_id, "contains");
         } catch (err) {
           console.error("保存上下文资源失败:", err);
           return;
@@ -145,9 +147,9 @@ export function useContextResources({
 
   const removeFromContext = useCallback(
     async (resourceId: number) => {
-      if (!isResourceMode && selectedTask) {
+      if (!isResourceMode && selectedContainer) {
         try {
-          await unlinkNodes(selectedTask.node_id, resourceId, "contains");
+          await unlinkNodes(selectedContainer.node_id, resourceId, "contains");
         } catch (err) {
           console.error("移除上下文资源失败:", err);
           return;
@@ -161,20 +163,20 @@ export function useContextResources({
         return next;
       });
     },
-    [isResourceMode, selectedTask, selectedResource]
+    [isResourceMode, selectedContainer, selectedResource]
   );
 
   const refreshContext = useCallback(async () => {
-    if (!isResourceMode && selectedTask) {
+    if (!isResourceMode && selectedContainer) {
       try {
         // 加载所有 contains 关系的节点
-        const result = await listTargetNodes(selectedTask.node_id, "contains");
+        const result = await listTargetNodes(selectedContainer.node_id, "contains");
         setContextResources(result.nodes);
       } catch (err) {
         console.error("刷新上下文节点失败:", err);
       }
     }
-  }, [isResourceMode, selectedTask]);
+  }, [isResourceMode, selectedContainer]);
 
   const updateResource = useCallback((updatedResource: NodeRecord) => {
     setSelectedResource((prev) =>

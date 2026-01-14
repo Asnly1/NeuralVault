@@ -18,6 +18,7 @@ import {
   StarOff,
   Trash2,
   MoreHorizontal,
+  Link2,
 } from "lucide-react";
 import {
   NodeRecord,
@@ -36,6 +37,7 @@ interface NodeCardProps {
   onTogglePinned?: () => void;
   onDelete?: () => void;
   onConvert?: (targetType: "task" | "topic") => void;
+  onLink?: () => void;
   edgeItems?: EdgeWithNode[];
   onConfirmEdge?: (edge: EdgeWithNode) => void;
   containedNodes?: NodeRecord[]; // Contains 关联的子节点
@@ -51,6 +53,7 @@ export function NodeCard({
   onTogglePinned,
   onDelete,
   onConvert,
+  onLink,
   edgeItems,
   onConfirmEdge,
   containedNodes,
@@ -161,6 +164,20 @@ export function NodeCard({
 
           {/* Actions */}
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            {onLink && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onLink();
+                }}
+                title="手动关联"
+              >
+                <Link2 className="h-3.5 w-3.5" />
+              </Button>
+            )}
             {convertOptions.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

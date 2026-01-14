@@ -1,7 +1,22 @@
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Inbox, Package, Tag, CheckSquare, FileText, RefreshCw } from "lucide-react";
 
 import { type EdgeWithNode, NodeRecord } from "../types";
@@ -15,7 +30,9 @@ import {
   fetchAllResources,
   fetchUnreviewedNodes,
   listEdgesForTarget,
+  listSourceNodes,
   listTargetNodes,
+  linkNodes,
   softDeleteResource,
   softDeleteTask,
   softDeleteTopic,
@@ -26,6 +43,7 @@ import {
 } from "../api";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
+import { getNodeTypeIcon } from "@/lib/nodeUtils";
 
 // 仓库页面的 Tab 类型
 type WarehouseTab = "all" | "topics" | "tasks" | "resources" | "inbox";
@@ -52,6 +70,14 @@ export function WarehousePage({ onSelectNode, onPinnedChange }: WarehousePagePro
   const [containedNodesMap, setContainedNodesMap] = useState<Map<number, NodeRecord[]>>(new Map());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [linkingNode, setLinkingNode] = useState<NodeRecord | null>(null);
+  const [linkTargets, setLinkTargets] = useState<NodeRecord[]>([]);
+  const [linkedParents, setLinkedParents] = useState<NodeRecord[]>([]);
+  const [linkParentId, setLinkParentId] = useState<string>("");
+  const [linkTargetsLoading, setLinkTargetsLoading] = useState(false);
+  const [linkSubmitting, setLinkSubmitting] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const { t } = useLanguage();
 
   const loadInboxEdges = useCallback(async (inboxNodes: NodeRecord[]) => {
@@ -151,6 +177,68 @@ export function WarehousePage({ onSelectNode, onPinnedChange }: WarehousePagePro
       console.error("Failed to load inbox count:", err);
     }
   }, []);
+
+  const handleLinkDialogChange = useCallback((open: boolean) => {
+    setLinkDialogOpen(open);
+    if (!open) {
+      setLinkingNode(null);
+      setLinkTargets([]);
+      setLinkedParents([]);
+      setLinkParentId("");
+      setLinkError(null);
+      setLinkTargetsLoading(false);
+      setLinkSubmitting(false);
+    }
+  }, []);
+
+  const openLinkDialog = useCallback(async (node: NodeRecord) => {
+    setLinkingNode(node);
+    setLinkDialogOpen(true);
+    setLinkParentId("");
+    setLinkError(null);
+    setLinkTargets([]);
+    setLinkedParents([]);
+    setLinkTargetsLoading(true);
+    try {
+      const [topics, tasks, parents] = await Promise.all([
+        fetchAllTopics(),
+        fetchAllTasks(),
+        listSourceNodes(node.node_id, "contains"),
+      ]);
+      const existingParents = parents.nodes;
+      const existingIds = new Set(existingParents.map((item) => item.node_id));
+      const options = [...topics, ...tasks].filter(
+        (item) => item.node_id !== node.node_id && !existingIds.has(item.node_id)
+      );
+      setLinkedParents(existingParents);
+      setLinkTargets(options);
+    } catch (err) {
+      console.error("Failed to load link targets:", err);
+      setLinkError(t("warehouse", "linkLoadFailed"));
+    } finally {
+      setLinkTargetsLoading(false);
+    }
+  }, [t]);
+
+  const handleCreateLink = useCallback(async () => {
+    if (!linkingNode || !linkParentId) {
+      setLinkError(t("warehouse", "linkSelectError"));
+      return;
+    }
+    setLinkSubmitting(true);
+    setLinkError(null);
+    try {
+      await linkNodes(Number(linkParentId), linkingNode.node_id, "contains");
+      handleLinkDialogChange(false);
+      await loadData(activeTab);
+      await loadInboxCount();
+    } catch (err) {
+      console.error("Failed to link nodes:", err);
+      setLinkError(t("warehouse", "linkFailed"));
+    } finally {
+      setLinkSubmitting(false);
+    }
+  }, [linkingNode, linkParentId, handleLinkDialogChange, loadData, activeTab, loadInboxCount, t]);
 
   // Tab 切换时加载数据
   useEffect(() => {
@@ -259,6 +347,103 @@ export function WarehousePage({ onSelectNode, onPinnedChange }: WarehousePagePro
 
   return (
     <div className="h-full flex flex-col">
+      <Dialog open={linkDialogOpen} onOpenChange={handleLinkDialogChange}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>{t("warehouse", "linkNode")}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 text-sm">
+            {linkingNode && (
+              <div className="text-xs text-muted-foreground">
+                {t("warehouse", "currentNode")}:{" "}
+                <span className="text-foreground">
+                  {linkingNode.title || t("common", "untitled")}
+                </span>
+              </div>
+            )}
+
+            {linkedParents.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  {t("warehouse", "linkExistingParents")}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {linkedParents.map((parent) => (
+                    <Badge
+                      key={parent.node_id}
+                      variant="secondary"
+                      className="flex items-center gap-1"
+                    >
+                      {getNodeTypeIcon(parent.node_type, "h-3 w-3")}
+                      <span className="max-w-[200px] truncate">
+                        {parent.title || t("common", "untitled")}
+                      </span>
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="warehouse-link-target">
+                {t("warehouse", "linkTarget")}
+              </Label>
+              <Select
+                value={linkParentId}
+                onValueChange={setLinkParentId}
+                disabled={linkTargetsLoading}
+              >
+                <SelectTrigger id="warehouse-link-target">
+                  <SelectValue placeholder={t("warehouse", "linkTargetPlaceholder")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {linkTargetsLoading ? (
+                    <SelectItem value="loading" disabled>
+                      {t("warehouse", "linkLoadingTargets")}
+                    </SelectItem>
+                  ) : linkTargets.length === 0 ? (
+                    <SelectItem value="empty" disabled>
+                      {t("warehouse", "linkNoTargets")}
+                    </SelectItem>
+                  ) : (
+                    linkTargets.map((target) => (
+                      <SelectItem key={target.node_id} value={String(target.node_id)}>
+                        <div className="flex items-center gap-2">
+                          {getNodeTypeIcon(target.node_type, "h-3.5 w-3.5")}
+                          <span className="truncate">
+                            {target.title || t("common", "untitled")}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {linkError && (
+              <div className="text-xs text-destructive">
+                {linkError}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => handleLinkDialogChange(false)}
+              disabled={linkSubmitting}
+            >
+              {t("warehouse", "linkCancel")}
+            </Button>
+            <Button
+              onClick={handleCreateLink}
+              disabled={!linkParentId || linkSubmitting || linkTargetsLoading}
+            >
+              {linkSubmitting ? t("common", "loading") : t("warehouse", "linkConfirm")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {/* Header */}
       <div className="flex items-center justify-between border-b px-6 py-4">
         <div className="flex items-center gap-3">
@@ -326,6 +511,7 @@ export function WarehousePage({ onSelectNode, onPinnedChange }: WarehousePagePro
                   onTogglePinned={() => handleTogglePinned(node)}
                   onDelete={() => handleDeleteNode(node)}
                   onConvert={(targetType) => handleConvert(node, targetType)}
+                  onLink={() => void openLinkDialog(node)}
                   edgeItems={
                     activeTab === "inbox" ? edgeMap.get(node.node_id) : undefined
                   }
