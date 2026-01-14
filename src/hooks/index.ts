@@ -41,3 +41,13 @@ export { useSidebar } from "./useSidebar";
 export { useDashboardData } from "./useDashboardData";
 export { useAppNavigation } from "./useAppNavigation";
 export { useGlobalSearch } from "./useGlobalSearch";
+
+// Refactored hooks
+export { useEditableField } from "./useEditableField";
+export type { UseEditableFieldReturn } from "./useEditableField";
+export { useNodeOperations } from "./useNodeOperations";
+export type { UseNodeOperationsOptions, NodeOperationsActions } from "./useNodeOperations";
+export { useLinkNodes } from "./useLinkNodes";
+export type { UseLinkNodesReturn, UseLinkNodesOptions, LinkNodesState, LinkNodesActions } from "./useLinkNodes";
+export { useChatSessionManagement } from "./useChatSessionManagement";
+export type { UseChatSessionManagementReturn, UseChatSessionManagementOptions } from "./useChatSessionManagement";

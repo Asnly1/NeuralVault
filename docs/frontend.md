@@ -22,7 +22,13 @@ src/
 │   ├── TaskEditCard.tsx  # 任务编辑/创建
 │   ├── TasksDialog.tsx   # 通用任务对话框
 │   ├── ResourceCard.tsx  # 资源卡片
-│   ├── NodeCard.tsx      # 通用节点卡片（收藏/删除/类型转换/Inbox Edge 确认）
+│   ├── GlobalSearchDialog.tsx # 全局搜索对话框
+│   ├── node-card/        # NodeCard 组件（重构后）
+│   │   ├── index.ts
+│   │   ├── NodeCard.tsx          # 主组件
+│   │   ├── NodeCardActions.tsx   # 操作按钮
+│   │   ├── EdgeItemList.tsx      # Edge 列表
+│   │   └── ContainedNodesList.tsx # 子节点列表
 │   ├── SearchBar.tsx     # 搜索栏（关键字 + 语义搜索）
 │   ├── QuickCapture.tsx  # 快速捕获
 │   ├── TiptapEditor.tsx  # Markdown 编辑器
@@ -32,7 +38,10 @@ src/
 │   │   ├── index.ts
 │   │   ├── ContextPanel.tsx
 │   │   ├── EditorPanel.tsx
-│   │   └── ChatPanel.tsx
+│   │   ├── ChatPanel.tsx
+│   │   ├── ThinkingBlock.tsx     # AI 思考过程展示
+│   │   ├── RelatedNodesList.tsx  # 关联节点列表
+│   │   └── ContextNodeTree.tsx   # 上下文节点树
 │   └── ui/               # shadcn/ui 组件库
 │       └── ...
 ├── contexts/
@@ -49,6 +58,7 @@ src/
 │   ├── useKeyboard.ts        # 键盘快捷键管理
 │   ├── usePanelResize.ts     # 面板拖拽调整
 │   ├── useIngestProgress.ts  # 资源处理进度
+│   ├── useEmbeddingStatus.ts # Embedding 处理状态监听
 │   ├── useChat.ts            # 聊天功能组合 hook
 │   ├── useResourceEditor.ts  # 编辑器状态管理
 │   ├── useContextResources.ts # 上下文资源管理
@@ -57,7 +67,12 @@ src/
 │   ├── useTheme.ts           # 主题管理
 │   ├── useSidebar.ts         # 侧边栏状态
 │   ├── useDashboardData.ts   # Dashboard 数据加载
-│   └── useAppNavigation.ts   # 页面导航状态
+│   ├── useAppNavigation.ts   # 页面导航状态
+│   ├── useGlobalSearch.ts    # 全局搜索状态
+│   ├── useEditableField.ts   # 通用可编辑字段 hook
+│   ├── useNodeOperations.ts  # 节点操作 hook
+│   ├── useLinkNodes.ts       # 节点关联管理 hook
+│   └── useChatSessionManagement.ts # 聊天会话管理 hook
 ├── lib/
 │   ├── utils.ts              # 通用工具函数
 │   ├── nodeUtils.ts          # 节点工具函数
@@ -65,9 +80,22 @@ src/
 ├── pages/
 │   ├── Dashboard.tsx
 │   ├── Workspace.tsx
-│   ├── Warehouse.tsx
+│   ├── warehouse/            # Warehouse 页面（重构后）
+│   │   ├── index.ts
+│   │   ├── Warehouse.tsx         # 主组件
+│   │   ├── WarehouseTabs.tsx     # Tab 切换栏
+│   │   └── LinkNodeDialog.tsx    # 节点关联弹窗
+│   ├── settings/             # Settings 页面（重构后）
+│   │   ├── index.ts
+│   │   ├── Settings.tsx          # 主组件
+│   │   ├── AppearanceCard.tsx    # 外观设置
+│   │   ├── APIKeyCard.tsx        # API Key 卡片
+│   │   ├── APIConfigCard.tsx     # API 配置区块
+│   │   ├── ProcessingConfigCard.tsx # 处理模型配置
+│   │   ├── LocalModelCard.tsx    # 本地模型
+│   │   ├── ClassificationCard.tsx # 归类模式
+│   │   └── ShortcutsCard.tsx     # 快捷键
 │   ├── Calendar.tsx
-│   ├── Settings.tsx
 │   ├── HUD.tsx
 │   └── index.ts
 ├── types/

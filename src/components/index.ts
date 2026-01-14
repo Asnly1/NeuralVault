@@ -2,7 +2,7 @@ export { Sidebar } from "./Sidebar";
 export { TaskCard } from "./TaskCard";
 export { TaskEditCard } from "./TaskEditCard";
 export { ResourceCard } from "./ResourceCard";
-export { NodeCard } from "./NodeCard";
+export { NodeCard } from "./node-card";
 export { SearchBar } from "./SearchBar";
 export { QuickCapture } from "./QuickCapture";
 export { TiptapEditor } from "./TiptapEditor";
