@@ -4,11 +4,14 @@
 //! - `crud`: Basic CRUD operations (insert, get, update, delete)
 //! - `status`: Status update operations (task status, processing stage, sync status)
 //! - `query`: Query operations (list, search)
+//! - `conversion`: Node type conversion operations
 
+mod conversion;
 mod crud;
 mod query;
 mod status;
 
+pub use conversion::*;
 pub use crud::*;
 pub use query::*;
 pub use status::*;

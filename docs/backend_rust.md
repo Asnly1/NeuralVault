@@ -17,9 +17,9 @@
 ```
 src-tauri/
 ├── src/
-│   ├── lib.rs               # 应用组装与启动
+│   ├── lib.rs               # 应用组装与启动（命令按功能分组注册）
 │   ├── app_state.rs         # 全局状态
-│   ├── error.rs             # 错误类型定义
+│   ├── error.rs             # 错误类型定义（扩展的 AppError 枚举）
 │   ├── services/
 │   │   ├── ai_config.rs     # API Key + VectorConfig 配置
 │   │   ├── ai_pipeline/     # AI 队列与管线
@@ -43,34 +43,157 @@ src-tauri/
 │   │       └── types.rs     # AI DTO
 │   ├── db/
 │   │   ├── pool.rs          # SQLx 连接池
-│   │   ├── types.rs         # 节点/边/枚举/结构体
+│   │   ├── types/           # 类型定义（拆分后）
+│   │   │   ├── mod.rs       # 导出 + DbPool + MIGRATOR
+│   │   │   ├── enums.rs     # 枚举类型（NodeType, TaskStatus 等）
+│   │   │   ├── records.rs   # 记录类型（NodeRecord, EdgeRecord 等）
+│   │   │   └── inputs.rs    # 输入类型（NewNode, NewEdge 等）
+│   │   ├── builders/        # 构建器模式
+│   │   │   ├── mod.rs       # 导出
+│   │   │   └── node.rs      # NodeBuilder（简化节点创建）
 │   │   ├── nodes/           # Node 操作
 │   │   │   ├── mod.rs       # NODE_FIELDS 常量与导出
 │   │   │   ├── crud.rs      # 基本 CRUD 操作
 │   │   │   ├── status.rs    # 状态更新操作
-│   │   │   └── query.rs     # 查询操作
+│   │   │   ├── query.rs     # 查询操作
+│   │   │   └── conversion.rs# 节点类型转换逻辑
 │   │   ├── edges.rs         # Edge CRUD
 │   │   └── chat.rs          # Chat 相关
 │   ├── commands/
+│   │   ├── mod.rs           # 命令导出 + simple_void_command 宏
+│   │   ├── types/           # 命令类型定义（拆分后）
+│   │   │   ├── mod.rs       # 导出
+│   │   │   ├── resource.rs  # 资源相关类型
+│   │   │   ├── task.rs      # 任务相关类型
+│   │   │   ├── chat.rs      # 聊天相关类型
+│   │   │   └── common.rs    # 通用类型
 │   │   ├── ai_config.rs     # AI 配置命令
 │   │   ├── chat_stream.rs   # 聊天流式命令
 │   │   ├── chat.rs          # 会话/消息/绑定
 │   │   ├── clipboard.rs     # 剪贴板读取
 │   │   ├── dashboard.rs     # Dashboard 数据
 │   │   ├── edges.rs         # 关系连接
-│   │   ├── nodes.rs         # 节点通用操作（收藏/审核）
-│   │   ├── resources.rs     # 资源捕获（调用 parser 模块）
+│   │   ├── nodes.rs         # 节点通用操作（收藏/审核/转换）
+│   │   ├── resources.rs     # 资源捕获（使用 NodeBuilder）
 │   │   ├── search.rs        # 语义搜索与精确搜索
-│   │   ├── tasks.rs         # 任务节点
-│   │   ├── topics.rs        # 主题节点
-│   │   └── types.rs         # 命令共用类型定义
+│   │   ├── tasks.rs         # 任务节点（使用 NodeBuilder）
+│   │   └── topics.rs        # 主题节点（使用 NodeBuilder）
 │   ├── utils/
 │   │   ├── crypto.rs        # 加密工具
 │   │   ├── file.rs          # 文件工具
-│   │   └── hash.rs          # 哈希工具
+│   │   ├── hash.rs          # 哈希工具
+│   │   └── validation.rs    # 通用验证函数
 │   └── window/              # 窗口管理
 └── migrations/
     └── 20241006120000_init.sql
+```
+
+---
+
+## 错误处理（`error.rs`）
+
+使用 `thiserror` 定义统一错误类型：
+
+```rust
+#[derive(Debug, Error)]
+pub enum AppError {
+    #[error("数据库错误: {0}")]
+    Database(#[from] sqlx::Error),
+
+    #[error("文件操作错误: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("验证失败: {0}")]
+    Validation(String),
+
+    #[error("资源不存在: {entity} (id={id})")]
+    NotFound { entity: &'static str, id: i64 },
+
+    #[error("配置错误: {0}")]
+    Config(String),
+
+    #[error("AI 服务错误: {0}")]
+    AiService(String),
+
+    #[error("{0}")]
+    Business(String),
+}
+```
+
+**错误变体说明：**
+
+| 变体 | 用途 |
+|------|------|
+| `Database` | SQLx 数据库错误（自动转换） |
+| `Io` | 文件 I/O 错误（自动转换） |
+| `Validation` | 输入参数验证失败 |
+| `NotFound` | 资源/节点不存在 |
+| `Config` | 配置相关错误 |
+| `AiService` | AI 服务调用错误 |
+| `Business` | 业务逻辑错误 |
+
+---
+
+## NodeBuilder 模式（`db/builders/node.rs`）
+
+提供链式 API 简化节点创建，避免重复的 `NewNode` 结构体构造：
+
+```rust
+// 创建任务
+let node_id = NodeBuilder::task()
+    .title("My Task")
+    .priority(Some(TaskPriority::High))
+    .due_date(Some("2024-01-01"))
+    .user_note(Some("备注"))
+    .insert(&pool)
+    .await?;
+
+// 创建主题
+let node_id = NodeBuilder::topic()
+    .title("My Topic")
+    .summary(Some("摘要"))
+    .insert(&pool)
+    .await?;
+
+// 创建资源
+let node_id = NodeBuilder::resource()
+    .title("My Resource")
+    .file_hash(Some(&hash))
+    .file_path(Some(&path))
+    .resource_subtype(Some(ResourceSubtype::Pdf))
+    .insert(&pool)
+    .await?;
+```
+
+**工厂方法：**
+
+| 方法 | 默认值 |
+|------|--------|
+| `NodeBuilder::task()` | `task_status=Todo`, `priority=Medium`, `review_status=Reviewed` |
+| `NodeBuilder::topic()` | `review_status=Reviewed` |
+| `NodeBuilder::resource()` | `review_status=Unreviewed`, `embedding_status=Pending` |
+
+---
+
+## 验证函数（`utils/validation.rs`）
+
+集中的验证逻辑，避免在命令层重复：
+
+```rust
+// 标题验证（trim + 非空检查）
+let title = validate_title(&input)?;
+
+// 通用非空验证
+let value = validate_not_empty(&input, "字段名")?;
+
+// 关系类型解析
+let relation = parse_relation_type("contains")?;  // -> EdgeRelationType::Contains
+
+// 审核状态解析
+let status = parse_review_status("reviewed")?;    // -> ReviewStatus::Reviewed
+
+// 带默认值的审核状态解析
+let status = parse_review_status_or_default(Some("approved"));  // -> ReviewStatus::Reviewed
 ```
 
 ---
@@ -81,7 +204,9 @@ src-tauri/
 2. 初始化 `AIConfigService`（加密存储 API Key / VectorConfig）。
 3. 初始化 `AiServices`（Embedding / LLM / Agent / Search）。
 4. 初始化 `AiPipeline` 队列并写入 `AppState`。
-5. 注册 Tauri 命令与窗口事件。
+5. 注册 Tauri 命令（按功能分组）与窗口事件。
+
+命令注册按功能分组：系统、资源、任务、主题、节点、边、搜索、聊天、AI 配置。
 
 ---
 
@@ -184,10 +309,11 @@ pub struct AppState {
 2. 计算 `file_hash`。
 3. 生成 title（文件名或文本前 10 字）。
 4. 合并 `source_meta`（window_title/process_name/captured_at）。
-5. 调用 `services::parser::parse_resource_content()` 解析内容。
-6. 写入 `nodes.file_content` / `nodes.file_hash`。
-7. 触发 `parse-progress` 事件。
-8. 内容存在或有 file_path 则入队 AI Pipeline（文件上传优先）。
+5. 使用 `NodeBuilder::resource()` 创建节点。
+6. 调用 `services::parser::parse_resource_content()` 解析内容。
+7. 写入 `nodes.file_content` / `nodes.file_hash`。
+8. 触发 `parse-progress` 事件。
+9. 内容存在或有 file_path 则入队 AI Pipeline（文件上传优先）。
 
 ### 资源命令
 
@@ -197,7 +323,7 @@ pub struct AppState {
 | `get_all_resources` | 获取所有资源 |
 | `get_resource_by_id` | 获取单个资源 |
 | `update_resource_content_command` | 更新内容 + 重新入队 AI Pipeline |
-| `update_resource_title_command` | 更新标题 |
+| `update_resource_title_command` | 更新标题（使用 `validate_title`） |
 | `update_resource_summary_command` | 更新摘要 |
 | `soft_delete_resource_command` | 软删除 |
 | `hard_delete_resource_command` | 硬删除 |
@@ -246,12 +372,31 @@ pub struct AppState {
 
 ## 数据模型（SQLite）
 
+### db/types/ 模块结构
+
+类型定义拆分为三个子模块：
+
+- `enums.rs`：枚举类型
+  - `NodeType`, `TaskStatus`, `TaskPriority`, `ResourceSubtype`
+  - `EmbeddingType`, `ResourceEmbeddingStatus`, `ResourceProcessingStage`
+  - `ReviewStatus`, `EdgeRelationType`, `SessionType`, `BindingType`
+
+- `records.rs`：记录类型（FromRow）
+  - `NodeRecord`, `EdgeRecord`, `NodeRevisionLogRecord`
+  - `ChatSessionRecord`, `ChatMessageRecord`, `SourceMeta`
+
+- `inputs.rs`：输入类型（NewXxx）
+  - `NewNode`, `NewEdge`, `NewNodeRevisionLog`
+  - `NewChatSession`, `NewChatMessage`, `NewMessageAttachment`
+  - `EmbedChunkResult`
+
 ### db/nodes/ 模块结构
 
 - `mod.rs`：`NODE_FIELDS` 常量（查询字段列表）与导出
 - `crud.rs`：基本 CRUD 操作（`insert_node`、`get_node_by_id`、`update_node_*`、`delete_node`）
 - `status.rs`：状态更新（`update_task_status`、`mark_task_done`、`update_resource_sync_status`、`insert_context_chunks`）
 - `query.rs`：查询操作（`list_nodes_by_type`、`list_active_tasks`、`search_nodes_by_keyword`）
+- `conversion.rs`：节点类型转换（`convert_topic_to_task`、`convert_task_to_topic`、`convert_resource_to_container`）
 
 ### nodes 表
 
@@ -292,22 +437,31 @@ pub struct AppState {
 
 ## Tauri Commands（概览）
 
+### commands/types/ 模块结构
+
+命令类型定义拆分为四个子模块：
+
+- `resource.rs`：`CaptureRequest`, `CaptureResponse`, `CaptureSourceMeta`, `ClipboardContent`, `ReadClipboardResponse`
+- `task.rs`：`CreateTaskRequest`, `CreateTaskResponse`
+- `chat.rs`：`CreateChatSessionRequest`, `CreateChatMessageRequest`, `UpdateChatSessionRequest` 等
+- `common.rs`：`DashboardData`, `LinkNodesRequest`, `LinkNodesResponse`, `NodeListResponse`
+
 ### resources.rs
 
-捕获、更新内容/标题/摘要、删除资源。
+捕获、更新内容/标题/摘要、删除资源。使用 `NodeBuilder::resource()` 创建节点。
 
 ### tasks.rs
 
 | 命令 | 说明 |
 |------|------|
-| `create_task` | 创建任务 |
+| `create_task` | 创建任务（使用 `NodeBuilder::task()`） |
 | `get_all_tasks` | 获取所有任务 |
 | `get_active_tasks` | 获取活跃任务（todo） |
 | `get_tasks_by_date` | 按日期获取任务 |
 | `mark_task_as_done_command` | 标记完成 |
 | `mark_task_as_todo_command` | 重置为待办 |
 | `mark_task_as_cancelled_command` | 标记取消 |
-| `update_task_title_command` | 更新标题 |
+| `update_task_title_command` | 更新标题（使用 `validate_title`） |
 | `update_task_due_date_command` | 更新截止日期 |
 | `update_task_description_command` | 更新描述（user_note） |
 | `update_task_summary_command` | 更新摘要 |
@@ -317,7 +471,8 @@ pub struct AppState {
 
 ### topics.rs
 
-创建 topic、更新标题/摘要、收藏、关联资源/任务、删除 topic（软/硬删除）。
+创建 topic（使用 `NodeBuilder::topic()`）、更新标题/摘要、收藏、关联资源/任务、删除 topic（软/硬删除）。
+使用 `validate_title` 进行标题验证，使用 `parse_review_status_or_default` 解析审核状态。
 
 ### nodes.rs
 
@@ -325,12 +480,13 @@ pub struct AppState {
 |------|------|
 | `list_pinned_nodes` | 获取所有收藏节点 |
 | `list_unreviewed_nodes` | 获取所有待审核节点 |
-| `update_node_review_status` | 更新审核状态 |
+| `update_node_review_status` | 更新审核状态（使用 `parse_review_status`） |
 | `update_node_pinned` | 更新收藏状态 |
-| `convert_resource_to_topic_command` | 资源 → 主题 |
-| `convert_resource_to_task_command` | 资源 → 任务 |
-| `convert_topic_to_task_command` | 主题 → 任务 |
-| `convert_task_to_topic_command` | 任务 → 主题 |
+| `list_node_revision_logs` | 获取节点修订日志 |
+| `convert_resource_to_topic_command` | 资源 → 主题（调用 `db::convert_resource_to_container`） |
+| `convert_resource_to_task_command` | 资源 → 任务（调用 `db::convert_resource_to_container`） |
+| `convert_topic_to_task_command` | 主题 → 任务（调用 `db::convert_topic_to_task`） |
+| `convert_task_to_topic_command` | 任务 → 主题（调用 `db::convert_task_to_topic`） |
 
 ### clipboard.rs
 
@@ -347,6 +503,7 @@ pub struct AppState {
 ### edges.rs
 
 通用节点连接（`related_to` 自动规范化），支持 Edge 确认与 Inbox 查询。
+使用 `parse_relation_type` 解析关系类型。
 
 | 命令 | 说明 |
 |------|------|
@@ -447,6 +604,7 @@ pub enum ClipboardContent {
 ## 事件
 
 - `parse-progress`：文件解析/OCR 进度。
+- `embedding-status`：AI Pipeline 处理状态。
 
 ---
 

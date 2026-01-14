@@ -1,19 +1,24 @@
+//! 主题相关命令
+
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::{
     app_state::AppState,
     db::{
-        contains_creates_cycle, delete_edge, insert_edge, list_nodes_by_type, list_source_nodes,
-        list_target_nodes, soft_delete_node, hard_delete_node, update_node_pinned,
-        update_node_summary, update_node_title, update_resource_review_status,
-        EdgeRelationType, NewEdge, NodeRecord, NodeType, ReviewStatus,
+        contains_creates_cycle, delete_edge, get_node_by_id, hard_delete_node, insert_edge,
+        list_nodes_by_type, list_source_nodes, list_target_nodes, soft_delete_node,
+        update_node_pinned, update_node_summary, update_node_title, update_resource_review_status,
+        EdgeRelationType, NewEdge, NodeBuilder, NodeRecord, NodeType,
     },
     simple_void_command,
+    utils::{parse_review_status_or_default, validate_title},
     AppResult,
 };
 
 use super::types::NodeListResponse;
+
+// ========== 请求/响应类型 ==========
 
 #[derive(Debug, Deserialize)]
 pub struct CreateTopicRequest {
@@ -48,66 +53,42 @@ pub struct SuccessResponse {
     pub success: bool,
 }
 
-fn parse_review_status(s: Option<&str>) -> ReviewStatus {
-    match s {
-        Some("approved") | Some("reviewed") => ReviewStatus::Reviewed,
-        Some("rejected") => ReviewStatus::Rejected,
-        _ => ReviewStatus::Unreviewed,
-    }
-}
+// ========== 简单命令 ==========
 
 simple_void_command!(soft_delete_topic_command, soft_delete_node, topic_id: i64);
 simple_void_command!(hard_delete_topic_command, hard_delete_node, topic_id: i64);
+
+// ========== 创建主题 ==========
 
 #[tauri::command]
 pub async fn create_topic(
     state: State<'_, AppState>,
     payload: CreateTopicRequest,
 ) -> AppResult<CreateTopicResponse> {
-    let uuid = uuid::Uuid::new_v4().to_string();
-    let node_id = crate::db::insert_node(
-        &state.db,
-        crate::db::NewNode {
-            uuid: &uuid,
-            user_id: 1,
-            title: &payload.title,
-            summary: payload.summary.as_deref(),
-            node_type: NodeType::Topic,
-            task_status: None,
-            priority: None,
-            due_date: None,
-            done_date: None,
-            file_hash: None,
-            file_path: None,
-            file_content: None,
-            user_note: None,
-            resource_subtype: None,
-            source_meta: None,
-            embedded_hash: None,
-            processing_hash: None,
-            embedding_status: crate::db::ResourceEmbeddingStatus::Pending,
-            last_embedding_at: None,
-            last_embedding_error: None,
-            processing_stage: crate::db::ResourceProcessingStage::Todo,
-            review_status: ReviewStatus::Reviewed,
-        },
-    )
-    .await?;
+    let title = validate_title(&payload.title)?;
+
+    let node_id = NodeBuilder::topic()
+        .title(title)
+        .summary(payload.summary.as_deref())
+        .insert(&state.db)
+        .await?;
 
     if payload.is_favourite.unwrap_or(false) {
         update_node_pinned(&state.db, node_id, true).await?;
     }
 
-    let node = crate::db::get_node_by_id(&state.db, node_id).await?;
+    let node = get_node_by_id(&state.db, node_id).await?;
     Ok(CreateTopicResponse { node })
 }
+
+// ========== 查询主题 ==========
 
 #[tauri::command]
 pub async fn get_topic_command(
     state: State<'_, AppState>,
     topic_id: i64,
 ) -> AppResult<NodeRecord> {
-    Ok(crate::db::get_node_by_id(&state.db, topic_id).await?)
+    Ok(get_node_by_id(&state.db, topic_id).await?)
 }
 
 #[tauri::command]
@@ -115,13 +96,16 @@ pub async fn list_topics_command(state: State<'_, AppState>) -> AppResult<Vec<No
     Ok(list_nodes_by_type(&state.db, NodeType::Topic, false).await?)
 }
 
+// ========== 更新主题 ==========
+
 #[tauri::command]
 pub async fn update_topic_title_command(
     state: State<'_, AppState>,
     topic_id: i64,
     title: String,
 ) -> AppResult<()> {
-    Ok(update_node_title(&state.db, topic_id, &title).await?)
+    let title = validate_title(&title)?;
+    Ok(update_node_title(&state.db, topic_id, title).await?)
 }
 
 #[tauri::command]
@@ -142,15 +126,17 @@ pub async fn update_topic_favourite_command(
     Ok(update_node_pinned(&state.db, topic_id, is_favourite).await?)
 }
 
+// ========== 主题-资源关联 ==========
+
 #[tauri::command]
 pub async fn link_resource_to_topic_command(
     state: State<'_, AppState>,
     payload: LinkResourceToTopicRequest,
 ) -> AppResult<SuccessResponse> {
-    let review_status = parse_review_status(payload.review_status.as_deref());
+    let review_status = parse_review_status_or_default(payload.review_status.as_deref());
 
     if contains_creates_cycle(&state.db, payload.topic_id, payload.resource_id).await? {
-        return Err("contains edge would create a cycle".into());
+        return Err("创建 contains 边会形成环".into());
     }
 
     insert_edge(
@@ -185,7 +171,7 @@ pub async fn update_topic_resource_review_status_command(
     state: State<'_, AppState>,
     payload: UpdateReviewStatusRequest,
 ) -> AppResult<()> {
-    let review_status = parse_review_status(Some(&payload.review_status));
+    let review_status = parse_review_status_or_default(Some(&payload.review_status));
     Ok(update_resource_review_status(&state.db, payload.resource_id, review_status).await?)
 }
 
@@ -207,6 +193,8 @@ pub async fn get_resource_topics_command(
     Ok(NodeListResponse { nodes })
 }
 
+// ========== 主题-任务关联 ==========
+
 #[tauri::command]
 pub async fn link_task_to_topic_command(
     state: State<'_, AppState>,
@@ -214,7 +202,7 @@ pub async fn link_task_to_topic_command(
     topic_id: i64,
 ) -> AppResult<SuccessResponse> {
     if contains_creates_cycle(&state.db, topic_id, task_id).await? {
-        return Err("contains edge would create a cycle".into());
+        return Err("创建 contains 边会形成环".into());
     }
 
     insert_edge(

@@ -1,6 +1,7 @@
-// Tauri 命令模块
-//
-// 提供前端可调用的所有命令函数。
+//! Tauri 命令模块
+//!
+//! 提供前端可调用的所有命令函数。
+//! 按功能分组导出，便于维护和查找。
 
 mod ai_config;
 mod chat;
@@ -60,15 +61,69 @@ macro_rules! simple_void_command {
     };
 }
 
-pub use ai_config::*;
-pub use chat::*;
-pub use chat_stream::*;
-pub use clipboard::*;
-pub use dashboard::*;
-pub use edges::*;
-pub use nodes::*;
-pub use resources::*;
-pub use search::*;
-pub use tasks::*;
-pub use topics::*;
+// ========== 类型导出 ==========
 pub use types::*;
+
+// ========== 资源命令 ==========
+pub use resources::{
+    capture_resource, get_all_resources, get_assets_path, get_resource_by_id,
+    hard_delete_resource_command, process_pending_resources_command,
+    soft_delete_resource_command, update_resource_content_command,
+    update_resource_summary_command, update_resource_title_command,
+    update_resource_user_note_command,
+};
+
+// ========== 任务命令 ==========
+pub use tasks::{
+    create_task, get_active_tasks, get_all_tasks, get_tasks_by_date,
+    hard_delete_task_command, mark_task_as_cancelled_command, mark_task_as_done_command,
+    mark_task_as_todo_command, soft_delete_task_command, update_task_description_command,
+    update_task_due_date_command, update_task_priority_command, update_task_summary_command,
+    update_task_title_command,
+};
+
+// ========== 主题命令 ==========
+pub use topics::{
+    create_topic, get_resource_topics_command, get_task_topics_command, get_topic_command,
+    get_topic_resources_command, get_topic_tasks_command, hard_delete_topic_command,
+    link_resource_to_topic_command, link_task_to_topic_command, list_topics_command,
+    soft_delete_topic_command, unlink_resource_from_topic_command, unlink_task_from_topic_command,
+    update_topic_favourite_command, update_topic_resource_review_status_command,
+    update_topic_summary_command, update_topic_title_command,
+};
+
+// ========== 节点命令 ==========
+pub use nodes::{
+    convert_resource_to_task_command, convert_resource_to_topic_command,
+    convert_task_to_topic_command, convert_topic_to_task_command, list_node_revision_logs,
+    list_pinned_nodes, list_unreviewed_nodes, update_node_pinned, update_node_review_status,
+};
+
+// ========== 边命令 ==========
+pub use edges::{
+    confirm_edge_command, link_nodes_command, list_edges_for_target_command,
+    list_source_nodes_command, list_target_nodes_command, unlink_nodes_command,
+};
+
+// ========== 搜索命令 ==========
+pub use search::{search_keyword, search_semantic, warmup_embedding};
+
+// ========== 聊天命令 ==========
+pub use chat::{
+    add_message_attachments, create_chat_message, create_chat_session, delete_chat_message,
+    delete_chat_session, get_chat_session, list_chat_messages_command, list_chat_sessions,
+    list_message_attachments_command, list_session_bound_resources_command,
+    remove_message_attachment, set_session_bindings_command, update_chat_message,
+    update_chat_session_command,
+};
+pub use chat_stream::send_chat_message;
+
+// ========== AI 配置命令 ==========
+pub use ai_config::{
+    get_ai_config_status, remove_api_key, save_api_key, set_classification_mode,
+    set_processing_provider_model,
+};
+
+// ========== 其他命令 ==========
+pub use clipboard::read_clipboard;
+pub use dashboard::get_dashboard;

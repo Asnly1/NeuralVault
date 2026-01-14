@@ -1,10 +1,11 @@
-// 搜索命令模块
-//
-// 提供语义搜索和精确搜索两种搜索方式
+//! 搜索命令模块
+//!
+//! 提供语义搜索和精确搜索两种搜索方式
 
 use serde::{Deserialize, Serialize};
 
 use crate::db::{self, NodeRecord, NodeType};
+use crate::error::AppError;
 use crate::{AppResult, AppState};
 
 /// 语义搜索结果项
@@ -23,12 +24,12 @@ pub async fn warmup_embedding(state: tauri::State<'_, AppState>) -> AppResult<()
         .ai
         .wait_ready()
         .await
-        .map_err(|e| crate::AppError::Custom(format!("AI services not ready: {}", e)))?;
+        .map_err(|e| AppError::AiService(format!("AI 服务未就绪: {}", e)))?;
 
     ai.embedding
         .warmup_search()
         .await
-        .map_err(|e| crate::AppError::Custom(format!("Embedding warmup failed: {}", e)))?;
+        .map_err(|e| AppError::AiService(format!("Embedding 预热失败: {}", e)))?;
 
     Ok(())
 }
@@ -50,13 +51,13 @@ pub async fn search_semantic(
         .ai
         .wait_ready()
         .await
-        .map_err(|e| crate::AppError::Custom(format!("AI services not ready: {}", e)))?;
+        .map_err(|e| AppError::AiService(format!("AI 服务未就绪: {}", e)))?;
 
     let search_response = ai
         .search
         .search_hybrid(&query, &embedding_type, scope_node_ids.as_deref(), limit)
         .await
-        .map_err(|e| crate::AppError::Custom(format!("Search failed: {}", e)))?;
+        .map_err(|e| AppError::AiService(format!("搜索失败: {}", e)))?;
 
     // 应用 Scope 权重
     // Local scope (有 scope_node_ids): × 1.5

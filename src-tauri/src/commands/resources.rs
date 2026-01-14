@@ -1,27 +1,27 @@
-use std::{
-    fs,
-    path::Path,
-};
+//! 资源相关命令
+
+use std::{fs, path::Path};
 
 use active_win_pos_rs::get_active_window;
 use serde::Serialize;
-use sqlx::types::Json;
 use tauri::{AppHandle, Emitter, State};
-use uuid::Uuid;
 
 use crate::{
     app_state::AppState,
     db::{
-        get_node_by_id, insert_node, list_all_resources, update_node_content,
-        update_node_summary, update_node_title, update_node_user_note, update_resource_sync_status, NewNode, NodeType,
-        ResourceProcessingStage, ResourceEmbeddingStatus, ReviewStatus, SourceMeta,
+        get_node_by_id, hard_delete_node, list_all_resources, soft_delete_node,
+        update_node_content, update_node_summary, update_node_title, update_node_user_note,
+        update_resource_sync_status, NodeBuilder, NodeRecord, ResourceEmbeddingStatus, SourceMeta,
     },
+    error::AppError,
     services::parser::{build_text_title, parse_resource_content, ProgressCallback},
-    utils::{compute_sha256, get_assets_dir, get_extension, parse_file_type, resolve_file_path},
+    utils::{compute_sha256, get_assets_dir, get_extension, parse_file_type, resolve_file_path, validate_title},
     AppResult,
 };
 
 use super::{CaptureRequest, CaptureResponse};
+
+// ========== 内部工具函数 ==========
 
 fn load_or_copy_file_for_capture(
     app: &AppHandle,
@@ -91,7 +91,6 @@ fn emit_parse_progress(
     let _ = app.emit("parse-progress", payload);
 }
 
-
 fn merge_source_meta(payload: Option<super::CaptureSourceMeta>) -> SourceMeta {
     let mut meta = SourceMeta {
         url: payload.as_ref().and_then(|m| m.url.clone()),
@@ -103,10 +102,18 @@ fn merge_source_meta(payload: Option<super::CaptureSourceMeta>) -> SourceMeta {
     if meta.window_title.is_none() || meta.process_name.is_none() {
         if let Ok(active) = get_active_window() {
             if meta.window_title.is_none() {
-                meta.window_title = if active.title.is_empty() { None } else { Some(active.title) };
+                meta.window_title = if active.title.is_empty() {
+                    None
+                } else {
+                    Some(active.title)
+                };
             }
             if meta.process_name.is_none() {
-                meta.process_name = if active.app_name.is_empty() { None } else { Some(active.app_name) };
+                meta.process_name = if active.app_name.is_empty() {
+                    None
+                } else {
+                    Some(active.app_name)
+                };
             }
         }
     }
@@ -118,6 +125,7 @@ fn merge_source_meta(payload: Option<super::CaptureSourceMeta>) -> SourceMeta {
     meta
 }
 
+// ========== 捕获资源 ==========
 
 #[tauri::command]
 pub async fn capture_resource(
@@ -132,8 +140,10 @@ pub async fn capture_resource(
         source_meta,
     } = payload;
 
-    let resource_uuid = Uuid::new_v4().to_string();
     let subtype = parse_file_type(file_type.as_deref());
+
+    let builder = NodeBuilder::resource();
+    let resource_uuid = builder.get_uuid().to_string();
 
     let file_info = match file_path.as_deref() {
         Some(source_path) => Some(load_or_copy_file_for_capture(&app, source_path, &resource_uuid)?),
@@ -141,7 +151,9 @@ pub async fn capture_resource(
     };
 
     let (file_bytes, stored_file_path, file_display_name) = match &file_info {
-        Some((bytes, _size, stored_path, name)) => (Some(bytes.as_slice()), Some(stored_path.as_str()), name.clone()),
+        Some((bytes, _size, stored_path, name)) => {
+            (Some(bytes.as_slice()), Some(stored_path.as_str()), name.clone())
+        }
         None => (None, None, None),
     };
 
@@ -155,54 +167,27 @@ pub async fn capture_resource(
     } else if let Some(text) = content.as_ref() {
         compute_sha256(text.as_bytes())
     } else {
-        return Err("content 或 file_path 至少提供一个".into());
+        return Err(AppError::Validation("content 或 file_path 至少提供一个".to_string()));
     };
 
-    let user_note = if file_info.is_some() { content.take() } else { None };
-
-    let title = if let Some(name) = file_display_name.as_ref() {
-        name.clone()
-    } else if let Some(text) = content.as_ref() {
-        build_text_title(text)
+    let user_note = if file_info.is_some() {
+        content.take()
     } else {
-        "Untitled".to_string()
-    };
-    let title = if title.trim().is_empty() {
-        "Untitled".to_string()
-    } else {
-        title
+        None
     };
 
+    let title = build_resource_title(file_display_name.as_deref(), content.as_deref());
     let meta = merge_source_meta(source_meta);
 
-    let node_id = insert_node(
-        &state.db,
-        NewNode {
-            uuid: &resource_uuid,
-            user_id: 1,
-            title: &title,
-            summary: None,
-            node_type: NodeType::Resource,
-            task_status: None,
-            priority: None,
-            due_date: None,
-            done_date: None,
-            file_hash: Some(&file_hash),
-            file_path: stored_file_path,
-            file_content: None,
-            user_note: user_note.as_deref(),
-            resource_subtype: Some(subtype),
-            source_meta: Some(Json(meta)),
-            embedded_hash: None,
-            processing_hash: None,
-            embedding_status: ResourceEmbeddingStatus::Pending,
-            last_embedding_at: None,
-            last_embedding_error: None,
-            processing_stage: ResourceProcessingStage::Todo,
-            review_status: ReviewStatus::Unreviewed,
-        },
-    )
-    .await?;
+    let node_id = builder
+        .title(&title)
+        .file_hash(Some(&file_hash))
+        .file_path(stored_file_path)
+        .user_note(user_note.as_deref())
+        .resource_subtype(Some(subtype))
+        .source_meta(Some(meta))
+        .insert(&state.db)
+        .await?;
 
     emit_parse_progress(Some(&app), Some(node_id), "parsing", Some(0), None);
 
@@ -261,8 +246,27 @@ pub async fn capture_resource(
     })
 }
 
+fn build_resource_title(file_name: Option<&str>, content: Option<&str>) -> String {
+    if let Some(name) = file_name {
+        if !name.trim().is_empty() {
+            return name.to_string();
+        }
+    }
+
+    if let Some(text) = content {
+        let title = build_text_title(text);
+        if !title.trim().is_empty() {
+            return title;
+        }
+    }
+
+    "Untitled".to_string()
+}
+
+// ========== 查询资源 ==========
+
 #[tauri::command]
-pub async fn get_all_resources(state: State<'_, AppState>) -> AppResult<Vec<crate::db::NodeRecord>> {
+pub async fn get_all_resources(state: State<'_, AppState>) -> AppResult<Vec<NodeRecord>> {
     Ok(list_all_resources(&state.db).await?)
 }
 
@@ -271,6 +275,16 @@ pub fn get_assets_path(app: AppHandle) -> AppResult<String> {
     let path = get_assets_dir(&app)?;
     Ok(path.to_string_lossy().to_string())
 }
+
+#[tauri::command]
+pub async fn get_resource_by_id(
+    state: State<'_, AppState>,
+    node_id: i64,
+) -> AppResult<NodeRecord> {
+    Ok(get_node_by_id(&state.db, node_id).await?)
+}
+
+// ========== 更新资源 ==========
 
 #[tauri::command]
 pub async fn update_resource_content_command(
@@ -290,11 +304,8 @@ pub async fn update_resource_title_command(
     node_id: i64,
     title: String,
 ) -> AppResult<()> {
-    let trimmed = title.trim();
-    if trimmed.is_empty() {
-        return Err("title 不能为空".into());
-    }
-    Ok(update_node_title(&state.db, node_id, trimmed).await?)
+    let title = validate_title(&title)?;
+    Ok(update_node_title(&state.db, node_id, title).await?)
 }
 
 #[tauri::command]
@@ -304,45 +315,6 @@ pub async fn update_resource_summary_command(
     summary: Option<String>,
 ) -> AppResult<()> {
     Ok(update_node_summary(&state.db, node_id, summary.as_deref()).await?)
-}
-
-#[tauri::command]
-pub async fn soft_delete_resource_command(
-    state: State<'_, AppState>,
-    node_id: i64,
-) -> AppResult<()> {
-    Ok(crate::db::soft_delete_node(&state.db, node_id).await?)
-}
-
-#[tauri::command]
-pub async fn hard_delete_resource_command(
-    state: State<'_, AppState>,
-    node_id: i64,
-) -> AppResult<()> {
-    Ok(crate::db::hard_delete_node(&state.db, node_id).await?)
-}
-
-#[tauri::command]
-pub async fn get_resource_by_id(
-    state: State<'_, AppState>,
-    node_id: i64,
-) -> AppResult<crate::db::NodeRecord> {
-    Ok(get_node_by_id(&state.db, node_id).await?)
-}
-
-#[tauri::command]
-pub async fn process_pending_resources_command(state: State<'_, AppState>) -> AppResult<usize> {
-    state
-        .ai
-        .wait_ready()
-        .await
-        .map_err(|e| crate::AppError::Custom(format!("AI services not ready: {e}")))?;
-    let count = state
-        .ai_pipeline
-        .enqueue_pending_resources(&state.db)
-        .await
-        .map_err(|e| crate::AppError::Custom(format!("Process resources failed: {e}")))?;
-    Ok(count)
 }
 
 #[tauri::command]
@@ -357,4 +329,39 @@ pub async fn update_resource_user_note_command(
         Some(user_note.as_str())
     };
     Ok(update_node_user_note(&state.db, node_id, note).await?)
+}
+
+// ========== 删除资源 ==========
+
+#[tauri::command]
+pub async fn soft_delete_resource_command(
+    state: State<'_, AppState>,
+    node_id: i64,
+) -> AppResult<()> {
+    Ok(soft_delete_node(&state.db, node_id).await?)
+}
+
+#[tauri::command]
+pub async fn hard_delete_resource_command(
+    state: State<'_, AppState>,
+    node_id: i64,
+) -> AppResult<()> {
+    Ok(hard_delete_node(&state.db, node_id).await?)
+}
+
+// ========== 处理待定资源 ==========
+
+#[tauri::command]
+pub async fn process_pending_resources_command(state: State<'_, AppState>) -> AppResult<usize> {
+    state
+        .ai
+        .wait_ready()
+        .await
+        .map_err(|e| AppError::AiService(format!("AI 服务未就绪: {e}")))?;
+    let count = state
+        .ai_pipeline
+        .enqueue_pending_resources(&state.db)
+        .await
+        .map_err(|e| AppError::AiService(format!("处理资源失败: {e}")))?;
+    Ok(count)
 }

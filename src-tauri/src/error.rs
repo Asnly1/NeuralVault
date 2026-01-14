@@ -9,14 +9,33 @@ use thiserror::Error;
 /// 应用级统一错误类型
 #[derive(Debug, Error)]
 pub enum AppError {
-    #[error("Database error: {0}")]
+    /// 数据库错误
+    #[error("数据库错误: {0}")]
     Database(#[from] sqlx::Error),
 
-    #[error("IO error: {0}")]
+    /// 文件操作错误
+    #[error("文件操作错误: {0}")]
     Io(#[from] std::io::Error),
 
+    /// 验证错误（输入参数不合法）
+    #[error("验证失败: {0}")]
+    Validation(String),
+
+    /// 资源未找到
+    #[error("资源不存在: {entity} (id={id})")]
+    NotFound { entity: &'static str, id: i64 },
+
+    /// 配置错误
+    #[error("配置错误: {0}")]
+    Config(String),
+
+    /// AI 服务错误
+    #[error("AI 服务错误: {0}")]
+    AiService(String),
+
+    /// 业务逻辑错误
     #[error("{0}")]
-    Custom(String),
+    Business(String),
 
     // [error("...")] (实现 Display trait)
     // 语法: #[error("Database error: {0}")]
@@ -42,7 +61,7 @@ pub enum AppError {
 
 impl From<String> for AppError {
     fn from(s: String) -> Self {
-        AppError::Custom(s)
+        AppError::Business(s)
     }
 }
 
@@ -61,7 +80,7 @@ impl From<String> for AppError {
 // &str: 数据借用者(只读)
 impl From<&str> for AppError {
     fn from(s: &str) -> Self {
-        AppError::Custom(s.to_string())
+        AppError::Business(s.to_string())
     }
 }
 
@@ -77,25 +96,53 @@ impl Serialize for AppError {
         // 1. 开始构建一个“结构体”（即 JSON 对象）
         // "AppError" 是名字（通常用于 XML 等，JSON 中忽略），2 是预计字段数量
         let mut state = serializer.serialize_struct("AppError", 2)?;
-        // 2. 根据枚举变体，手动写入 "type" 字段
-        // 这里把 Rust 的类型系统映射成了简单的字符串标签
-        match self {
-            AppError::Database(_) => state.serialize_field("type", "database")?,
-            AppError::Io(_) => state.serialize_field("type", "io")?,
-            AppError::Custom(_) => state.serialize_field("type", "custom")?,
-        }
-        // 3. 写入 "message" 字段
-        // self.to_string() 会调用 thiserror 定义的 #[error(...)] 格式化逻辑
+
+        // 根据枚举变体写入 "type" 字段
+        let error_type = match self {
+            AppError::Database(_) => "database",
+            AppError::Io(_) => "io",
+            AppError::Validation(_) => "validation",
+            AppError::NotFound { .. } => "not_found",
+            AppError::Config(_) => "config",
+            AppError::AiService(_) => "ai_service",
+            AppError::Business(_) => "business",
+        };
+        state.serialize_field("type", error_type)?;
+
+        // 写入 "message" 字段
         state.serialize_field("message", &self.to_string())?;
-        // 4. 结束序列化，封闭 JSON 对象（相当于补上右大括号 }）
+
         state.end()
     }
-    // 例子
-    // {
-    //     "type": "database",
-    //     "message": "Database error: connection refused"
-    // }
 }
 
 /// 应用级 Result 类型别名
 pub type AppResult<T> = Result<T, AppError>;
+
+// ========== 扩展 trait：为 Result 添加上下文方法 ==========
+
+/// 为 Result 类型添加错误上下文转换方法
+pub trait ResultExt<T> {
+    /// 将错误转换为验证错误
+    fn validation_err(self, msg: &str) -> AppResult<T>;
+
+    /// 将错误转换为配置错误
+    fn config_err(self, msg: &str) -> AppResult<T>;
+
+    /// 将错误转换为 AI 服务错误
+    fn ai_err(self, msg: &str) -> AppResult<T>;
+}
+
+impl<T, E: std::fmt::Display> ResultExt<T> for Result<T, E> {
+    fn validation_err(self, msg: &str) -> AppResult<T> {
+        self.map_err(|e| AppError::Validation(format!("{}: {}", msg, e)))
+    }
+
+    fn config_err(self, msg: &str) -> AppResult<T> {
+        self.map_err(|e| AppError::Config(format!("{}: {}", msg, e)))
+    }
+
+    fn ai_err(self, msg: &str) -> AppResult<T> {
+        self.map_err(|e| AppError::AiService(format!("{}: {}", msg, e)))
+    }
+}
