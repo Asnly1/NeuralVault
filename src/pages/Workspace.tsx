@@ -110,34 +110,21 @@ export function WorkspacePage({
         <div className="flex items-center gap-2 text-sm">
           {isTopicMode ? (
             // Topic 模式
-            <>
-              <span className="text-muted-foreground">{t("warehouse", "topics")}</span>
-              <span className="text-muted-foreground">/</span>
-              <span className="font-medium" title={propSelectedResource?.title}>
-                📁 {truncateTitle(propSelectedResource?.title) || t("common", "untitled")}
-              </span>
-            </>
+            <span className="font-medium" title={propSelectedResource?.title}>
+              {truncateTitle(propSelectedResource?.title) || t("common", "untitled")}
+            </span>
           ) : isResourceMode ? (
             // Resource 模式
-            <>
-              <span className="text-muted-foreground">{t("workspace", "resourceBreadcrumb")}</span>
-              <span className="text-muted-foreground">/</span>
-              {currentResource ? (
-                <span className="font-medium" title={currentResource.title}>
-                  {currentResource.resource_subtype
-                    ? resourceSubtypeIcons[currentResource.resource_subtype]
-                    : "📎"}{" "}
-                  {truncateTitle(currentResource.title) || "未命名资源"}
-                </span>
-              ) : (
-                <span className="font-medium text-muted-foreground">未选择资源</span>
-              )}
-            </>
+            currentResource ? (
+              <span className="font-medium" title={currentResource.title}>
+                {truncateTitle(currentResource.title) || "未命名资源"}
+              </span>
+            ) : (
+              <span className="font-medium text-muted-foreground">未选择资源</span>
+            )
           ) : (
             // Task 模式
             <>
-              <span className="text-muted-foreground">{t("dashboard", "tasks")}</span>
-              <span className="text-muted-foreground">/</span>
               <span className="font-medium" title={selectedTask!.title}>
                 {truncateTitle(selectedTask!.title) || t("common", "untitled")}
               </span>
@@ -145,9 +132,6 @@ export function WorkspacePage({
                 <>
                   <span className="text-muted-foreground">/</span>
                   <span className="text-muted-foreground" title={currentResource.title}>
-                    {currentResource.resource_subtype
-                      ? resourceSubtypeIcons[currentResource.resource_subtype]
-                      : "📎"}{" "}
                     {truncateTitle(currentResource.title) || "未命名文件"}
                   </span>
                 </>

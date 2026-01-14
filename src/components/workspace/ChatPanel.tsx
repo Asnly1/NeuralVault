@@ -117,7 +117,7 @@ export function ChatPanel({
       AI_PROVIDER_INFO[provider].models.map((m) => ({
         provider,
         model_id: m.id,
-        display_name: `${AI_PROVIDER_INFO[provider].icon} ${m.name}`,
+        display_name: m.name,
       }))
   );
 
@@ -365,78 +365,10 @@ export function ChatPanel({
         <div className="absolute top-0 left-0 w-4 h-full -ml-1.5" />
       </div>
 
-      {/* Header with model selector */}
-      <div className="px-4 py-3 border-b shrink-0">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="font-semibold">{t("workspace", "aiAssistant")}</h3>
-          <div className="flex items-center gap-2">
-            <Select
-              value={
-                selectedModel
-                  ? `${selectedModel.provider}:${selectedModel.model_id}`
-                  : ""
-              }
-              onValueChange={(value) => {
-                const [provider, model_id] = value.split(":");
-                const model = availableModels.find(
-                  (m) => m.provider === provider && m.model_id === model_id
-                );
-                if (model) setSelectedModel(model);
-              }}
-            >
-              <SelectTrigger className="w-[160px] h-8 text-xs">
-                <SelectValue placeholder={t("workspace", "selectModel")} />
-              </SelectTrigger>
-              <SelectContent>
-                {availableModels.length === 0 ? (
-                  <SelectItem value="none" disabled>
-                    {t("workspace", "noModelsConfigured")}
-                  </SelectItem>
-                ) : (
-                  availableModels.map((model) => (
-                    <SelectItem
-                      key={`${model.provider}:${model.model_id}`}
-                      value={`${model.provider}:${model.model_id}`}
-                    >
-                      {model.display_name}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
-            <Select
-              value={thinkingEffort}
-              onValueChange={(value) => setThinkingEffort(value as ThinkingEffort)}
-            >
-              <SelectTrigger className="w-[110px] h-8 text-xs">
-                <SelectValue placeholder={t("workspace", "thinkingEffort")} />
-              </SelectTrigger>
-              <SelectContent>
-                {availableThinkingEfforts.map((effort) => (
-                  <SelectItem key={effort} value={effort}>
-                    {t("workspace", `effort${effort.charAt(0).toUpperCase() + effort.slice(1)}`)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 mt-1">
-          <p className="text-xs text-muted-foreground">
-            {t("workspace", "context")}
-          </p>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-6 px-2 text-[10px] rounded-full"
-            onClick={() => setRagScopeValue(ragScope === "local" ? "global" : "local")}
-            title={t("workspace", "ragScope")}
-          >
-            {t("workspace", "ragScope")}: {ragScopeLabel}
-          </Button>
-        </div>
-        {hasSessionContext && (
-          <div className="mt-3 space-y-2">
+      {/* Header - only session management, hide when conversation started */}
+      {hasSessionContext && messages.length === 0 && (
+        <div className="px-4 py-3 border-b shrink-0">
+          <div className="space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground">
                 {t("workspace", "chatSessions")}
@@ -478,8 +410,8 @@ export function ChatPanel({
               </div>
             )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Messages area */}
       <ScrollArea className="flex-1">
@@ -577,8 +509,8 @@ export function ChatPanel({
         </div>
       </ScrollArea>
 
-      {/* Input area */}
-      <div className="p-4 border-t shrink-0">
+      {/* Input area with model selector */}
+      <div className="p-4 border-t shrink-0 space-y-2">
         {configuredProviders.length === 0 ? (
           <Button
             variant="outline"
@@ -589,35 +521,99 @@ export function ChatPanel({
             {t("workspace", "goToSettings")}
           </Button>
         ) : (
-          <div className="flex gap-2">
-            <Input
-              placeholder={t("workspace", "inputPlaceholder")}
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={!selectedModel || isChatLoading}
-              className="flex-1"
-            />
-            <Button
-              size="icon"
-              disabled={
-                !chatInput.trim() ||
-                !selectedModel ||
-                isChatLoading ||
-                !hasSessionContext
-              }
-              onClick={handleSend}
-            >
-              {isChatLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
+          <>
+            {/* Model, Thinking, RAG controls */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <Select
+                value={
+                  selectedModel
+                    ? `${selectedModel.provider}:${selectedModel.model_id}`
+                    : ""
+                }
+                onValueChange={(value) => {
+                  const [provider, model_id] = value.split(":");
+                  const model = availableModels.find(
+                    (m) => m.provider === provider && m.model_id === model_id
+                  );
+                  if (model) setSelectedModel(model);
+                }}
+              >
+                <SelectTrigger className="w-[140px] h-7 text-xs">
+                  <SelectValue placeholder={t("workspace", "selectModel")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableModels.length === 0 ? (
+                    <SelectItem value="none" disabled>
+                      {t("workspace", "noModelsConfigured")}
+                    </SelectItem>
+                  ) : (
+                    availableModels.map((model) => (
+                      <SelectItem
+                        key={`${model.provider}:${model.model_id}`}
+                        value={`${model.provider}:${model.model_id}`}
+                      >
+                        {model.display_name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              <Select
+                value={thinkingEffort}
+                onValueChange={(value) => setThinkingEffort(value as ThinkingEffort)}
+              >
+                <SelectTrigger className="w-[80px] h-7 text-xs">
+                  <SelectValue placeholder={t("workspace", "thinkingEffort")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableThinkingEfforts.map((effort) => (
+                    <SelectItem key={effort} value={effort}>
+                      {t("workspace", `effort${effort.charAt(0).toUpperCase() + effort.slice(1)}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-[10px] rounded-full"
+                onClick={() => setRagScopeValue(ragScope === "local" ? "global" : "local")}
+                title={t("workspace", "ragScope")}
+              >
+                {ragScopeLabel}
+              </Button>
+            </div>
+            {/* Input field */}
+            <div className="flex gap-2">
+              <Input
+                placeholder={t("workspace", "inputPlaceholder")}
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={!selectedModel || isChatLoading}
+                className="flex-1"
+              />
+              <Button
+                size="icon"
+                disabled={
+                  !chatInput.trim() ||
+                  !selectedModel ||
+                  isChatLoading ||
+                  !hasSessionContext
+                }
+                onClick={handleSend}
+              >
+                {isChatLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+          </>
         )}
         {!selectedModel && configuredProviders.length > 0 && (
-          <p className="text-xs text-muted-foreground mt-2">
+          <p className="text-xs text-muted-foreground">
             {t("workspace", "selectModelFirst")}
           </p>
         )}

@@ -15,9 +15,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { NodeRecord, priorityConfig, resourceSubtypeIcons } from "@/types";
-import { Plus, Pencil, Check, X } from "lucide-react";
+import { Plus, Check, X } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { RelatedNodesList } from "./RelatedNodesList";
 import { ContextNodeTree } from "./ContextNodeTree";
 import { updateTaskTitle, updateTaskSummary, updateTopicTitle, updateTopicSummary } from "@/api";
 
@@ -162,178 +161,134 @@ export function ContextPanel({
         >
           {/* Task 详情 */}
           {!isResourceMode && !isTopicMode && selectedTask && (
-            <div>
-              <h3 className="text-sm font-semibold mb-3">{t("workspace", "taskDetails")}</h3>
-              <Card>
-                <CardContent className="p-3 space-y-3">
-                  {/* Title */}
-                  <div className="group">
-                    {isEditingTaskTitle ? (
-                      <div className="flex items-center gap-2">
-                        <Input
-                          value={editTaskTitle}
-                          onChange={(e) => setEditTaskTitle(e.target.value)}
-                          className="h-8 text-sm font-medium"
-                          autoFocus
-                        />
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleTaskTitleSave}>
-                          <Check className="h-4 w-4 text-green-600" />
-                        </Button>
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setIsEditingTaskTitle(false)}>
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-medium flex-1">{selectedTask.title || "未命名任务"}</h4>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-6 w-6 opacity-0 group-hover:opacity-100"
-                          onClick={handleTaskTitleEdit}
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    )}
+            <Card>
+              <CardContent className="p-3 space-y-3">
+                {/* Title - 双击编辑 */}
+                {isEditingTaskTitle ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={editTaskTitle}
+                      onChange={(e) => setEditTaskTitle(e.target.value)}
+                      className="h-8 text-sm font-medium"
+                      autoFocus
+                    />
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleTaskTitleSave}>
+                      <Check className="h-4 w-4 text-green-600" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setIsEditingTaskTitle(false)}>
+                      <X className="h-4 w-4" />
+                    </Button>
                   </div>
-                  {/* Summary */}
-                  <div className="group">
-                    {isEditingTaskSummary ? (
-                      <div className="space-y-2">
-                        <Textarea
-                          value={editTaskSummary}
-                          onChange={(e) => setEditTaskSummary(e.target.value)}
-                          className="text-sm resize-none"
-                          rows={3}
-                          autoFocus
-                        />
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="outline" onClick={handleTaskSummarySave}>保存</Button>
-                          <Button size="sm" variant="ghost" onClick={() => setIsEditingTaskSummary(false)}>取消</Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-start gap-2">
-                        <p className="text-sm text-muted-foreground flex-1">
-                          {selectedTask.summary || <span className="italic">无摘要</span>}
-                        </p>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-6 w-6 opacity-0 group-hover:opacity-100 shrink-0"
-                          onClick={handleTaskSummaryEdit}
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    )}
+                ) : (
+                  <h4
+                    className="font-medium cursor-pointer hover:text-primary transition-colors"
+                    onDoubleClick={handleTaskTitleEdit}
+                    title="双击编辑"
+                  >
+                    {selectedTask.title || "未命名任务"}
+                  </h4>
+                )}
+                {/* Summary - 双击编辑 */}
+                {isEditingTaskSummary ? (
+                  <div className="space-y-2">
+                    <Textarea
+                      value={editTaskSummary}
+                      onChange={(e) => setEditTaskSummary(e.target.value)}
+                      className="text-sm resize-none"
+                      rows={3}
+                      autoFocus
+                    />
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={handleTaskSummarySave}>保存</Button>
+                      <Button size="sm" variant="ghost" onClick={() => setIsEditingTaskSummary(false)}>取消</Button>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant="outline">{selectedTask.task_status}</Badge>
-                    {selectedTask.priority && (
-                      <Badge
-                        style={{
-                          backgroundColor: `${priorityConfig[selectedTask.priority].color}20`,
-                          color: priorityConfig[selectedTask.priority].color,
-                        }}
-                      >
-                        {priorityConfig[selectedTask.priority].label}
-                      </Badge>
-                    )}
-                  </div>
-                  {selectedTask.due_date && (
-                    <p className="text-xs text-muted-foreground">
-                      截止: {selectedTask.due_date.toLocaleDateString("zh-CN")}
-                    </p>
+                ) : (
+                  <p
+                    className="text-sm text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+                    onDoubleClick={handleTaskSummaryEdit}
+                    title="双击编辑"
+                  >
+                    {selectedTask.summary || <span className="italic">无摘要</span>}
+                  </p>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="outline">{selectedTask.task_status}</Badge>
+                  {selectedTask.priority && (
+                    <Badge
+                      style={{
+                        backgroundColor: `${priorityConfig[selectedTask.priority].color}20`,
+                        color: priorityConfig[selectedTask.priority].color,
+                      }}
+                    >
+                      {priorityConfig[selectedTask.priority].label}
+                    </Badge>
                   )}
-                  {/* 关联节点列表 */}
-                  <RelatedNodesList
-                    nodeId={selectedTask.node_id}
-                    onNodeClick={onNodeClick}
-                  />
-                </CardContent>
-              </Card>
-            </div>
+                </div>
+                {selectedTask.due_date && (
+                  <p className="text-xs text-muted-foreground">
+                    截止: {selectedTask.due_date.toLocaleDateString("zh-CN")}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
           )}
 
           {/* Topic 详情 */}
           {isTopicMode && selectedTopic && (
-            <div>
-              <h3 className="text-sm font-semibold mb-3">{t("workspace", "topicDetails")}</h3>
-              <Card>
-                <CardContent className="p-3 space-y-3">
-                  {/* Title */}
-                  <div className="group">
-                    {isEditingTopicTitle ? (
-                      <div className="flex items-center gap-2">
-                        <Input
-                          value={editTopicTitle}
-                          onChange={(e) => setEditTopicTitle(e.target.value)}
-                          className="h-8 text-sm font-medium"
-                          autoFocus
-                        />
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleTopicTitleSave}>
-                          <Check className="h-4 w-4 text-green-600" />
-                        </Button>
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setIsEditingTopicTitle(false)}>
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-medium flex-1">📁 {selectedTopic.title || "未命名主题"}</h4>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-6 w-6 opacity-0 group-hover:opacity-100"
-                          onClick={handleTopicTitleEdit}
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    )}
+            <Card>
+              <CardContent className="p-3 space-y-3">
+                {/* Title - 双击编辑 */}
+                {isEditingTopicTitle ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={editTopicTitle}
+                      onChange={(e) => setEditTopicTitle(e.target.value)}
+                      className="h-8 text-sm font-medium"
+                      autoFocus
+                    />
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleTopicTitleSave}>
+                      <Check className="h-4 w-4 text-green-600" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setIsEditingTopicTitle(false)}>
+                      <X className="h-4 w-4" />
+                    </Button>
                   </div>
-                  {/* Summary */}
-                  <div className="group">
-                    {isEditingTopicSummary ? (
-                      <div className="space-y-2">
-                        <Textarea
-                          value={editTopicSummary}
-                          onChange={(e) => setEditTopicSummary(e.target.value)}
-                          className="text-sm resize-none"
-                          rows={3}
-                          autoFocus
-                        />
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="outline" onClick={handleTopicSummarySave}>保存</Button>
-                          <Button size="sm" variant="ghost" onClick={() => setIsEditingTopicSummary(false)}>取消</Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-start gap-2">
-                        <p className="text-sm text-muted-foreground flex-1">
-                          {selectedTopic.summary || <span className="italic">无摘要</span>}
-                        </p>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-6 w-6 opacity-0 group-hover:opacity-100 shrink-0"
-                          onClick={handleTopicSummaryEdit}
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    )}
+                ) : (
+                  <h4
+                    className="font-medium cursor-pointer hover:text-primary transition-colors"
+                    onDoubleClick={handleTopicTitleEdit}
+                    title="双击编辑"
+                  >
+                    {selectedTopic.title || "未命名主题"}
+                  </h4>
+                )}
+                {/* Summary - 双击编辑 */}
+                {isEditingTopicSummary ? (
+                  <div className="space-y-2">
+                    <Textarea
+                      value={editTopicSummary}
+                      onChange={(e) => setEditTopicSummary(e.target.value)}
+                      className="text-sm resize-none"
+                      rows={3}
+                      autoFocus
+                    />
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={handleTopicSummarySave}>保存</Button>
+                      <Button size="sm" variant="ghost" onClick={() => setIsEditingTopicSummary(false)}>取消</Button>
+                    </div>
                   </div>
-                  {/* 关联节点列表 */}
-                  <RelatedNodesList
-                    nodeId={selectedTopic.node_id}
-                    onNodeClick={onNodeClick}
-                  />
-                </CardContent>
-              </Card>
-            </div>
+                ) : (
+                  <p
+                    className="text-sm text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+                    onDoubleClick={handleTopicSummaryEdit}
+                    title="双击编辑"
+                  >
+                    {selectedTopic.summary || <span className="italic">无摘要</span>}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
           )}
 
           <div>

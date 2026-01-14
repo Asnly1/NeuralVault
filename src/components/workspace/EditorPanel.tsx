@@ -335,7 +335,7 @@ export function EditorPanel({
         ) : isTopicMode && selectedTopic ? (
           // Topic 模式：显示主题标题
           <span className="text-sm font-medium">
-            📁 {selectedTopic.title || "未命名主题"}
+            {selectedTopic.title || "未命名主题"}
           </span>
         ) : (
           <span className="text-sm font-medium">{t("workspace", "workspaceArea")}</span>
