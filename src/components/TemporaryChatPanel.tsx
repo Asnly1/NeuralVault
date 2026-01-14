@@ -78,11 +78,8 @@ export function TemporaryChatPanel({
           });
           setSessionId(response.session_id);
 
-          // 发送初始消息 - 使用 resource_id 作为会话锚点
-          // 注意：临时会话没有关联的 task 或 resource，但 sendMessage 需要至少一个
-          // 这里我们用一个 hack：将 session_id 作为 resource_id
           await sendMessage(initialMessage, {
-            resource_id: response.session_id,
+            session_id: response.session_id,
             thinking_effort: thinkingEffort,
           });
         } catch (e) {
@@ -119,12 +116,12 @@ export function TemporaryChatPanel({
         setSessionId(response.session_id);
 
         await sendMessage(content, {
-          resource_id: response.session_id,
+          session_id: response.session_id,
           thinking_effort: thinkingEffort,
         });
       } else {
         await sendMessage(content, {
-          resource_id: sessionId,
+          session_id: sessionId,
           thinking_effort: thinkingEffort,
         });
       }

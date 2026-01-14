@@ -275,24 +275,9 @@ pub struct NewChatMessage<'a> {
     pub total_tokens: Option<i64>,
 }
 
-#[derive(Debug, FromRow, Serialize)]
-pub struct MessageAttachmentRecord {
-    pub id: i64,
-    pub message_id: i64,
-    pub node_id: i64,
-}
-
 pub struct NewMessageAttachment {
     pub message_id: i64,
     pub node_id: i64,
-}
-
-#[derive(Debug, FromRow, Serialize)]
-pub struct SessionBindingRecord {
-    pub session_id: i64,
-    pub node_id: i64,
-    pub binding_type: BindingType,
-    pub created_at: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

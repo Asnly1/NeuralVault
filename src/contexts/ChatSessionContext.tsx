@@ -3,7 +3,7 @@
  * 职责：会话创建、缓存、绑定
  */
 import React, { createContext, useContext, useState, useCallback } from "react";
-import { createChatSession, listChatSessions, setSessionBindings } from "@/api";
+import { createChatSession, setSessionBindings } from "@/api";
 
 interface SessionContext {
   task_id?: number;
@@ -11,12 +11,14 @@ interface SessionContext {
 }
 
 export interface ChatSessionContextType {
-  /** 确保会话存在，返回 session_id */
-  ensureSession: (context: SessionContext, contextResourceIds?: number[]) => Promise<number>;
+  /** 创建新会话并设为当前会话 */
+  createSession: (context: SessionContext) => Promise<number>;
+  /** 获取当前会话 session_id */
+  getActiveSessionId: (context: SessionContext) => number | undefined;
+  /** 设置当前会话 session_id */
+  setActiveSessionId: (context: SessionContext, sessionId: number | null) => void;
   /** 同步会话的上下文资源绑定 */
   syncSessionBindings: (sessionId: number, nodeIds: number[]) => Promise<void>;
-  /** 获取已缓存的 session_id */
-  getSessionId: (context: SessionContext) => number | undefined;
   /** 清除会话缓存 */
   clearSessionCache: () => void;
 }
@@ -32,52 +34,56 @@ const buildSessionKey = (context: SessionContext): string => {
 export function ChatSessionProvider({ children }: { children: React.ReactNode }) {
   const [sessionMap, setSessionMap] = useState<Map<string, number>>(new Map());
 
-  const getSessionId = useCallback(
+  const getActiveSessionId = useCallback(
     (context: SessionContext): number | undefined => {
       const key = buildSessionKey(context);
+      if (key === "unknown") return undefined;
       return sessionMap.get(key);
     },
     [sessionMap]
   );
 
-  const ensureSession = useCallback(
-    async (context: SessionContext, contextResourceIds?: number[]): Promise<number> => {
+  const setActiveSessionId = useCallback(
+    (context: SessionContext, sessionId: number | null) => {
+      const key = buildSessionKey(context);
+      if (key === "unknown") return;
+      setSessionMap((prev) => {
+        const next = new Map(prev);
+        if (sessionId === null) {
+          next.delete(key);
+        } else {
+          next.set(key, sessionId);
+        }
+        return next;
+      });
+    },
+    []
+  );
+
+  const createSession = useCallback(
+    async (context: SessionContext): Promise<number> => {
       const key = buildSessionKey(context);
       if (key === "unknown") {
         throw new Error("task_id or resource_id is required");
       }
 
-      // 检查缓存
-      const existing = sessionMap.get(key);
-      if (existing) return existing;
-
-      // 优先使用 task_id，否则使用 resource_id
       const nodeId = context.task_id ?? context.resource_id;
-
-      // 查找现有会话
-      const sessions = await listChatSessions({
-        node_id: nodeId,
-        include_deleted: false,
-      });
-
-      if (sessions.length > 0) {
-        const sessionId = sessions[0].session_id;
-        setSessionMap((prev) => new Map(prev).set(key, sessionId));
-        return sessionId;
+      if (!nodeId) {
+        throw new Error("task_id or resource_id is required");
       }
 
-      // 创建新会话
       const response = await createChatSession({
         title: undefined,
         summary: undefined,
         chat_model: undefined,
-        context_node_ids: contextResourceIds,
+        context_node_ids: [nodeId],
+        binding_type: "primary",
       });
 
-      setSessionMap((prev) => new Map(prev).set(key, response.session_id));
+      setActiveSessionId(context, response.session_id);
       return response.session_id;
     },
-    [sessionMap]
+    [setActiveSessionId]
   );
 
   const syncSessionBindings = useCallback(
@@ -102,9 +108,10 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
   return (
     <ChatSessionContext.Provider
       value={{
-        ensureSession,
+        createSession,
+        getActiveSessionId,
+        setActiveSessionId,
         syncSessionBindings,
-        getSessionId,
         clearSessionCache,
       }}
     >

@@ -178,11 +178,3 @@ pub struct SetSessionBindingsRequest {
 pub struct ChatMessageAttachmentPayload {
     pub node_id: i64,
 }
-
-#[derive(Debug, Serialize)]
-pub struct ChatUsagePayload {
-    pub input_tokens: i64,
-    pub output_tokens: i64,
-    pub reasoning_tokens: i64,
-    pub total_tokens: i64,
-}

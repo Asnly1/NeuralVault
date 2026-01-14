@@ -1,8 +1,14 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -11,10 +17,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useAIConfig, useChatMessage } from "@/contexts/AIContext";
-import { AI_PROVIDER_INFO, type ModelOption, type ThinkingEffort, type RagScope } from "@/types";
-import { Send, Loader2, Settings, Pin } from "lucide-react";
-import { quickCapture, linkNodes } from "@/api";
+import { useAIConfig, useChatMessage, useChatSession } from "@/contexts/AIContext";
+import {
+  AI_PROVIDER_INFO,
+  type ChatSession,
+  type ModelOption,
+  type ThinkingEffort,
+  type RagScope,
+} from "@/types";
+import { Send, Loader2, Settings, Pin, Trash2 } from "lucide-react";
+import { quickCapture, linkNodes, listChatSessions, deleteChatSession } from "@/api";
 import { ThinkingBlock } from "./ThinkingBlock";
 import { useLocalStorageString } from "@/hooks";
 
@@ -43,6 +55,7 @@ export function ChatPanel({
 }: ChatPanelProps) {
   const { t } = useLanguage();
   const { configuredProviders, selectedModel, setSelectedModel } = useAIConfig();
+  const { getActiveSessionId, setActiveSessionId } = useChatSession();
   const {
     messages,
     isChatLoading,
@@ -53,6 +66,9 @@ export function ChatPanel({
   } = useChatMessage();
   const [chatInput, setChatInput] = useState("");
   const [thinkingEffort, setThinkingEffort] = useState<ThinkingEffort>("low");
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [isSessionsLoading, setIsSessionsLoading] = useState(false);
+  const [isAllSessionsOpen, setIsAllSessionsOpen] = useState(false);
   const [ragScopeValue, setRagScopeValue] = useLocalStorageString(
     "neuralvault_rag_scope",
     "local"
@@ -60,6 +76,13 @@ export function ChatPanel({
   const [pinningIndex, setPinningIndex] = useState<number | null>(null);
   const hasSessionContext = !!taskId || !!resourceId;
   const anchorNodeId = taskId || resourceId;
+  const sessionContext = useMemo(
+    () => ({ task_id: taskId, resource_id: resourceId }),
+    [taskId, resourceId]
+  );
+  const activeSessionId = hasSessionContext
+    ? getActiveSessionId(sessionContext)
+    : undefined;
 
   const currentWidth = tempWidth !== null ? tempWidth : width;
   const ragScope: RagScope = ragScopeValue === "global" ? "global" : "local";
@@ -67,6 +90,26 @@ export function ChatPanel({
     ragScope === "local"
       ? t("workspace", "ragScopeLocal")
       : t("workspace", "ragScopeGlobal");
+
+  const loadSessions = useCallback(async () => {
+    if (!anchorNodeId) {
+      setSessions([]);
+      return;
+    }
+    setIsSessionsLoading(true);
+    try {
+      const result = await listChatSessions({
+        node_id: anchorNodeId,
+        include_deleted: false,
+      });
+      setSessions(result);
+    } catch (err) {
+      console.error("Failed to load chat sessions:", err);
+      setSessions([]);
+    } finally {
+      setIsSessionsLoading(false);
+    }
+  }, [anchorNodeId]);
 
   // 构建可用模型列表
   const availableModels: ModelOption[] = configuredProviders.flatMap(
@@ -111,10 +154,47 @@ export function ChatPanel({
         context_resource_ids: contextResourceIds,
         rag_scope: ragScope,
       });
+      await loadSessions();
     } catch (e) {
       console.error("Failed to send message:", e);
     }
   };
+
+  const handleSelectSession = async (sessionId: number) => {
+    if (!hasSessionContext || isChatLoading) return;
+    if (activeSessionId === sessionId) return;
+    setActiveSessionId(sessionContext, sessionId);
+    try {
+      await loadSessionMessages(
+        { ...sessionContext, session_id: sessionId },
+        { context_resource_ids: contextResourceIds }
+      );
+    } catch (e) {
+      console.error("Failed to load session messages:", e);
+    }
+  };
+
+  const handleNewSession = () => {
+    if (!hasSessionContext || isChatLoading) return;
+    setActiveSessionId(sessionContext, null);
+    clearMessages();
+  };
+
+  const handleDeleteSession = async (sessionId: number) => {
+    if (!window.confirm(t("workspace", "deleteChatSessionConfirm"))) return;
+    try {
+      await deleteChatSession({ session_id: sessionId });
+      if (activeSessionId === sessionId) {
+        setActiveSessionId(sessionContext, null);
+        clearMessages();
+      }
+      await loadSessions();
+    } catch (e) {
+      console.error("Failed to delete chat session:", e);
+    }
+  };
+
+  const visibleSessions = useMemo(() => sessions.slice(0, 3), [sessions]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey && chatInput.trim() && selectedModel) {
@@ -159,22 +239,85 @@ export function ChatPanel({
   useEffect(() => {
     if (!hasSessionContext) {
       clearMessages();
+      setSessions([]);
       return;
     }
-    void loadSessionMessages({
-      task_id: taskId,
-      resource_id: resourceId,
-    }, {
-      context_resource_ids: contextResourceIds,
-    });
-  }, [
-    taskId,
-    resourceId,
-    contextResourceIds,
-    loadSessionMessages,
-    clearMessages,
-    hasSessionContext,
-  ]);
+    setActiveSessionId(sessionContext, null);
+    clearMessages();
+    void loadSessions();
+  }, [hasSessionContext, sessionContext, clearMessages, setActiveSessionId, loadSessions]);
+
+  useEffect(() => {
+    if (!hasSessionContext || !activeSessionId) return;
+    void loadSessions();
+  }, [activeSessionId, hasSessionContext, loadSessions]);
+
+  useEffect(() => {
+    if (!isAllSessionsOpen) return;
+    void loadSessions();
+  }, [isAllSessionsOpen, loadSessions]);
+
+  const formatSessionTitle = (session: ChatSession): string => {
+    const title = session.title?.trim();
+    if (title) return title;
+    const summary = session.summary?.trim();
+    if (summary) {
+      return summary.length > 20 ? `${summary.slice(0, 20)}...` : summary;
+    }
+    return t("common", "untitled");
+  };
+
+  const formatSessionSubtitle = (session: ChatSession): string => {
+    const summary = session.summary?.trim();
+    if (summary && session.title?.trim()) {
+      return summary.length > 40 ? `${summary.slice(0, 40)}...` : summary;
+    }
+    if (session.created_at) {
+      const date = new Date(session.created_at);
+      if (!Number.isNaN(date.getTime())) {
+        return date.toLocaleDateString();
+      }
+    }
+    return "";
+  };
+
+  const renderSessionItem = (session: ChatSession, onSelect: () => void) => {
+    const isActive = session.session_id === activeSessionId;
+    const subtitle = formatSessionSubtitle(session);
+    return (
+      <div key={session.session_id} className="flex items-start gap-1">
+        <button
+          type="button"
+          className={cn(
+            "flex-1 text-left rounded-md border px-2 py-1.5 text-xs transition-colors",
+            isActive ? "bg-accent border-accent" : "hover:bg-accent/50"
+          )}
+          onClick={onSelect}
+          disabled={isChatLoading}
+        >
+          <div className="font-medium truncate">{formatSessionTitle(session)}</div>
+          {subtitle && (
+            <div className="text-[10px] text-muted-foreground truncate">
+              {subtitle}
+            </div>
+          )}
+        </button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          onClick={(event) => {
+            event.stopPropagation();
+            void handleDeleteSession(session.session_id);
+          }}
+          title={t("workspace", "deleteChatSession")}
+          disabled={isChatLoading}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    );
+  };
 
   return (
     <aside
@@ -184,6 +327,33 @@ export function ChatPanel({
         !isResizing && "transition-all duration-300"
       )}
     >
+      <Dialog open={isAllSessionsOpen} onOpenChange={setIsAllSessionsOpen}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>{t("workspace", "chatSessions")}</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-[360px]">
+            <div className="space-y-2 pr-2">
+              {isSessionsLoading ? (
+                <p className="text-sm text-muted-foreground">
+                  {t("common", "loading")}
+                </p>
+              ) : sessions.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {t("workspace", "noChatSessions")}
+                </p>
+              ) : (
+                sessions.map((session) =>
+                  renderSessionItem(session, async () => {
+                    await handleSelectSession(session.session_id);
+                    setIsAllSessionsOpen(false);
+                  })
+                )
+              )}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
       {/* Resize Handle */}
       <div
         className={cn(
@@ -265,6 +435,50 @@ export function ChatPanel({
             {t("workspace", "ragScope")}: {ragScopeLabel}
           </Button>
         </div>
+        {hasSessionContext && (
+          <div className="mt-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">
+                {t("workspace", "chatSessions")}
+              </p>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-[10px]"
+                  onClick={() => setIsAllSessionsOpen(true)}
+                  disabled={isChatLoading}
+                >
+                  {t("workspace", "seeAllSessions")}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-[10px]"
+                  onClick={handleNewSession}
+                  disabled={isChatLoading}
+                >
+                  {t("workspace", "newChatSession")}
+                </Button>
+              </div>
+            </div>
+            {isSessionsLoading ? (
+              <p className="text-xs text-muted-foreground">
+                {t("common", "loading")}
+              </p>
+            ) : sessions.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                {t("workspace", "noChatSessions")}
+              </p>
+            ) : (
+              <div className="space-y-1">
+                {visibleSessions.map((session) =>
+                  renderSessionItem(session, () => handleSelectSession(session.session_id))
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Messages area */}

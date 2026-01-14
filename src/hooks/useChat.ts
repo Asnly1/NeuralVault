@@ -9,6 +9,7 @@ import { useChatMessage } from "@/contexts/ChatMessageContext";
 import type { ThinkingEffort, ModelOption, ChatMessage, AIProvider, RagScope } from "@/types";
 
 interface ChatContext {
+  session_id?: number;
   task_id?: number;
   resource_id?: number;
   images?: number[];
@@ -33,7 +34,7 @@ export interface UseChatReturn {
   // 操作
   sendMessage: (content: string, context: ChatContext) => Promise<void>;
   loadMessages: (
-    context: { task_id?: number; resource_id?: number },
+    context: { session_id?: number; task_id?: number; resource_id?: number },
     options?: { context_resource_ids?: number[] }
   ) => Promise<void>;
   clearMessages: () => void;

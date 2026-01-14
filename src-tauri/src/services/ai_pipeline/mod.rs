@@ -12,6 +12,7 @@ mod processor;
 mod queue;
 
 pub use queue::AiPipeline;
+pub(crate) use processor::get_processing_config;
 
 // Constants
 pub(crate) const AI_QUEUE_BUFFER: usize = 32;

@@ -99,6 +99,49 @@ impl AgentService {
         Ok(result)
     }
 
+    pub async fn summarize_chat_session(
+        &self,
+        provider: &str,
+        model: &str,
+        provider_config: &ProviderConfig,
+        user_content: &str,
+        assistant_content: &str,
+    ) -> Result<(String, String), String> {
+        let title_max = 20;
+        let summary_max = 80;
+        let user_content = user_content.trim();
+        let assistant_content = assistant_content.trim();
+
+        if user_content.is_empty() || assistant_content.is_empty() {
+            return Err("chat session content empty".to_string());
+        }
+
+        let prompt = build_chat_session_prompt(user_content, assistant_content, title_max, summary_max);
+        let schema = chat_session_schema();
+
+        let response = self
+            .llm
+            .generate_structured_json(
+                provider,
+                model,
+                provider_config,
+                &prompt,
+                schema,
+                None,
+                None,
+            )
+            .await
+            .map_err(|e| format!("chat session summary request failed: {e}"))?;
+
+        let parsed: ChatSessionSummaryResponse = serde_json::from_str(&response)
+            .map_err(|e| format!("chat session summary parse failed: {e}"))?;
+
+        let title = clamp_text(&parsed.title, title_max);
+        let summary = clamp_text(&parsed.summary, summary_max);
+
+        Ok((title, summary))
+    }
+
     pub async fn classify_topic(
         &self,
         provider: &str,
@@ -150,6 +193,12 @@ struct SummaryResponse {
     summary: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct ChatSessionSummaryResponse {
+    title: String,
+    summary: String,
+}
+
 fn build_summary_prompt(
     content: &str,
     user_note: Option<&str>,
@@ -185,6 +234,40 @@ fn summary_schema() -> serde_json::Value {
             }
         },
         "required": ["summary"]
+    })
+}
+
+fn build_chat_session_prompt(
+    user_content: &str,
+    assistant_content: &str,
+    title_max: i32,
+    summary_max: i32,
+) -> String {
+    let lines = vec![
+        "你是知识库助手，请根据用户提问和助手回答生成会话标题与摘要。".to_string(),
+        format!("标题不超过 {} 字，摘要不超过 {} 字。", title_max, summary_max),
+        "使用与用户提问相同的语言，内容简洁明了。".to_string(),
+        String::new(),
+        format!("用户：{}", user_content),
+        format!("助手：{}", assistant_content),
+    ];
+    lines.join("\n")
+}
+
+fn chat_session_schema() -> serde_json::Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "title": {
+                "type": "string",
+                "description": "会话标题"
+            },
+            "summary": {
+                "type": "string",
+                "description": "会话摘要"
+            }
+        },
+        "required": ["title", "summary"]
     })
 }
 
@@ -290,6 +373,18 @@ fn classify_schema() -> serde_json::Value {
         },
         "required": ["action", "payload", "confidence_score"]
     })
+}
+
+fn clamp_text(text: &str, max_length: i32) -> String {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    let mut result = trimmed.to_string();
+    if result.chars().count() > max_length as usize {
+        result = result.chars().take(max_length as usize).collect();
+    }
+    result
 }
 
 fn clamp_confidence(response: ClassifyTopicResponse) -> ClassifyTopicResponse {

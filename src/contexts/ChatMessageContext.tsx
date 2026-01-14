@@ -16,6 +16,7 @@ import { useChatSession } from "./ChatSessionContext";
 import { useAIConfig } from "./AIConfigContext";
 
 interface SendMessageContext {
+  session_id?: number;
   task_id?: number;
   resource_id?: number;
   images?: number[];
@@ -26,6 +27,7 @@ interface SendMessageContext {
 }
 
 interface LoadContext {
+  session_id?: number;
   task_id?: number;
   resource_id?: number;
 }
@@ -76,7 +78,8 @@ export function ChatMessageProvider({ children }: { children: React.ReactNode })
   const [chatError, setChatError] = useState<string | null>(null);
   const loadTokenRef = useRef(0);
 
-  const { ensureSession, syncSessionBindings } = useChatSession();
+  const { createSession, getActiveSessionId, setActiveSessionId, syncSessionBindings } =
+    useChatSession();
   const { selectedModel } = useAIConfig();
 
   // ============================================
@@ -174,14 +177,21 @@ export function ChatMessageProvider({ children }: { children: React.ReactNode })
       const loadToken = ++loadTokenRef.current;
 
       try {
-        if (!context.task_id && !context.resource_id) {
+        const hasAnchor = !!context.task_id || !!context.resource_id;
+        const sessionId =
+          context.session_id ??
+          (hasAnchor ? getActiveSessionId(context) : undefined);
+
+        if (!sessionId) {
           if (loadToken === loadTokenRef.current) {
             setMessages([]);
           }
           return;
         }
 
-        const sessionId = await ensureSession(context, options?.context_resource_ids);
+        if (context.session_id && hasAnchor) {
+          setActiveSessionId(context, context.session_id);
+        }
 
         if (options?.context_resource_ids) {
           await syncSessionBindings(sessionId, options.context_resource_ids);
@@ -198,7 +208,7 @@ export function ChatMessageProvider({ children }: { children: React.ReactNode })
         console.error("Failed to load chat history:", e);
       }
     },
-    [ensureSession, syncSessionBindings]
+    [getActiveSessionId, setActiveSessionId, syncSessionBindings]
   );
 
   // ============================================
@@ -213,17 +223,24 @@ export function ChatMessageProvider({ children }: { children: React.ReactNode })
       if (!selectedModel) {
         throw new Error("No model selected");
       }
-      if (!context.task_id && !context.resource_id) {
-        throw new Error("task_id or resource_id is required");
-      }
+      const hasAnchor = !!context.task_id || !!context.resource_id;
 
       loadTokenRef.current += 1;
 
-      // 确保会话存在
-      const sessionId = await ensureSession(
-        { task_id: context.task_id, resource_id: context.resource_id },
-        context.context_resource_ids
-      );
+      const sessionContext = { task_id: context.task_id, resource_id: context.resource_id };
+      let sessionId =
+        context.session_id ?? (hasAnchor ? getActiveSessionId(sessionContext) : undefined);
+
+      if (!sessionId) {
+        if (!hasAnchor) {
+          throw new Error("session_id or task_id/resource_id is required");
+        }
+        sessionId = await createSession(sessionContext);
+      }
+
+      if (hasAnchor) {
+        setActiveSessionId(sessionContext, sessionId);
+      }
 
       // 同步上下文资源
       if (context.context_resource_ids) {
@@ -274,7 +291,14 @@ export function ChatMessageProvider({ children }: { children: React.ReactNode })
         throw e;
       }
     },
-    [selectedModel, ensureSession, syncSessionBindings, setupStreamListener]
+    [
+      selectedModel,
+      createSession,
+      getActiveSessionId,
+      setActiveSessionId,
+      syncSessionBindings,
+      setupStreamListener,
+    ]
   );
 
   const clearMessages = useCallback(() => {

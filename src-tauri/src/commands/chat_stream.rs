@@ -6,16 +6,17 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
+use tracing::warn;
 
 use crate::{
     app_state::AppState,
     db::{
-        get_node_by_id, insert_chat_message, insert_message_attachments, list_chat_messages,
-        list_message_attachments_with_node, list_session_bound_resources,
+        get_chat_session_by_id, get_node_by_id, insert_chat_message, insert_message_attachments,
+        list_chat_messages, list_message_attachments_with_node, list_session_bound_resources,
         update_chat_message_contents, update_chat_session, NewChatMessage, NewMessageAttachment,
         ResourceSubtype,
     },
-    services::{ChatMessage, ChatRole, ChatStreamEvent},
+    services::{get_processing_config, ChatMessage, ChatRole, ChatStreamEvent},
     utils::resolve_file_path,
 };
 
@@ -129,6 +130,7 @@ pub async fn send_chat_message(
     let messages = list_chat_messages(&state.db, request.session_id)
         .await
         .map_err(|e| e.to_string())?;
+    let is_first_message = messages.len() == 1;
     let attachments = list_message_attachments_with_node(&state.db, request.session_id)
         .await
         .map_err(|e| e.to_string())?;
@@ -385,6 +387,96 @@ pub async fn send_chat_message(
     )
     .await
     .map_err(|e| e.to_string())?;
+
+    if is_first_message {
+        let assistant_text = final_assistant.as_deref().unwrap_or("").trim();
+        let user_text = request.content.trim();
+        if !assistant_text.is_empty() && !user_text.is_empty() {
+            match get_chat_session_by_id(&state.db, request.session_id).await {
+                Ok(session) => {
+                    let title_missing = session
+                        .title
+                        .as_deref()
+                        .map(|value| value.trim().is_empty())
+                        .unwrap_or(true);
+                    let summary_missing = session
+                        .summary
+                        .as_deref()
+                        .map(|value| value.trim().is_empty())
+                        .unwrap_or(true);
+                    if title_missing || summary_missing {
+                        match get_processing_config(&state.ai_config).await {
+                            Ok((provider, model, _mode, provider_config)) => {
+                                match ai
+                                    .agent
+                                    .summarize_chat_session(
+                                        &provider,
+                                        &model,
+                                        &provider_config,
+                                        user_text,
+                                        assistant_text,
+                                    )
+                                    .await
+                                {
+                                    Ok((title, summary)) => {
+                                        let update_title = if title_missing && !title.trim().is_empty() {
+                                            Some(title.as_str())
+                                        } else {
+                                            None
+                                        };
+                                        let update_summary =
+                                            if summary_missing && !summary.trim().is_empty() {
+                                                Some(summary.as_str())
+                                            } else {
+                                                None
+                                            };
+                                        if update_title.is_some() || update_summary.is_some() {
+                                            if let Err(err) = update_chat_session(
+                                                &state.db,
+                                                request.session_id,
+                                                update_title,
+                                                update_summary,
+                                                None,
+                                            )
+                                            .await
+                                            {
+                                                warn!(
+                                                    error = %err,
+                                                    session_id = request.session_id,
+                                                    "Failed to update chat session summary"
+                                                );
+                                            }
+                                        }
+                                    }
+                                    Err(err) => {
+                                        warn!(
+                                            error = %err,
+                                            session_id = request.session_id,
+                                            "Chat session summary generation failed"
+                                        );
+                                    }
+                                }
+                            }
+                            Err(err) => {
+                                warn!(
+                                    error = %err,
+                                    session_id = request.session_id,
+                                    "Chat session summary skipped: processing config missing"
+                                );
+                            }
+                        }
+                    }
+                }
+                Err(err) => {
+                    warn!(
+                        error = %err,
+                        session_id = request.session_id,
+                        "Chat session summary skipped: session load failed"
+                    );
+                }
+            }
+        }
+    }
 
     Ok(ChatStreamAck { ok: true })
 }
