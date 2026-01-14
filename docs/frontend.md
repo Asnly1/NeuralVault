@@ -33,15 +33,21 @@ src/
 │   ├── QuickCapture.tsx  # 快速捕获
 │   ├── TiptapEditor.tsx  # Markdown 编辑器
 │   ├── PDFViewer.tsx     # PDF 阅读/高亮
-│   ├── TemporaryChatPanel.tsx # 临时聊天面板
+│   ├── TemporaryChatPanel.tsx # 临时聊天面板（复用 MessageBubble）
 │   ├── workspace/        # Workspace 子组件
 │   │   ├── index.ts
-│   │   ├── ContextPanel.tsx
 │   │   ├── EditorPanel.tsx
-│   │   ├── ChatPanel.tsx
 │   │   ├── ThinkingBlock.tsx     # AI 思考过程展示
 │   │   ├── RelatedNodesList.tsx  # 关联节点列表
-│   │   └── ContextNodeTree.tsx   # 上下文节点树
+│   │   ├── ContextNodeTree.tsx   # 上下文节点树
+│   │   ├── context/              # 上下文面板（重构后）
+│   │   │   ├── index.ts
+│   │   │   ├── ContextPanel.tsx      # 主组件
+│   │   │   └── NodeDetailCard.tsx    # 节点详情卡片（使用 useEditableField）
+│   │   └── chat/                 # 聊天面板（重构后）
+│   │       ├── ChatPanel.tsx         # 主组件（使用 useChatSessionManagement）
+│   │       ├── MessageBubble.tsx     # 消息气泡（复用组件）
+│   │       └── SessionItem.tsx       # 会话列表项
 │   └── ui/               # shadcn/ui 组件库
 │       └── ...
 ├── contexts/
@@ -324,6 +330,48 @@ const { progressMap, clearProgress } = useIngestProgress();
 const { width, tempWidth, isResizing, onMouseDown } = usePanelResize(options);
 ```
 
+#### 重构 Hooks
+
+**`useEditableField.ts`**
+通用可编辑字段 hook，消除重复的编辑逻辑：
+```typescript
+const {
+  value, isEditing, editValue, isSaving,
+  startEditing, setEditValue, save, cancel
+} = useEditableField<T>({ initialValue, onSave });
+```
+> 用于 `NodeDetailCard` 中标题/摘要的双击编辑。
+
+**`useNodeOperations.ts`**
+节点操作 hook，整合 approve/reject/pin/delete/convert：
+```typescript
+const {
+  approveNode, rejectNode, togglePinned,
+  deleteNode, convertNode, confirmEdgeRelation
+} = useNodeOperations({ onSuccess, onError });
+```
+> 用于 `Warehouse`、`NodeCard` 等组件。
+
+**`useLinkNodes.ts`**
+节点关联对话框状态管理：
+```typescript
+const {
+  isOpen, linkType, sourceNode, availableTargets,
+  open, close, setLinkType, confirmLink
+} = useLinkNodes({ onLinkSuccess });
+```
+> 用于 `LinkNodeDialog`。
+
+**`useChatSessionManagement.ts`**
+聊天会话管理 hook：
+```typescript
+const {
+  sessions, activeSessionId, isSessionsLoading, visibleSessions, hasSessionContext,
+  loadSessions, selectSession, createNewSession, deleteSession
+} = useChatSessionManagement({ taskId, resourceId, contextResourceIds });
+```
+> 用于 `ChatPanel`，管理会话列表、选择、创建、删除。
+
 ---
 
 ### `lib/`
@@ -371,9 +419,26 @@ sortTasksForCalendar(tasks);   // todo 在 done 前面
 - 使用 `useClipboard` 和 `useFileSelection` hooks
 
 #### `workspace/`
-- `ContextPanel.tsx`：上下文资源管理
+
+**`context/`（上下文面板）**
+- `ContextPanel.tsx`：主容器，上下文资源管理
+- `NodeDetailCard.tsx`：Task/Topic 详情卡片，使用 `useEditableField` 管理标题/摘要编辑
+
+**`chat/`（聊天面板）**
+- `ChatPanel.tsx`：主容器，使用 `useChatSessionManagement` 管理会话
+- `MessageBubble.tsx`：消息气泡组件（支持 ThinkingBlock、Token 统计、Pin 功能）
+- `SessionItem.tsx`：会话列表项组件
+
+**其他**
 - `EditorPanel.tsx`：文本/PDF/图片编辑器
-- `ChatPanel.tsx`：AI 聊天面板（RAG scope 切换 + Token 用量）
+- `ThinkingBlock.tsx`：AI 思考过程折叠展示
+- `RelatedNodesList.tsx`：关联节点列表
+- `ContextNodeTree.tsx`：上下文节点树形展示
+
+#### `TemporaryChatPanel.tsx`
+- 临时聊天面板（Dashboard 使用）
+- 复用 `workspace/chat/MessageBubble` 组件
+- 不绑定 Task/Resource，独立会话
 
 ---
 

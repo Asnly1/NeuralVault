@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef } from "react";
-import { cn } from "@/lib/utils";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -15,6 +14,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAIConfig, useChatMessage } from "@/contexts/AIContext";
 import { AI_PROVIDER_INFO, type ModelOption, type ThinkingEffort } from "@/types";
 import { createChatSession } from "@/api";
+import { MessageBubble } from "./workspace";
 
 interface TemporaryChatPanelProps {
   initialMessage?: string;
@@ -42,7 +42,7 @@ export function TemporaryChatPanel({
   } = useChatMessage();
 
   const [chatInput, setChatInput] = useState("");
-  const [thinkingEffort, _setThinkingEffort] = useState<ThinkingEffort>("low");
+  const [thinkingEffort, setThinkingEffort] = useState<ThinkingEffort>("low");
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -58,20 +58,39 @@ export function TemporaryChatPanel({
       }))
   );
 
+  // 根据选中模型计算可用的 thinking effort 选项
+  const availableThinkingEfforts = useMemo((): ThinkingEffort[] => {
+    if (!selectedModel) return ["none", "low", "high"];
+    const providerInfo = AI_PROVIDER_INFO[selectedModel.provider];
+    const modelInfo = providerInfo.models.find((m) => m.id === selectedModel.model_id);
+    return modelInfo?.thinkingConfig?.supported
+      ? [...modelInfo.thinkingConfig.supported]
+      : ["none", "low", "high"];
+  }, [selectedModel]);
+
+  // 当模型切换时，重置 thinkingEffort 为默认值或可用选项中的第一个
+  useEffect(() => {
+    if (selectedModel) {
+      const providerInfo = AI_PROVIDER_INFO[selectedModel.provider];
+      const modelInfo = providerInfo.models.find((m) => m.id === selectedModel.model_id);
+      const defaultEffort = modelInfo?.thinkingConfig?.default ?? "low";
+      if (!availableThinkingEfforts.includes(thinkingEffort)) {
+        setThinkingEffort(defaultEffort);
+      }
+    }
+  }, [selectedModel, availableThinkingEfforts, thinkingEffort]);
+
   // 创建临时会话并发送初始消息
   useEffect(() => {
     if (hasInitialized.current) return;
     hasInitialized.current = true;
 
     const initSession = async () => {
-      // 清空之前的消息
       clearMessages();
 
-      // 如果有初始消息且有选中的模型，创建会话并发送
       if (initialMessage && selectedModel) {
         setIsInitializing(true);
         try {
-          // 创建临时会话
           const response = await createChatSession({
             session_type: "temporary",
             title: initialMessage.slice(0, 50),
@@ -108,7 +127,6 @@ export function TemporaryChatPanel({
 
     try {
       if (!sessionId) {
-        // 如果还没有会话，先创建一个
         const response = await createChatSession({
           session_type: "temporary",
           title: content.slice(0, 50),
@@ -133,7 +151,7 @@ export function TemporaryChatPanel({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey && chatInput.trim() && selectedModel) {
       e.preventDefault();
-      handleSend();
+      void handleSend();
     }
     if (e.key === "Escape") {
       onClose();
@@ -144,15 +162,12 @@ export function TemporaryChatPanel({
   if (availableModels.length === 0) {
     return (
       <div className="h-full flex flex-col bg-background">
-        {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <h2 className="font-medium">AI 助手</h2>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>
         </div>
-
-        {/* 未配置提示 */}
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
           <Settings className="h-12 w-12 text-muted-foreground mb-4" />
           <p className="text-sm text-muted-foreground mb-4">
@@ -185,7 +200,7 @@ export function TemporaryChatPanel({
               if (model) setSelectedModel(model);
             }}
           >
-            <SelectTrigger className="h-7 w-[180px] text-xs">
+            <SelectTrigger className="h-7 w-[140px] text-xs">
               <SelectValue placeholder={t("workspace", "selectModel")} />
             </SelectTrigger>
             <SelectContent>
@@ -200,13 +215,29 @@ export function TemporaryChatPanel({
               ))}
             </SelectContent>
           </Select>
+          {/* Thinking Effort 选择 */}
+          <Select
+            value={thinkingEffort}
+            onValueChange={(value) => setThinkingEffort(value as ThinkingEffort)}
+          >
+            <SelectTrigger className="w-[80px] h-7 text-xs">
+              <SelectValue placeholder={t("workspace", "thinkingEffort")} />
+            </SelectTrigger>
+            <SelectContent>
+              {availableThinkingEfforts.map((effort) => (
+                <SelectItem key={effort} value={effort}>
+                  {t("workspace", `effort${effort.charAt(0).toUpperCase() + effort.slice(1)}`)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <Button variant="ghost" size="icon" onClick={onClose}>
           <X className="h-4 w-4" />
         </Button>
       </div>
 
-      {/* Messages */}
+      {/* Messages - 复用 MessageBubble */}
       <ScrollArea className="flex-1" ref={scrollRef}>
         <div className="p-4 space-y-4">
           {isInitializing && (
@@ -217,36 +248,18 @@ export function TemporaryChatPanel({
           )}
 
           {messages.map((msg, idx) => (
-            <div
+            <MessageBubble
               key={idx}
-              className={cn(
-                "flex",
-                msg.role === "user" ? "justify-end" : "justify-start"
-              )}
-            >
-              <div
-                className={cn(
-                  "max-w-[80%] rounded-lg px-3 py-2 text-sm",
-                  msg.role === "user"
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted"
-                )}
-              >
-                <p className="whitespace-pre-wrap">{msg.content}</p>
-                {msg.usage && (
-                  <p className="text-[10px] opacity-60 mt-1">
-                    {t("workspace", "tokenUsage")}{" "}
-                    {t("workspace", "tokenUsageInput")} {msg.usage.input_tokens} /{" "}
-                    {t("workspace", "tokenUsageOutput")} {msg.usage.output_tokens} /{" "}
-                    {t("workspace", "tokenUsageReasoning")} {msg.usage.reasoning_tokens} /{" "}
-                    {t("workspace", "tokenUsageTotal")} {msg.usage.total_tokens}
-                  </p>
-                )}
-              </div>
-            </div>
+              message={msg}
+              isLastMessage={idx === messages.length - 1}
+              isStreaming={isChatLoading}
+              showPinButton={false}
+              isPinning={false}
+              onPin={() => {}}
+            />
           ))}
 
-          {isChatLoading && (
+          {isChatLoading && messages.length === 0 && (
             <div className="flex justify-start">
               <div className="bg-muted rounded-lg px-3 py-2 text-sm">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -275,7 +288,7 @@ export function TemporaryChatPanel({
           />
           <Button
             size="icon"
-            onClick={handleSend}
+            onClick={() => void handleSend()}
             disabled={!chatInput.trim() || !selectedModel || isChatLoading}
           >
             {isChatLoading ? (
