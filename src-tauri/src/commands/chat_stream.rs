@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
-use tracing::warn;
+use tracing::{debug, warn};
 
 use crate::{
     app_state::AppState,
@@ -244,6 +244,23 @@ pub async fn send_chat_message(
             chat_messages.insert(insert_at, rag_message);
         } else {
             chat_messages.push(rag_message);
+        }
+    }
+
+    match serde_json::to_string(&chat_messages) {
+        Ok(payload) => {
+            debug!(
+                session_id = request.session_id,
+                payload = %payload,
+                "Chat messages payload"
+            );
+        }
+        Err(err) => {
+            debug!(
+                session_id = request.session_id,
+                error = %err,
+                "Chat messages payload serialization failed"
+            );
         }
     }
 

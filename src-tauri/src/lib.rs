@@ -7,11 +7,12 @@ mod utils;
 mod window;
 
 use std::fs;
+use std::path::Path;
 use std::sync::Arc;
 
 use tauri::Manager;
 use tokio::sync::Mutex;
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 pub use app_state::AppState;
 pub use error::{AppError, AppResult};
@@ -90,20 +91,68 @@ fn greet(name: &str) -> String {
 
 // ========== 初始化 ==========
 
-fn init_tracing() {
-    let env_filter =
-        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(env_filter)
+fn init_tracing(log_dir: &Path) {
+    let mut env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug"));
+    for directive in ["sqlx=off", "sqlx::query=off", "sqlx::query::summary=off"] {
+        if let Ok(parsed) = directive.parse() {
+            env_filter = env_filter.add_directive(parsed);
+        }
+    }
+    let log_path = log_dir.join("neuralvault.log");
+
+    let file_layer = match std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+    {
+        Ok(_) => {
+            let file_path = log_path.clone();
+            Some(
+                tracing_subscriber::fmt::layer()
+                    .with_target(false)
+                    .with_ansi(false)
+                    .with_writer(move || -> Box<dyn std::io::Write + Send> {
+                        match std::fs::OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open(&file_path)
+                        {
+                            Ok(file) => Box::new(file),
+                            Err(_) => Box::new(std::io::sink()),
+                        }
+                    }),
+            )
+        }
+        Err(err) => {
+            eprintln!(
+                "Failed to open log file {}: {err}",
+                log_path.display()
+            );
+            None
+        }
+    };
+
+    let stdout_layer = tracing_subscriber::fmt::layer()
         .with_target(false)
-        .with_writer(std::io::stdout)
-        .try_init();
+        .with_writer(std::io::stdout);
+
+    if let Some(layer) = file_layer {
+        let _ = tracing_subscriber::registry()
+            .with(env_filter)
+            .with(stdout_layer)
+            .with(layer)
+            .try_init();
+    } else {
+        let _ = tracing_subscriber::registry()
+            .with(env_filter)
+            .with(stdout_layer)
+            .try_init();
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    init_tracing();
-
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
@@ -118,6 +167,10 @@ pub fn run() {
 
             // 标准库 std::fs 的操作。如果目录不存在，就创建它；如果已存在，则什么都不做
             fs::create_dir_all(&app_dir)?;
+
+            let log_dir = app_dir.join("logs");
+            fs::create_dir_all(&log_dir)?;
+            init_tracing(&log_dir);
 
             // 安全地将文件名拼接到目录后面，生成数据库文件的完整绝对路径
             let db_path = app_dir.join("neuralvault.sqlite3");

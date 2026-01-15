@@ -208,6 +208,12 @@ pub async fn capture_resource(
     match file_content_result {
         Ok(text) => {
             if let Some(content) = text.as_deref() {
+                tracing::debug!(
+                    node_id,
+                    subtype = ?subtype,
+                    content = %content,
+                    "Parsed resource content"
+                );
                 update_node_content(&state.db, node_id, Some(content), Some(&file_hash)).await?;
                 should_enqueue = !content.trim().is_empty();
             }

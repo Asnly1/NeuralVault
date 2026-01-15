@@ -13,6 +13,7 @@ pub async fn mark_task_todo(pool: &DbPool, node_id: i64) -> Result<(), sqlx::Err
     )
     .execute(pool)
     .await?;
+    tracing::debug!(node_id, "Task marked todo");
     Ok(())
 }
 
@@ -24,6 +25,7 @@ pub async fn mark_task_done(pool: &DbPool, node_id: i64) -> Result<(), sqlx::Err
     )
     .execute(pool)
     .await?;
+    tracing::debug!(node_id, "Task marked done");
     Ok(())
 }
 
@@ -35,6 +37,7 @@ pub async fn mark_task_cancelled(pool: &DbPool, node_id: i64) -> Result<(), sqlx
     )
     .execute(pool)
     .await?;
+    tracing::debug!(node_id, "Task marked cancelled");
     Ok(())
 }
 
@@ -50,6 +53,7 @@ pub async fn update_task_priority(
     )
     .execute(pool)
     .await?;
+    tracing::debug!(node_id, priority = ?priority, "Task priority updated");
     Ok(())
 }
 
@@ -65,6 +69,7 @@ pub async fn update_task_due_date(
     )
     .execute(pool)
     .await?;
+    tracing::debug!(node_id, due_date = ?due_date, "Task due date updated");
     Ok(())
 }
 
@@ -82,6 +87,12 @@ pub async fn update_resource_processing_stage(
     )
     .execute(pool)
     .await?;
+    tracing::debug!(
+        node_id,
+        stage = ?stage,
+        processing_hash = ?processing_hash,
+        "Resource processing stage updated"
+    );
     Ok(())
 }
 
@@ -105,6 +116,13 @@ pub async fn update_resource_sync_status(
     )
     .execute(pool)
     .await?;
+    tracing::debug!(
+        node_id,
+        status = ?status,
+        embedded_hash = ?embedded_hash,
+        last_embedding_error = ?last_embedding_error,
+        "Resource embedding status updated"
+    );
     Ok(())
 }
 
@@ -120,6 +138,7 @@ pub async fn update_resource_review_status(
     )
     .execute(pool)
     .await?;
+    tracing::debug!(node_id, status = ?status, "Resource review status updated");
     Ok(())
 }
 

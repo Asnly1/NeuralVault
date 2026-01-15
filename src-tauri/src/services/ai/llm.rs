@@ -5,6 +5,7 @@ use futures_util::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tokio::time::sleep;
+use tracing::debug;
 
 use crate::services::ProviderConfig;
 
@@ -93,6 +94,25 @@ impl LlmService {
             generation_config,
         };
 
+        match serde_json::to_string(&request) {
+            Ok(payload) => {
+                debug!(
+                    provider = %provider,
+                    model = %model,
+                    payload = %payload,
+                    "Gemini stream request"
+                );
+            }
+            Err(err) => {
+                debug!(
+                    provider = %provider,
+                    model = %model,
+                    error = %err,
+                    "Gemini stream request serialization failed"
+                );
+            }
+        }
+
         let url = format!(
             "{}/v1beta/models/{}:streamGenerateContent?alt=sse",
             base_url, model
@@ -143,6 +163,7 @@ impl LlmService {
                     continue;
                 }
 
+                debug!(chunk_json = %data, "Gemini stream response chunk");
                 let chunk: GeminiStreamResponse = serde_json::from_str(data)
                     .map_err(|e| format!("gemini stream payload invalid: {e}"))?;
 
@@ -239,6 +260,25 @@ impl LlmService {
             generation_config: Some(generation_config),
         };
 
+        match serde_json::to_string(&request) {
+            Ok(payload) => {
+                debug!(
+                    provider = %provider,
+                    model = %model,
+                    payload = %payload,
+                    "Gemini structured request"
+                );
+            }
+            Err(err) => {
+                debug!(
+                    provider = %provider,
+                    model = %model,
+                    error = %err,
+                    "Gemini structured request serialization failed"
+                );
+            }
+        }
+
         let url = format!("{}/v1beta/models/{}:generateContent", base_url, model);
         let response = self
             .client
@@ -256,10 +296,18 @@ impl LlmService {
             return Err(format!("gemini request failed: {status} {body}"));
         }
 
-        let response: GeminiGenerateResponse = response
-            .json()
+        let response_text = response
+            .text()
             .await
-            .map_err(|e| format!("gemini response invalid: {e}"))?;
+            .map_err(|e| format!("gemini response read failed: {e}"))?;
+        debug!(
+            provider = %provider,
+            model = %model,
+            response_json = %response_text,
+            "Gemini structured response"
+        );
+        let response: GeminiGenerateResponse =
+            serde_json::from_str(&response_text).map_err(|e| format!("gemini response invalid: {e}"))?;
 
         let mut output = String::new();
         if let Some(candidate) = response.candidates.and_then(|mut list| list.pop()) {
@@ -275,6 +323,13 @@ impl LlmService {
         if output.trim().is_empty() {
             return Err("gemini response missing text".to_string());
         }
+
+        debug!(
+            provider = %provider,
+            model = %model,
+            response_json = %output,
+            "Gemini structured output"
+        );
 
         Ok(output)
     }

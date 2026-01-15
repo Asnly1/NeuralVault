@@ -30,6 +30,7 @@ pub async fn convert_topic_to_task(pool: &DbPool, node_id: i64) -> AppResult<Nod
     .execute(pool)
     .await?;
 
+    tracing::debug!(node_id, "Converted topic to task");
     Ok(get_node_by_id(pool, node_id).await?)
 }
 
@@ -44,6 +45,7 @@ pub async fn convert_task_to_topic(pool: &DbPool, node_id: i64) -> AppResult<Nod
     .execute(pool)
     .await?;
 
+    tracing::debug!(node_id, "Converted task to topic");
     Ok(get_node_by_id(pool, node_id).await?)
 }
 
@@ -201,6 +203,11 @@ pub async fn convert_resource_to_container(
 
     tx.commit().await?;
 
+    tracing::debug!(
+        source_node_id = node_id,
+        new_node_id,
+        target_type = ?target_type,
+        "Converted resource to container"
+    );
     Ok(get_node_by_id(pool, new_node_id).await?)
 }
-

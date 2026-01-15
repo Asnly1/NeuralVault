@@ -36,7 +36,22 @@ pub async fn insert_node(pool: &DbPool, params: NewNode<'_>) -> Result<i64, sqlx
     .execute(pool)
     .await?;
 
-    Ok(result.last_insert_rowid())
+    let node_id = result.last_insert_rowid();
+    tracing::debug!(
+        node_id,
+        node_type = ?params.node_type,
+        title = %params.title,
+        task_status = ?params.task_status,
+        priority = ?params.priority,
+        resource_subtype = ?params.resource_subtype,
+        file_path = ?params.file_path,
+        file_hash = ?params.file_hash,
+        embedding_status = ?params.embedding_status,
+        processing_stage = ?params.processing_stage,
+        review_status = ?params.review_status,
+        "Node created"
+    );
+    Ok(node_id)
 }
 
 pub async fn get_node_by_id(pool: &DbPool, node_id: i64) -> Result<NodeRecord, sqlx::Error> {
@@ -70,6 +85,7 @@ pub async fn soft_delete_node(pool: &DbPool, node_id: i64) -> Result<(), sqlx::E
     )
     .execute(pool)
     .await?;
+    tracing::debug!(node_id, "Node soft deleted");
     Ok(())
 }
 
@@ -77,6 +93,7 @@ pub async fn hard_delete_node(pool: &DbPool, node_id: i64) -> Result<(), sqlx::E
     sqlx::query!("DELETE FROM nodes WHERE node_id = ?", node_id)
         .execute(pool)
         .await?;
+    tracing::debug!(node_id, "Node hard deleted");
     Ok(())
 }
 
@@ -88,6 +105,7 @@ pub async fn update_node_title(pool: &DbPool, node_id: i64, title: &str) -> Resu
     )
     .execute(pool)
     .await?;
+    tracing::debug!(node_id, title = %title, "Node title updated");
     Ok(())
 }
 
@@ -103,6 +121,7 @@ pub async fn update_node_summary(
     )
     .execute(pool)
     .await?;
+    tracing::debug!(node_id, summary = ?summary, "Node summary updated");
     Ok(())
 }
 
@@ -120,6 +139,7 @@ pub async fn update_node_pinned(
     )
     .execute(pool)
     .await?;
+    tracing::debug!(node_id, is_pinned, "Node pinned status updated");
     Ok(())
 }
 
@@ -137,6 +157,12 @@ pub async fn update_node_content(
     )
     .execute(pool)
     .await?;
+    tracing::debug!(
+        node_id,
+        content = ?content,
+        file_hash = ?file_hash,
+        "Node content updated"
+    );
     Ok(())
 }
 
@@ -152,5 +178,6 @@ pub async fn update_node_user_note(
     )
     .execute(pool)
     .await?;
+    tracing::debug!(node_id, note = ?note, "Node user note updated");
     Ok(())
 }
