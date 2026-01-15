@@ -10,18 +10,6 @@ use crate::db::{
     ResourceSubtype, ReviewStatus, SourceMeta, TaskPriority, TaskStatus,
 };
 
-/// Node Builder - 简化节点创建
-///
-/// # Example
-///
-/// ```rust
-/// let node_id = NodeBuilder::task()
-///     .title("My Task")
-///     .priority(TaskPriority::High)
-///     .due_date(Some("2024-01-01"))
-///     .insert(&pool)
-///     .await?;
-/// ```
 pub struct NodeBuilder {
     uuid: String,
     user_id: i64,

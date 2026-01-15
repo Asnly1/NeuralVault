@@ -34,6 +34,7 @@ export type {
   EdgeWithNode,
   DashboardData,
   IngestProgress,
+  NodeSearchSummary,
   SemanticSearchResult,
 } from "./node";
 

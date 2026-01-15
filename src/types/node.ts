@@ -131,9 +131,14 @@ export interface IngestProgress {
 // Search Types
 // ============================================
 
-export interface SemanticSearchResult {
+export interface NodeSearchSummary {
   node_id: number;
-  chunk_index: number;
-  chunk_text: string;
+  node_type: NodeType;
+  title: string;
+  summary: string | null;
+}
+
+export interface SemanticSearchResult {
+  node: NodeSearchSummary;
   score: number;
 }

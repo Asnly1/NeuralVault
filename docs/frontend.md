@@ -187,6 +187,12 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 - `softDeleteResource()`、`hardDeleteResource()`
 - `updateResourceContent()`、`updateResourceTitle()`、`updateResourceUserNote()`
 
+#### `api/search.ts`
+搜索 API：
+- `searchSemantic()`、`searchKeyword()`、`warmupEmbedding()`
+- 语义搜索返回节点摘要（title/summary/nodeType），默认过滤已删除资源
+- 关键字搜索返回 `NodeRecord`，前端仅展示 title/summary
+
 #### `api/chat.ts`
 聊天 API：
 - `createChatSession()`、`getChatSession()`、`listChatSessions()`

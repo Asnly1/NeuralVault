@@ -180,18 +180,23 @@ export function SearchBar({ onSelectResult }: SearchBarProps) {
               </div>
             ) : mode === "semantic" ? (
               // Semantic Results
-              semanticResults.map((result, index) => (
+              semanticResults.map((result) => (
                 <button
-                  key={`${result.node_id}-${result.chunk_index}-${index}`}
-                  onClick={() => handleResultClick(result.node_id, "resource")}
+                  key={result.node.node_id}
+                  onClick={() => handleResultClick(result.node.node_id, result.node.node_type)}
                   className="w-full px-3 py-2 text-left hover:bg-muted/50 transition-colors border-b border-border/50 last:border-0"
                 >
                   <div className="flex items-start gap-2">
-                    <FileText className="h-3.5 w-3.5 text-orange-500 mt-0.5 shrink-0" />
+                    {getNodeTypeIcon(result.node.node_type)}
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs text-foreground line-clamp-2">
-                        {result.chunk_text}
+                      <p className="text-xs text-foreground font-medium truncate">
+                        {result.node.title}
                       </p>
+                      {result.node.summary && (
+                        <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">
+                          {result.node.summary}
+                        </p>
+                      )}
                       <p className="text-[10px] text-muted-foreground mt-0.5">
                         Score: {result.score.toFixed(3)}
                       </p>

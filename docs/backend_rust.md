@@ -533,6 +533,9 @@ API Key 管理、processing provider/model 配置。
 
 ## 搜索命令（`commands/search.rs`）
 
+- 所有搜索默认过滤已删除资源（`is_deleted = 0`）。
+- 语义搜索结果仅返回节点摘要，不包含 `chunk_text`。
+
 ### search_semantic
 
 语义搜索，调用 Rust LanceDB hybrid search（FTS + dense 向量）。
@@ -548,10 +551,15 @@ pub async fn search_semantic(
 ```
 
 ```rust
-pub struct SemanticSearchResult {
+pub struct NodeSearchSummary {
     pub node_id: i64,
-    pub chunk_index: i32,
-    pub chunk_text: String,
+    pub node_type: NodeType,
+    pub title: String,
+    pub summary: Option<String>,
+}
+
+pub struct SemanticSearchResult {
+    pub node: NodeSearchSummary,
     pub score: f64,
 }
 ```
@@ -562,7 +570,7 @@ Scope 权重：
 
 ### search_keyword
 
-精确搜索，使用 SQL LIKE 在 title、file_content、user_note 中匹配。
+精确搜索，使用 SQL LIKE 在 title、file_content、user_note 中匹配（已删除资源不参与搜索）。
 
 ```rust
 #[tauri::command]
@@ -573,7 +581,7 @@ pub async fn search_keyword(
 ) -> AppResult<Vec<NodeRecord>>
 ```
 
-返回完整的 `NodeRecord` 列表。
+返回完整的 `NodeRecord` 列表（前端仅展示 title/summary）。
 
 ---
 
