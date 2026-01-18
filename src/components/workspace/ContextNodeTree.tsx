@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, ChevronDown, FolderOpen, Folder } from "lucide-react";
+import { ChevronRight, ChevronDown, FolderOpen, Folder, Trash2 } from "lucide-react";
 import { NodeRecord, resourceSubtypeIcons } from "@/types";
 import { listTargetNodes } from "@/api";
 
@@ -9,6 +9,7 @@ interface ContextNodeTreeProps {
   nodes: NodeRecord[];
   currentResourceId?: number;
   onNodeClick: (node: NodeRecord) => void;
+  onRemoveFromContext?: (resourceId: number) => Promise<void>;
   level?: number;
 }
 
@@ -16,6 +17,7 @@ interface ContextNodeItemProps {
   node: NodeRecord;
   isActive: boolean;
   onNodeClick: (node: NodeRecord) => void;
+  onRemoveFromContext?: (resourceId: number) => Promise<void>;
   level: number;
 }
 
@@ -36,7 +38,7 @@ function getNodeIcon(node: NodeRecord, isExpanded: boolean) {
 }
 
 // 单个节点项
-function ContextNodeItem({ node, isActive, onNodeClick, level }: ContextNodeItemProps) {
+function ContextNodeItem({ node, isActive, onNodeClick, onRemoveFromContext, level }: ContextNodeItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [childNodes, setChildNodes] = useState<NodeRecord[]>([]);
   const [loading, setLoading] = useState(false);
@@ -81,11 +83,18 @@ function ContextNodeItem({ node, isActive, onNodeClick, level }: ContextNodeItem
     }
   };
 
+  const handleRemove = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onRemoveFromContext) {
+      void onRemoveFromContext(node.node_id);
+    }
+  };
+
   return (
     <div>
       <div
         className={cn(
-          "flex items-center gap-1 px-2 py-1.5 rounded-md cursor-pointer transition-colors",
+          "flex items-center gap-1 px-2 py-1.5 rounded-md cursor-pointer transition-colors group",
           isActive ? "bg-secondary" : "hover:bg-muted"
         )}
         style={{ paddingLeft: `${8 + level * 16}px` }}
@@ -120,6 +129,18 @@ function ContextNodeItem({ node, isActive, onNodeClick, level }: ContextNodeItem
         <span className="flex-1 truncate text-sm">
           {node.title || "未命名"}
         </span>
+
+        {/* 删除按钮 - 仅顶层资源显示 */}
+        {level === 0 && onRemoveFromContext && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+            onClick={handleRemove}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        )}
       </div>
 
       {/* 子节点 */}
@@ -127,6 +148,7 @@ function ContextNodeItem({ node, isActive, onNodeClick, level }: ContextNodeItem
         <ContextNodeTree
           nodes={childNodes}
           onNodeClick={onNodeClick}
+          onRemoveFromContext={onRemoveFromContext}
           level={level + 1}
         />
       )}
@@ -139,6 +161,7 @@ export function ContextNodeTree({
   nodes,
   currentResourceId,
   onNodeClick,
+  onRemoveFromContext,
   level = 0,
 }: ContextNodeTreeProps) {
   return (
@@ -149,6 +172,7 @@ export function ContextNodeTree({
           node={node}
           isActive={currentResourceId === node.node_id}
           onNodeClick={onNodeClick}
+          onRemoveFromContext={onRemoveFromContext}
           level={level}
         />
       ))}

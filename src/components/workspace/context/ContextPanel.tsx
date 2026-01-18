@@ -57,7 +57,7 @@ export function ContextPanel({
   onMouseDown,
   onResourceClick,
   onAddToContext,
-  onRemoveFromContext: _onRemoveFromContext,
+  onRemoveFromContext,
   onNodeClick,
   onTaskUpdate,
   onTopicUpdate,
@@ -163,6 +163,7 @@ export function ContextPanel({
                     onNodeClick?.(node);
                   }
                 }}
+                onRemoveFromContext={onRemoveFromContext}
               />
             ) : (
               <p className="text-sm text-muted-foreground">

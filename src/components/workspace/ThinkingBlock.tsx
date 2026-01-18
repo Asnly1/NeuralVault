@@ -10,31 +10,40 @@ interface ThinkingBlockProps {
 
 export function ThinkingBlock({ content, isStreaming = false }: ThinkingBlockProps) {
   const { t } = useLanguage();
-  // 流式时展开，流式结束后折叠
+  // 流式时自动展开，结束后自动折叠（除非用户手动操作过）
   const [isExpanded, setIsExpanded] = useState(isStreaming);
+  // 追踪用户是否手动点击过展开/折叠
+  const [userToggled, setUserToggled] = useState(false);
 
-  // 当流式结束时自动折叠
+  // 当流式结束时自动折叠（仅当用户没有手动操作过时）
   useEffect(() => {
-    if (!isStreaming && isExpanded) {
+    if (!isStreaming && isExpanded && !userToggled) {
       // 延迟折叠，让用户看到完整的思考内容
       const timer = setTimeout(() => setIsExpanded(false), 500);
       return () => clearTimeout(timer);
     }
-  }, [isStreaming, isExpanded]);
+  }, [isStreaming, isExpanded, userToggled]);
 
-  // 当开始流式时自动展开
+  // 当开始流式时自动展开，并重置用户操作标记
   useEffect(() => {
     if (isStreaming) {
       setIsExpanded(true);
+      setUserToggled(false); // 新的流式开始，重置用户操作状态
     }
   }, [isStreaming]);
+
+  // 用户手动切换时设置标记
+  const handleToggle = () => {
+    setUserToggled(true);
+    setIsExpanded(!isExpanded);
+  };
 
   if (!content) return null;
 
   return (
     <div className="mb-2">
       <button
-        onClick={() => setIsExpanded(!isExpanded)}
+        onClick={handleToggle}
         className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
       >
         {isExpanded ? (
