@@ -260,59 +260,61 @@ export function ChatPanel({
         <div className="absolute top-0 left-0 w-4 h-full -ml-1.5" />
       </div>
 
-      {/* Header - session management, hide when conversation started */}
-      {sessionManager.hasSessionContext && messages.length === 0 && (
+      {/* Header - session management */}
+      {sessionManager.hasSessionContext && (
         <div className="px-4 py-3 border-b shrink-0">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">
-                {t("workspace", "chatSessions")}
-              </p>
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 px-2 text-[10px]"
-                  onClick={() => setIsAllSessionsOpen(true)}
-                  disabled={isChatLoading}
-                >
-                  {t("workspace", "seeAllSessions")}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 px-2 text-[10px]"
-                  onClick={sessionManager.createNewSession}
-                  disabled={isChatLoading}
-                >
-                  {t("workspace", "newChatSession")}
-                </Button>
-              </div>
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">
+              {t("workspace", "chatSessions")}
+            </p>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-[10px]"
+                onClick={() => setIsAllSessionsOpen(true)}
+                disabled={isChatLoading}
+              >
+                {t("workspace", "seeAllSessions")}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-[10px]"
+                onClick={sessionManager.createNewSession}
+                disabled={isChatLoading}
+              >
+                {t("workspace", "newChatSession")}
+              </Button>
             </div>
-            {sessionManager.isSessionsLoading ? (
-              <p className="text-xs text-muted-foreground">{t("common", "loading")}</p>
-            ) : sessionManager.sessions.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                {t("workspace", "noChatSessions")}
-              </p>
-            ) : (
-              <div className="space-y-1">
-                {sessionManager.visibleSessions.map((session) => (
-                  <SessionItem
-                    key={session.session_id}
-                    session={session}
-                    isActive={session.session_id === sessionManager.activeSessionId}
-                    isLoading={isChatLoading}
-                    deleteLabel={t("workspace", "deleteChatSession")}
-                    onSelect={() => void sessionManager.selectSession(session.session_id)}
-                    onDelete={() => void sessionManager.deleteSession(session.session_id)}
-                    formatTitle={formatSessionTitle}
-                    formatSubtitle={formatSessionSubtitle}
-                  />
-                ))}
-              </div>
-            )}
           </div>
+          {messages.length === 0 && (
+            <div className="mt-2">
+              {sessionManager.isSessionsLoading ? (
+                <p className="text-xs text-muted-foreground">{t("common", "loading")}</p>
+              ) : sessionManager.sessions.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  {t("workspace", "noChatSessions")}
+                </p>
+              ) : (
+                <div className="space-y-1">
+                  {sessionManager.visibleSessions.map((session) => (
+                    <SessionItem
+                      key={session.session_id}
+                      session={session}
+                      isActive={session.session_id === sessionManager.activeSessionId}
+                      isLoading={isChatLoading}
+                      deleteLabel={t("workspace", "deleteChatSession")}
+                      onSelect={() => void sessionManager.selectSession(session.session_id)}
+                      onDelete={() => void sessionManager.deleteSession(session.session_id)}
+                      formatTitle={formatSessionTitle}
+                      formatSubtitle={formatSessionSubtitle}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

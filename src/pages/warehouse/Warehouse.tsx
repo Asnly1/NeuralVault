@@ -4,7 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Package, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-import { type EdgeWithNode, type NodeRecord } from "@/types";
+import { type EdgeRecord, type EdgeWithNode, type NodeRecord } from "@/types";
 import { NodeCard } from "@/components/node-card";
 import {
   confirmEdge,
@@ -12,6 +12,7 @@ import {
   fetchAllTasks,
   fetchAllResources,
   fetchUnreviewedNodes,
+  listAllEdges,
   listEdgesForTarget,
   listTargetNodes,
 } from "@/api";
@@ -20,6 +21,7 @@ import { useLinkNodes } from "@/hooks/useLinkNodes";
 import { useNodeOperations } from "@/hooks/useNodeOperations";
 import { LinkNodeDialog } from "./LinkNodeDialog";
 import { WarehouseTabs, type WarehouseTab } from "./WarehouseTabs";
+import { GraphPanel } from "./GraphPanel";
 
 interface WarehousePageProps {
   onSelectNode: (node: NodeRecord) => void;
@@ -27,8 +29,13 @@ interface WarehousePageProps {
 }
 
 export function WarehousePage({ onSelectNode, onPinnedChange }: WarehousePageProps) {
+  const [viewMode, setViewMode] = useState<"list" | "graph">("list");
   const [activeTab, setActiveTab] = useState<WarehouseTab>("all");
   const [nodes, setNodes] = useState<NodeRecord[]>([]);
+  const [graphNodes, setGraphNodes] = useState<NodeRecord[]>([]);
+  const [graphEdges, setGraphEdges] = useState<EdgeRecord[]>([]);
+  const [graphLoading, setGraphLoading] = useState(false);
+  const [graphError, setGraphError] = useState<string | null>(null);
   const [inboxCount, setInboxCount] = useState(0);
   const [edgeMap, setEdgeMap] = useState<Map<number, EdgeWithNode[]>>(new Map());
   const [containedNodesMap, setContainedNodesMap] = useState<Map<number, NodeRecord[]>>(new Map());
@@ -129,12 +136,40 @@ export function WarehousePage({ onSelectNode, onPinnedChange }: WarehousePagePro
   }, []);
 
   useEffect(() => {
-    loadData(activeTab);
-  }, [activeTab, loadData]);
+    if (viewMode === "list") {
+      loadData(activeTab);
+    }
+  }, [activeTab, loadData, viewMode]);
 
   useEffect(() => {
     loadInboxCount();
   }, [loadInboxCount]);
+
+  const loadGraphData = useCallback(async () => {
+    setGraphLoading(true);
+    setGraphError(null);
+    try {
+      const [topics, tasks, resources, edges] = await Promise.all([
+        fetchAllTopics(),
+        fetchAllTasks(),
+        fetchAllResources(),
+        listAllEdges(),
+      ]);
+      setGraphNodes([...topics, ...tasks, ...resources]);
+      setGraphEdges(edges);
+    } catch (err) {
+      console.error("Failed to load graph data:", err);
+      setGraphError(t("warehouse", "graphLoadFailed"));
+    } finally {
+      setGraphLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    if (viewMode === "graph") {
+      void loadGraphData();
+    }
+  }, [loadGraphData, viewMode]);
 
   // Link nodes hook
   const linkNodes = useLinkNodes({
@@ -189,66 +224,110 @@ export function WarehousePage({ onSelectNode, onPinnedChange }: WarehousePagePro
           <Package className="h-5 w-5 text-muted-foreground" />
           <h1 className="text-lg font-medium">{t("warehouse", "title")}</h1>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => loadData(activeTab)}
-          disabled={loading}
-        >
-          <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center rounded-md border p-0.5 bg-background">
+            <Button
+              size="sm"
+              variant={viewMode === "list" ? "secondary" : "ghost"}
+              onClick={() => setViewMode("list")}
+            >
+              {t("warehouse", "viewList")}
+            </Button>
+            <Button
+              size="sm"
+              variant={viewMode === "graph" ? "secondary" : "ghost"}
+              onClick={() => setViewMode("graph")}
+            >
+              {t("warehouse", "viewGraph")}
+            </Button>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              if (viewMode === "graph") {
+                void loadGraphData();
+              } else {
+                void loadData(activeTab);
+              }
+            }}
+            disabled={viewMode === "graph" ? graphLoading : loading}
+          >
+            <RefreshCw
+              className={cn(
+                "h-4 w-4",
+                viewMode === "graph"
+                  ? graphLoading && "animate-spin"
+                  : loading && "animate-spin"
+              )}
+            />
+          </Button>
+        </div>
       </div>
 
-      <WarehouseTabs
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        inboxCount={inboxCount}
-      />
+      {viewMode === "list" ? (
+        <>
+          <WarehouseTabs
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            inboxCount={inboxCount}
+          />
 
-      {/* Node list */}
-      <ScrollArea className="flex-1">
-        <div className="p-4">
-          {loading ? (
-            <div className="flex items-center justify-center h-32 text-muted-foreground">
-              {t("common", "loading")}...
+          {/* Node list */}
+          <ScrollArea className="flex-1">
+            <div className="p-4">
+              {loading ? (
+                <div className="flex items-center justify-center h-32 text-muted-foreground">
+                  {t("common", "loading")}...
+                </div>
+              ) : error ? (
+                <div className="text-destructive text-sm bg-destructive/10 p-4 rounded-md">
+                  {error}
+                </div>
+              ) : nodes.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-32 text-muted-foreground border border-dashed rounded-lg bg-muted/20">
+                  <Package className="h-8 w-8 mb-2 opacity-20" />
+                  <p className="text-sm font-medium">{t("warehouse", "empty")}</p>
+                </div>
+              ) : (
+                <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                  {nodes.map((node) => (
+                    <NodeCard
+                      key={node.node_id}
+                      node={node}
+                      onClick={() => onSelectNode(node)}
+                      showReviewActions={activeTab === "inbox"}
+                      onApprove={() => nodeOps.approveNode(node)}
+                      onReject={() => nodeOps.rejectNode(node)}
+                      onTogglePinned={() => nodeOps.togglePinned(node)}
+                      onDelete={() => nodeOps.deleteNode(node)}
+                      onConvert={(targetType) => nodeOps.convertNode(node, targetType)}
+                      onLink={() => void linkNodes.openDialog(node)}
+                      edgeItems={
+                        activeTab === "inbox" ? edgeMap.get(node.node_id) : undefined
+                      }
+                      onConfirmEdge={activeTab === "inbox" ? handleConfirmEdge : undefined}
+                      containedNodes={
+                        activeTab !== "inbox" ? containedNodesMap.get(node.node_id) : undefined
+                      }
+                      onContainedNodeClick={onSelectNode}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
-          ) : error ? (
-            <div className="text-destructive text-sm bg-destructive/10 p-4 rounded-md">
-              {error}
-            </div>
-          ) : nodes.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-32 text-muted-foreground border border-dashed rounded-lg bg-muted/20">
-              <Package className="h-8 w-8 mb-2 opacity-20" />
-              <p className="text-sm font-medium">{t("warehouse", "empty")}</p>
-            </div>
-          ) : (
-            <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-              {nodes.map((node) => (
-                <NodeCard
-                  key={node.node_id}
-                  node={node}
-                  onClick={() => onSelectNode(node)}
-                  showReviewActions={activeTab === "inbox"}
-                  onApprove={() => nodeOps.approveNode(node)}
-                  onReject={() => nodeOps.rejectNode(node)}
-                  onTogglePinned={() => nodeOps.togglePinned(node)}
-                  onDelete={() => nodeOps.deleteNode(node)}
-                  onConvert={(targetType) => nodeOps.convertNode(node, targetType)}
-                  onLink={() => void linkNodes.openDialog(node)}
-                  edgeItems={
-                    activeTab === "inbox" ? edgeMap.get(node.node_id) : undefined
-                  }
-                  onConfirmEdge={activeTab === "inbox" ? handleConfirmEdge : undefined}
-                  containedNodes={
-                    activeTab !== "inbox" ? containedNodesMap.get(node.node_id) : undefined
-                  }
-                  onContainedNodeClick={onSelectNode}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      </ScrollArea>
+          </ScrollArea>
+        </>
+      ) : (
+        <GraphPanel
+          nodes={graphNodes}
+          edges={graphEdges}
+          loading={graphLoading}
+          error={graphError}
+          onNodeClick={onSelectNode}
+          onRefresh={loadGraphData}
+        />
+      )}
     </div>
   );
 }

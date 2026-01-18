@@ -129,6 +129,19 @@ pub async fn list_edges_to(
     .await
 }
 
+pub async fn list_all_edges(pool: &DbPool) -> Result<Vec<EdgeRecord>, sqlx::Error> {
+    sqlx::query_as::<_, EdgeRecord>(
+        "SELECT e.edge_id, e.source_node_id, e.target_node_id, e.relation_type, e.confidence_score, e.is_manual, \
+            e.created_at, e.updated_at, e.is_deleted, e.deleted_at \
+         FROM edges e \
+         INNER JOIN nodes s ON s.node_id = e.source_node_id \
+         INNER JOIN nodes t ON t.node_id = e.target_node_id \
+         WHERE e.is_deleted = 0 AND s.is_deleted = 0 AND t.is_deleted = 0",
+    )
+    .fetch_all(pool)
+    .await
+}
+
 pub async fn list_target_nodes(
     pool: &DbPool,
     source_node_id: i64,

@@ -5,8 +5,8 @@ use crate::{
     app_state::AppState,
     db::{
         confirm_edge, contains_creates_cycle, delete_edge, get_node_by_id, insert_edge,
-        list_edges_to, list_source_nodes, list_target_nodes, EdgeRecord, EdgeRelationType,
-        NewEdge, NodeRecord,
+        list_all_edges, list_edges_to, list_source_nodes, list_target_nodes, EdgeRecord,
+        EdgeRelationType, NewEdge, NodeRecord,
     },
     AppResult,
 };
@@ -137,4 +137,12 @@ pub async fn list_edges_for_target_command(
     }
 
     Ok(items)
+}
+
+#[tauri::command]
+pub async fn list_all_edges_command(
+    state: State<'_, AppState>,
+) -> AppResult<Vec<EdgeRecord>> {
+    let edges = list_all_edges(&state.db).await?;
+    Ok(edges)
 }

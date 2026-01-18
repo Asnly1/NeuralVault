@@ -1,8 +1,10 @@
 import { apiCall, apiCallVoid, apiCallArray } from "./client";
 import {
   nodeRecordSchema,
+  edgeRecordSchema,
   edgeWithNodeSchema,
   type EdgeWithNode,
+  type EdgeRecord,
   type NodeRecord,
   type ReviewStatus,
   type RelationType,
@@ -120,3 +122,7 @@ export const confirmEdge = (
       relationType,
     } as LinkNodesRequest,
   });
+
+/** 获取所有边（用于图谱） */
+export const listAllEdges = (): Promise<EdgeRecord[]> =>
+  apiCallArray("list_all_edges_command", edgeRecordSchema);

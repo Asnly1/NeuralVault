@@ -24,6 +24,7 @@ export {
   unlinkNodes,
   listTargetNodes,
   listSourceNodes,
+  listAllEdges,
   listEdgesForTarget,
   confirmEdge,
 } from "./node";

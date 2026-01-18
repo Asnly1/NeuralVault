@@ -57,8 +57,9 @@ pub use commands::{
 
 // 边命令
 pub use commands::{
-    confirm_edge_command, link_nodes_command, list_edges_for_target_command,
-    list_source_nodes_command, list_target_nodes_command, unlink_nodes_command,
+    confirm_edge_command, link_nodes_command, list_all_edges_command,
+    list_edges_for_target_command, list_source_nodes_command, list_target_nodes_command,
+    unlink_nodes_command,
 };
 
 // 搜索命令
@@ -324,6 +325,7 @@ pub fn run() {
             list_source_nodes_command,
             confirm_edge_command,
             list_edges_for_target_command,
+            list_all_edges_command,
             // 搜索
             search_semantic,
             search_keyword,
