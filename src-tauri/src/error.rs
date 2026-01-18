@@ -122,6 +122,7 @@ pub type AppResult<T> = Result<T, AppError>;
 // ========== 扩展 trait：为 Result 添加上下文方法 ==========
 
 /// 为 Result 类型添加错误上下文转换方法
+#[allow(dead_code)]
 pub trait ResultExt<T> {
     /// 将错误转换为验证错误
     fn validation_err(self, msg: &str) -> AppResult<T>;

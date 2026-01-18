@@ -98,6 +98,7 @@ pub async fn confirm_edge(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub async fn list_edges_from(
     pool: &DbPool,
     source_node_id: i64,

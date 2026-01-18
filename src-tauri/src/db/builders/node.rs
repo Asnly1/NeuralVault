@@ -98,12 +98,14 @@ impl NodeBuilder {
     }
 
     /// 设置用户 ID
+    #[allow(dead_code)]
     pub fn user_id(mut self, user_id: i64) -> Self {
         self.user_id = user_id;
         self
     }
 
     /// 设置 UUID（通常由 Builder 自动生成）
+    #[allow(dead_code)]
     pub fn uuid(mut self, uuid: impl Into<String>) -> Self {
         self.uuid = uuid.into();
         self
@@ -140,6 +142,7 @@ impl NodeBuilder {
     }
 
     /// 设置完成日期
+    #[allow(dead_code)]
     pub fn done_date(mut self, done_date: Option<impl Into<String>>) -> Self {
         self.done_date = done_date.map(|s| s.into());
         self
@@ -160,6 +163,7 @@ impl NodeBuilder {
     }
 
     /// 设置文件内容
+    #[allow(dead_code)]
     pub fn file_content(mut self, content: Option<impl Into<String>>) -> Self {
         self.file_content = content.map(|s| s.into());
         self
@@ -186,36 +190,42 @@ impl NodeBuilder {
     // ========== 嵌入相关字段 ==========
 
     /// 设置已嵌入的内容哈希
+    #[allow(dead_code)]
     pub fn embedded_hash(mut self, hash: Option<impl Into<String>>) -> Self {
         self.embedded_hash = hash.map(|s| s.into());
         self
     }
 
     /// 设置正在处理的内容哈希
+    #[allow(dead_code)]
     pub fn processing_hash(mut self, hash: Option<impl Into<String>>) -> Self {
         self.processing_hash = hash.map(|s| s.into());
         self
     }
 
     /// 设置嵌入状态
+    #[allow(dead_code)]
     pub fn embedding_status(mut self, status: ResourceEmbeddingStatus) -> Self {
         self.embedding_status = status;
         self
     }
 
     /// 设置最后嵌入时间
+    #[allow(dead_code)]
     pub fn last_embedding_at(mut self, at: Option<impl Into<String>>) -> Self {
         self.last_embedding_at = at.map(|s| s.into());
         self
     }
 
     /// 设置最后嵌入错误
+    #[allow(dead_code)]
     pub fn last_embedding_error(mut self, error: Option<impl Into<String>>) -> Self {
         self.last_embedding_error = error.map(|s| s.into());
         self
     }
 
     /// 设置处理阶段
+    #[allow(dead_code)]
     pub fn processing_stage(mut self, stage: ResourceProcessingStage) -> Self {
         self.processing_stage = stage;
         self
@@ -224,6 +234,7 @@ impl NodeBuilder {
     // ========== 审核状态 ==========
 
     /// 设置审核状态
+    #[allow(dead_code)]
     pub fn review_status(mut self, status: ReviewStatus) -> Self {
         self.review_status = status;
         self
@@ -276,10 +287,10 @@ impl NodeBuilder {
     }
 
     /// 插入到数据库并返回 (node_id, uuid)
+    #[allow(dead_code)]
     pub async fn insert_with_uuid(self, pool: &DbPool) -> Result<(i64, String), sqlx::Error> {
         let uuid = self.uuid.clone();
         let node_id = self.insert(pool).await?;
         Ok((node_id, uuid))
     }
 }
-

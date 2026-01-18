@@ -17,6 +17,7 @@ pub fn validate_title(title: &str) -> AppResult<&str> {
 }
 
 /// 验证字符串非空（通用）
+#[allow(dead_code)]
 pub fn validate_not_empty<'a>(value: &'a str, field_name: &str) -> AppResult<&'a str> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
@@ -26,6 +27,7 @@ pub fn validate_not_empty<'a>(value: &'a str, field_name: &str) -> AppResult<&'a
 }
 
 /// 解析关系类型
+#[allow(dead_code)]
 pub fn parse_relation_type(raw: &str) -> AppResult<EdgeRelationType> {
     match raw {
         "contains" => Ok(EdgeRelationType::Contains),
@@ -54,6 +56,7 @@ pub fn parse_review_status_or_default(raw: Option<&str>) -> ReviewStatus {
 }
 
 /// 验证 node_id 有效
+#[allow(dead_code)]
 pub fn validate_node_id(node_id: i64) -> AppResult<i64> {
     if node_id <= 0 {
         return Err(AppError::Validation("无效的节点 ID".into()));
@@ -62,6 +65,7 @@ pub fn validate_node_id(node_id: i64) -> AppResult<i64> {
 }
 
 /// 验证限制值范围
+#[allow(dead_code)]
 pub fn validate_limit(limit: Option<i32>, default: i32, max: i32) -> i32 {
     limit.unwrap_or(default).max(1).min(max)
 }
@@ -120,4 +124,3 @@ mod tests {
         assert_eq!(validate_limit(Some(200), 20, 100), 100);
     }
 }
-

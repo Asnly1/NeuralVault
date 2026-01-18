@@ -175,6 +175,7 @@ pub async fn insert_context_chunks(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub async fn delete_context_chunks(pool: &DbPool, node_id: i64) -> Result<(), sqlx::Error> {
     sqlx::query!("DELETE FROM context_chunks WHERE node_id = ?", node_id)
         .execute(pool)
