@@ -7,12 +7,13 @@
 mod model;
 mod store;
 
-pub use model::EmbeddingService;
+pub use model::{EmbeddingService, TextSegment};
 pub use store::SearchResult;
 
 // Column name constants (used by both model and store)
 pub(crate) const VECTOR_KIND_TEXT: &str = "text";
 pub(crate) const VECTOR_KIND_IMAGE: &str = "image";
+pub(crate) const EMBEDDING_TYPE_TITLE: &str = "title";
 pub(crate) const COLUMN_RELEVANCE_SCORE: &str = "_relevance_score";
 pub(crate) const COLUMN_SCORE: &str = "_score";
 pub(crate) const COLUMN_DISTANCE: &str = "_distance";

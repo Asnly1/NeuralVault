@@ -280,19 +280,30 @@ pub fn merge_results(
     limit: usize,
 ) -> Vec<SearchResult> {
     text_results.append(&mut image_results);
-    let mut seen = std::collections::HashSet::new();
-    let mut deduped = Vec::new();
+    let mut best_by_key: std::collections::HashMap<(i64, i32, String), SearchResult> =
+        std::collections::HashMap::new();
 
-    // TODO: 优化去重逻辑
-    // 目前的代码是“先到先得”：如果文本结果和图片结果中有重复项，代码会保留 text_results 里的那个（因为它先被 push）。
-    // 一个更合理的做法是：如果文本结果和图片结果中有重复项，代码会保留 score 更高的那个。
     for item in text_results {
         let key = (item.node_id, item.chunk_index, item.chunk_text.clone());
-        if seen.insert(key) {
-            deduped.push(item);
+        match best_by_key.get_mut(&key) {
+            Some(existing) => {
+                let replace = match (item.score.is_nan(), existing.score.is_nan()) {
+                    (true, true) => false,
+                    (true, false) => false,
+                    (false, true) => true,
+                    (false, false) => item.score > existing.score,
+                };
+                if replace {
+                    *existing = item;
+                }
+            }
+            None => {
+                best_by_key.insert(key, item);
+            }
         }
     }
 
+    let mut deduped: Vec<SearchResult> = best_by_key.into_values().collect();
     deduped.sort_by(|a, b| {
         b.score
             .partial_cmp(&a.score)

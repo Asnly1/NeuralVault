@@ -12,6 +12,7 @@ use fastembed::{
 use lancedb::index::scalar::FullTextSearchQuery;
 use lancedb::query::{ExecutableQuery, QueryBase, QueryExecutionOptions};
 use lancedb::{DistanceType, Table};
+use serde_json::Value;
 use text_splitter::{ChunkConfig, TextSplitter};
 use tokenizers::Tokenizer;
 use tokio::sync::Mutex;
@@ -23,7 +24,8 @@ use super::store::{
     LanceChunk, SearchResult,
 };
 use super::{
-    COLUMN_IMAGE_VECTOR, COLUMN_NODE_ID, COLUMN_TEXT_VECTOR, VECTOR_KIND_IMAGE, VECTOR_KIND_TEXT,
+    COLUMN_IMAGE_VECTOR, COLUMN_NODE_ID, COLUMN_TEXT_VECTOR, EMBEDDING_TYPE_TITLE,
+    VECTOR_KIND_IMAGE, VECTOR_KIND_TEXT,
 };
 use crate::db::{EmbedChunkResult, EmbeddingType};
 use crate::services::VectorConfig;
@@ -44,6 +46,12 @@ pub struct EmbeddingService {
 
 pub struct EmbeddingResponse {
     pub chunks: Vec<EmbedChunkResult>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TextSegment {
+    pub text: String,
+    pub meta: Option<Value>,
 }
 
 struct TimedModel<T> {
@@ -227,12 +235,67 @@ impl EmbeddingService {
             return Ok(EmbeddingResponse { chunks: Vec::new() });
         }
 
-        let chunks = if chunk {
-            self.chunk_text(text)
-        } else {
-            vec![TextChunk::from_text(text, 0, self.token_count(text))]
-        };
+        let segments = [TextSegment {
+            text: text.to_string(),
+            meta: None,
+        }];
+        self.embed_text_segments(node_id, embedding_type, &segments, chunk)
+            .await
+    }
 
+    pub async fn embed_text_segments(
+        &self,
+        node_id: i64,
+        embedding_type: EmbeddingType,
+        segments: &[TextSegment],
+        chunk: bool,
+    ) -> Result<EmbeddingResponse, String> {
+        let type_label = embedding_type_label(embedding_type);
+        self.embed_text_segments_with_label(node_id, type_label, segments, chunk)
+            .await
+    }
+
+    pub async fn upsert_title_embedding(&self, node_id: i64, title: &str) -> Result<(), String> {
+        let title = title.trim();
+        if title.is_empty() {
+            return Ok(());
+        }
+
+        self.delete_by_node(node_id, Some(EMBEDDING_TYPE_TITLE), Some(VECTOR_KIND_TEXT))
+            .await?;
+
+        let segments = [TextSegment {
+            text: title.to_string(),
+            meta: None,
+        }];
+        self.embed_text_segments_with_label(node_id, EMBEDDING_TYPE_TITLE, &segments, false)
+            .await?;
+
+        Ok(())
+    }
+
+    async fn embed_text_segments_with_label(
+        &self,
+        node_id: i64,
+        embedding_type: &str,
+        segments: &[TextSegment],
+        chunk: bool,
+    ) -> Result<EmbeddingResponse, String> {
+        let chunks = self.build_chunks_from_segments(segments, chunk);
+        if chunks.is_empty() {
+            return Ok(EmbeddingResponse { chunks: Vec::new() });
+        }
+
+        self.embed_text_chunks_with_label(node_id, embedding_type, chunks)
+            .await
+    }
+
+    async fn embed_text_chunks_with_label(
+        &self,
+        node_id: i64,
+        embedding_type: &str,
+        chunks: Vec<TextChunk>,
+    ) -> Result<EmbeddingResponse, String> {
         let texts: Vec<&str> = chunks.iter().map(|chunk| chunk.text.as_str()).collect();
         let dense_vectors = self
             .with_dense(|model| model.embed(texts.as_slice(), None).map_err(|e| e.to_string()))
@@ -244,7 +307,6 @@ impl EmbeddingService {
 
         let mut rows = Vec::with_capacity(chunks.len());
         let mut results = Vec::with_capacity(chunks.len());
-        let type_label = embedding_type_label(embedding_type);
 
         for (idx, chunk) in chunks.iter().enumerate() {
             let vector_id = uuid::Uuid::new_v4().to_string();
@@ -254,7 +316,7 @@ impl EmbeddingService {
             rows.push(LanceChunk {
                 vector_id: vector_id.clone(),
                 node_id,
-                embedding_type: type_label.to_string(),
+                embedding_type: embedding_type.to_string(),
                 vector_kind: VECTOR_KIND_TEXT.to_string(),
                 embedding_model: self.config.dense_embedding_model.clone(),
                 chunk_text: chunk_text.clone(),
@@ -273,6 +335,7 @@ impl EmbeddingService {
                 token_count: chunk.token_count,
                 vector_kind: VECTOR_KIND_TEXT.to_string(),
                 embedding_model: self.config.dense_embedding_model.clone(),
+                chunk_meta: chunk.chunk_meta.clone(),
             });
         }
 
@@ -325,6 +388,7 @@ impl EmbeddingService {
             token_count,
             vector_kind: VECTOR_KIND_IMAGE.to_string(),
             embedding_model: self.config.image_embedding_model.clone(),
+            chunk_meta: None,
         })
     }
 
@@ -376,6 +440,33 @@ impl EmbeddingService {
             .ok_or_else(|| "clip text query embedding missing".to_string())?;
 
         Ok((dense_vector, clip_text_vector))
+    }
+
+    pub async fn embed_dense_query(&self, text: &str) -> Result<Vec<f32>, String> {
+        let text = text.trim();
+        if text.is_empty() {
+            return Err("query text is empty".to_string());
+        }
+
+        let dense = self
+            .with_dense(|model| model.embed(vec![text], None).map_err(|e| e.to_string()))
+            .await?;
+
+        dense
+            .into_iter()
+            .next()
+            .ok_or_else(|| "dense query embedding missing".to_string())
+    }
+
+    pub async fn search_title_similar(
+        &self,
+        query: &str,
+        limit: u64,
+    ) -> Result<Vec<SearchResult>, String> {
+        let dense_vector = self.embed_dense_query(query).await?;
+        let filter = build_filter(EMBEDDING_TYPE_TITLE, None, VECTOR_KIND_TEXT);
+        self.search_text_vector(dense_vector, filter.as_deref(), limit as usize)
+            .await
     }
 
     pub async fn search_hybrid(
@@ -430,6 +521,29 @@ impl EmbeddingService {
         collect_search_results(stream).await
     }
 
+    async fn search_text_vector(
+        &self,
+        dense_vector: Vec<f32>,
+        filter: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<SearchResult>, String> {
+        let mut query_builder = self
+            .table
+            .query()
+            .nearest_to(dense_vector)
+            .map_err(|e| e.to_string())?
+            .column(COLUMN_TEXT_VECTOR)
+            .distance_type(DistanceType::Cosine)
+            .limit(limit);
+
+        if let Some(filter) = filter {
+            query_builder = query_builder.only_if(filter);
+        }
+
+        let stream = query_builder.execute().await.map_err(|e| e.to_string())?;
+        collect_search_results(stream).await
+    }
+
     async fn search_image_vector(
         &self,
         clip_text_vector: Vec<f32>,
@@ -469,12 +583,50 @@ impl EmbeddingService {
         Ok(())
     }
 
-    fn chunk_text(&self, text: &str) -> Vec<TextChunk> {
+    fn build_chunks_from_segments(&self, segments: &[TextSegment], chunk: bool) -> Vec<TextChunk> {
+        let mut output = Vec::new();
+        let mut next_index = 0;
+
+        for segment in segments {
+            let text = segment.text.trim();
+            if text.is_empty() {
+                continue;
+            }
+
+            if chunk {
+                let chunks = self.chunk_text_with_meta(text, next_index, segment.meta.clone());
+                next_index += chunks.len() as i32;
+                output.extend(chunks);
+            } else {
+                output.push(TextChunk::from_text(
+                    text,
+                    next_index,
+                    self.token_count(text),
+                    segment.meta.clone(),
+                ));
+                next_index += 1;
+            }
+        }
+
+        output
+    }
+
+    fn chunk_text_with_meta(
+        &self,
+        text: &str,
+        start_index: i32,
+        meta: Option<Value>,
+    ) -> Vec<TextChunk> {
         self.splitter
             .chunks(text)
             .enumerate()
             .map(|(idx, chunk)| {
-                TextChunk::from_text(chunk, idx as i32, self.token_count(chunk))
+                TextChunk::from_text(
+                    chunk,
+                    start_index + idx as i32,
+                    self.token_count(chunk),
+                    meta.clone(),
+                )
             })
             .collect()
     }
@@ -491,14 +643,21 @@ struct TextChunk {
     text: String,
     chunk_index: i32,
     token_count: Option<i32>,
+    chunk_meta: Option<Value>,
 }
 
 impl TextChunk {
-    fn from_text(text: &str, chunk_index: i32, token_count: Option<i32>) -> Self {
+    fn from_text(
+        text: &str,
+        chunk_index: i32,
+        token_count: Option<i32>,
+        chunk_meta: Option<Value>,
+    ) -> Self {
         Self {
             text: text.to_string(),
             chunk_index,
             token_count,
+            chunk_meta,
         }
     }
 }

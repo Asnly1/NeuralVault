@@ -13,6 +13,7 @@ use crate::{
     },
     simple_void_command,
     utils::{parse_review_status_or_default, validate_title},
+    AppError,
     AppResult,
 };
 
@@ -77,6 +78,15 @@ pub async fn create_topic(
         update_node_pinned(&state.db, node_id, true).await?;
     }
 
+    let ai = state.ai.wait_ready().await.map_err(AppError::AiService)?;
+    if let Err(err) = ai.embedding.upsert_title_embedding(node_id, title).await {
+        tracing::warn!(
+            node_id,
+            error = %err,
+            "Failed to upsert topic title embedding"
+        );
+    }
+
     let node = get_node_by_id(&state.db, node_id).await?;
     Ok(CreateTopicResponse { node })
 }
@@ -105,7 +115,16 @@ pub async fn update_topic_title_command(
     title: String,
 ) -> AppResult<()> {
     let title = validate_title(&title)?;
-    Ok(update_node_title(&state.db, topic_id, title).await?)
+    update_node_title(&state.db, topic_id, title).await?;
+    let ai = state.ai.wait_ready().await.map_err(AppError::AiService)?;
+    if let Err(err) = ai.embedding.upsert_title_embedding(topic_id, title).await {
+        tracing::warn!(
+            topic_id,
+            error = %err,
+            "Failed to upsert topic title embedding"
+        );
+    }
+    Ok(())
 }
 
 #[tauri::command]

@@ -10,7 +10,7 @@ mod pdf;
 mod text;
 
 pub use ocr::{parse_image_file};
-pub use pdf::{parse_pdf_file};
+pub use pdf::{parse_pdf_file, parse_pdf_pages_with_fallback};
 pub use text::{build_text_title, parse_text_file};
 
 use std::path::PathBuf;

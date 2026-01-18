@@ -11,7 +11,7 @@ use tokio::sync::watch;
 use crate::services::AIConfigService;
 
 pub use agent::AgentService;
-pub use embedding::EmbeddingService;
+pub use embedding::{EmbeddingService, TextSegment};
 pub use llm::LlmService;
 pub use search::SearchService;
 pub use types::*;

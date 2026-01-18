@@ -26,7 +26,6 @@ pub fn build_ocr_engine() -> Result<OcrEngine, String> {
 }
 
 /// Perform OCR on an image using the provided engine
-/// TODO: 引入itertools，避免内存二次分配
 pub fn ocr_image_with_engine(engine: &OcrEngine, image: &DynamicImage) -> Result<String, String> {
     let results = engine.recognize(image).map_err(|e| e.to_string())?;
     let text = results

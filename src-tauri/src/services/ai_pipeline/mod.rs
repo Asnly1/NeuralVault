@@ -21,3 +21,4 @@ pub(crate) const SUMMARY_MIN_LENGTH: i32 = 10;
 pub(crate) const CLASSIFY_TOP_K: i32 = 10;
 pub(crate) const CLASSIFY_SIMILARITY_THRESHOLD: f64 = 0.7;
 pub(crate) const REVIEW_CONFIDENCE_THRESHOLD: f64 = 0.8;
+pub(crate) const TOPIC_TITLE_SIMILARITY_THRESHOLD: f64 = 0.8;

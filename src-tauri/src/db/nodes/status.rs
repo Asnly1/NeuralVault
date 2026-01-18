@@ -1,5 +1,7 @@
 //! Status update operations for nodes
 
+use sqlx::types::Json;
+
 use crate::db::{
     DbPool, EmbedChunkResult, EmbeddingType, ResourceEmbeddingStatus, ResourceProcessingStage,
     ReviewStatus, TaskPriority,
@@ -154,10 +156,11 @@ pub async fn insert_context_chunks(
         let vector_id = chunk.vector_id.as_str();
         let embedding_hash = chunk.embedding_hash.as_str();
         let embedding_model = chunk.embedding_model.as_str();
+        let chunk_meta = chunk.chunk_meta.as_ref().map(|meta| Json(meta.clone()));
         sqlx::query!(
             "INSERT INTO context_chunks \
-             (node_id, embedding_type, vector_kind, chunk_text, chunk_index, vector_id, embedding_hash, embedding_model, embedding_at, token_count) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)",
+             (node_id, embedding_type, vector_kind, chunk_text, chunk_index, vector_id, embedding_hash, embedding_model, embedding_at, token_count, chunk_meta) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)",
             node_id,
             embedding_type,
             vector_kind,
@@ -167,6 +170,7 @@ pub async fn insert_context_chunks(
             embedding_hash,
             embedding_model,
             chunk.token_count,
+            chunk_meta,
         )
         .execute(pool)
         .await?;

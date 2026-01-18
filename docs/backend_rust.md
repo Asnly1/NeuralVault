@@ -261,7 +261,7 @@ pub struct AppState {
 
 模块结构：
 - `mod.rs`：常量定义（向量维度、分块参数等）与导出
-- `model.rs`：`EmbeddingService` 结构体与方法（`embed_text`、`embed_image`、`embed_query`、`search_hybrid`）
+- `model.rs`：`EmbeddingService` 结构体与方法（`embed_text`、`embed_text_segments`、`embed_image`、`embed_query`、`search_hybrid`、`search_title_similar`、`upsert_title_embedding`）
 - `store.rs`：LanceDB 存储操作（表创建、向量写入、搜索结果收集）
 
 技术栈：
@@ -270,7 +270,8 @@ pub struct AppState {
   - Image: `Qdrant/clip-ViT-B-32-vision`（512）
 - 使用 Hugging Face tokenizer（`intfloat/multilingual-e5-small`）+ `text-splitter` 做分段与 token 计数。
 - LanceDB 表保存向量与元数据；不再计算 sparse embedding。
-- `embedding_type` 仍区分 `summary` / `content`。
+- `embedding_type` 仍区分 `summary` / `content`；另外保存 `title` 向量（仅 LanceDB）用于 Topic 标题相似度。
+- 搜索结果合并时对重复 chunk 保留更高 score 的那条记录。
 
 ### Agent（`agent.rs`）
 
@@ -281,6 +282,7 @@ pub struct AppState {
 
 - Hybrid Search：LanceDB FTS + dense 向量检索，`execute_hybrid` 融合。
 - 若 FTS 不可用，可退化为纯向量检索。
+- 文本/图片结果去重时保留更高 score 的 chunk。
 
 ---
 
@@ -289,13 +291,13 @@ pub struct AppState {
 模块结构：
 - `mod.rs`：导出 `parse_resource_content()` 入口函数与 `ProgressCallback` 类型
 - `ocr.rs`：OCR 引擎构建（`ocr_rs`）与图片识别
-- `pdf.rs`：PDF 解析（文本优先，失败后 PDFium + OCR）
+- `pdf.rs`：PDF 解析（pdf_oxide Markdown + 质量评分 + OCR fallback）
 - `text.rs`：文本文件解析与标题生成
 
 解析流程根据 `ResourceSubtype` 分发：
 - `Text`：直接读取文件内容
 - `Image`：OCR 识别
-- `Pdf`：文本提取优先，失败后逐页 OCR
+- `Pdf`：先用 pdf_oxide 转 Markdown；质量不足则逐页 OCR，最终按页合并（`---` 分隔）
 - `Epub`：文本提取
 - `Url` / `Other`：返回空
 
@@ -353,13 +355,14 @@ pub struct AppState {
 5. Embedding：
    - 清理旧 `context_chunks` + LanceDB 记录（按 `node_id` + `embedding_type`）。
    - `summary`：不切分；`content`：使用 `text-splitter` 分段。
+   - PDF 内容会按页转 Markdown，并在 chunk_meta 写入 `page` 字段。
    - 写入 LanceDB（dense 向量；image 向量按资源类型可选）并回写 `context_chunks`。
 6. `embedding_status = synced`，`processing_stage = done`。
 7. Topic 分类：
    - 用 Summary 做 LanceDB hybrid search（Top-10，阈值 0.7）。
    - 构建候选 Topic + 父级上下文。
    - LLM 结构化输出：assign / create_new / restructure。
-   - 去重：新 Topic 创建前做标题相似性检查。
+   - 去重：新 Topic 创建前做标题向量相似度检查（阈值 0.8，持久化 title 向量；必要时回退到字符串相似度）。
    - 插入 `contains` 边（DAG 环检测，失败则拒绝）。
    - `classification_mode` 决定 review_status（manual 全部进 Inbox；aggressive 置信度≥0.8 自动 reviewed）。
    - 置信度≥0.8 时允许修改 Topic title/summary，并写入 `node_revision_logs`。
@@ -422,6 +425,7 @@ pub struct AppState {
 
 - `node_id` + `embedding_type`（summary/content）。
 - 记录 `embedding_hash`、`dense_embedding_model`、`image_embedding_model` 等。
+- `chunk_meta` 保存额外元数据（如 PDF 页码）。
 - 保存 LanceDB 行 ID（若字段名仍为 `qdrant_uuid`，仅属历史残留）。
 
 ### node_revision_logs

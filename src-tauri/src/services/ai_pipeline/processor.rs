@@ -4,6 +4,8 @@ use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+use serde_json::json;
+
 use super::classifier::classify_and_link_topic;
 use super::{SUMMARY_MAX_LENGTH, SUMMARY_MIN_LENGTH};
 use crate::db::{
@@ -12,7 +14,10 @@ use crate::db::{
     DbPool, EmbedChunkResult, EmbeddingType, NodeRecord, NodeType, ResourceEmbeddingStatus,
     ResourceProcessingStage, ResourceSubtype,
 };
-use crate::services::{AiServices, AIConfigService, ClassificationMode, ProviderConfig};
+use crate::services::{
+    parser::parse_pdf_pages_with_fallback, AiServices, AIConfigService, ClassificationMode,
+    ProviderConfig, TextSegment,
+};
 
 pub(crate) async fn process_resource_job(
     db: &DbPool,
@@ -47,6 +52,12 @@ pub(crate) async fn process_resource_job(
 
     let image_path_for_embedding = match node.resource_subtype {
         Some(ResourceSubtype::Image) => node.file_path.as_deref(),
+        _ => None,
+    }
+    .map(|path| resolve_resource_path(app_data_dir, path));
+
+    let pdf_path_for_embedding = match node.resource_subtype {
+        Some(ResourceSubtype::Pdf) => node.file_path.as_deref(),
         _ => None,
     }
     .map(|path| resolve_resource_path(app_data_dir, path));
@@ -116,20 +127,24 @@ pub(crate) async fn process_resource_job(
             db,
             ai,
             node_id,
+            node.resource_subtype,
             EmbeddingType::Summary,
             summary.as_str(),
             false,
             None,
+            pdf_path_for_embedding.as_deref(),
         )
         .await?;
         sync_embeddings_for_type(
             db,
             ai,
             node_id,
+            node.resource_subtype,
             EmbeddingType::Content,
             content.as_str(),
             true,
             image_path_for_embedding.as_deref(),
+            pdf_path_for_embedding.as_deref(),
         )
         .await?;
 
@@ -188,10 +203,12 @@ pub(crate) async fn sync_embeddings_for_type(
     db: &DbPool,
     ai: &AiServices,
     node_id: i64,
+    resource_subtype: Option<ResourceSubtype>,
     embedding_type: EmbeddingType,
     text: &str,
     chunk: bool,
     image_path: Option<&str>,
+    pdf_path: Option<&str>,
 ) -> Result<(), String> {
     delete_context_chunks_by_type(db, node_id, embedding_type)
         .await
@@ -202,8 +219,42 @@ pub(crate) async fn sync_embeddings_for_type(
         .await?;
 
     let mut chunks: Vec<EmbedChunkResult> = Vec::new();
+    let mut used_segment_embedding = false;
 
-    if !text.trim().is_empty() {
+    if embedding_type == EmbeddingType::Content
+        && matches!(resource_subtype, Some(ResourceSubtype::Pdf))
+    {
+        if let Some(pdf_path) = pdf_path {
+            match parse_pdf_pages_with_fallback(pdf_path, None) {
+                Ok(pages) => {
+                    let segments: Vec<TextSegment> = pages
+                        .into_iter()
+                        .map(|page| TextSegment {
+                            text: page.text,
+                            meta: Some(json!({ "page": page.page_number })),
+                        })
+                        .collect();
+                    if !segments.is_empty() {
+                        let response = ai
+                            .embedding
+                            .embed_text_segments(node_id, embedding_type, &segments, chunk)
+                            .await?;
+                        chunks.extend(response.chunks);
+                        used_segment_embedding = true;
+                    }
+                }
+                Err(err) => {
+                    tracing::warn!(
+                        node_id,
+                        error = %err,
+                        "PDF page parse failed, fallback to stored content"
+                    );
+                }
+            }
+        }
+    }
+
+    if !used_segment_embedding && !text.trim().is_empty() {
         let response = ai
             .embedding
             .embed_text(node_id, embedding_type, text, chunk)

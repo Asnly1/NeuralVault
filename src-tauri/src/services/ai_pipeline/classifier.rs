@@ -1,9 +1,13 @@
 //! Topic classification logic
 
+use std::cmp::Ordering;
 use std::collections::HashSet;
 use uuid::Uuid;
 
-use super::{CLASSIFY_SIMILARITY_THRESHOLD, CLASSIFY_TOP_K, REVIEW_CONFIDENCE_THRESHOLD};
+use super::{
+    CLASSIFY_SIMILARITY_THRESHOLD, CLASSIFY_TOP_K, REVIEW_CONFIDENCE_THRESHOLD,
+    TOPIC_TITLE_SIMILARITY_THRESHOLD,
+};
 use crate::db::{
     contains_creates_cycle, get_node_by_id, get_node_by_title, insert_edge_if_missing,
     insert_node, insert_node_revision_log, list_nodes_by_type, list_source_nodes,
@@ -59,9 +63,13 @@ pub(crate) async fn classify_and_link_topic(
             payload,
             confidence_score,
         } => {
-            let (topic_id, _) =
-                create_topic_node(db, &payload.new_topic.title, payload.new_topic.summary.as_deref())
-                    .await?;
+            let (topic_id, _) = create_topic_node(
+                db,
+                ai,
+                &payload.new_topic.title,
+                payload.new_topic.summary.as_deref(),
+            )
+            .await?;
             if let Some(parent_id) = payload.parent_topic_id {
                 let parent = get_node_by_id(db, parent_id)
                     .await
@@ -89,6 +97,7 @@ pub(crate) async fn classify_and_link_topic(
                 for revision in &payload.topics_to_revise {
                     apply_topic_revision(
                         db,
+                        ai,
                         revision.topic_id,
                         revision.new_title.as_deref(),
                         revision.new_summary.as_deref(),
@@ -102,8 +111,13 @@ pub(crate) async fn classify_and_link_topic(
 
             let mut parent_topic_id = None;
             if let Some(new_parent) = payload.new_parent_topic.as_ref() {
-                let (id, _) =
-                    create_topic_node(db, &new_parent.title, new_parent.summary.as_deref()).await?;
+                let (id, _) = create_topic_node(
+                    db,
+                    ai,
+                    &new_parent.title,
+                    new_parent.summary.as_deref(),
+                )
+                .await?;
                 parent_topic_id = Some(id);
             }
 
@@ -252,6 +266,7 @@ async fn apply_review_status(
 
 async fn create_topic_node(
     db: &DbPool,
+    ai: &AiServices,
     title: &str,
     summary: Option<&str>,
 ) -> Result<(i64, bool), String> {
@@ -260,7 +275,7 @@ async fn create_topic_node(
         return Err("topic title is empty".to_string());
     }
 
-    if let Some(node) = find_similar_topic(db, title).await? {
+    if let Some(node) = find_similar_topic(db, ai, title).await? {
         return Ok((node.node_id, false));
     }
 
@@ -304,10 +319,22 @@ async fn create_topic_node(
     .await
     .map_err(|e| e.to_string())?;
 
+    if let Err(err) = ai.embedding.upsert_title_embedding(node_id, title).await {
+        tracing::warn!(
+            node_id,
+            error = %err,
+            "Failed to upsert topic title embedding"
+        );
+    }
+
     Ok((node_id, true))
 }
 
-async fn find_similar_topic(db: &DbPool, title: &str) -> Result<Option<NodeRecord>, String> {
+async fn find_similar_topic(
+    db: &DbPool,
+    ai: &AiServices,
+    title: &str,
+) -> Result<Option<NodeRecord>, String> {
     if let Some(node) = get_node_by_title(db, NodeType::Topic, title)
         .await
         .map_err(|e| e.to_string())?
@@ -315,16 +342,103 @@ async fn find_similar_topic(db: &DbPool, title: &str) -> Result<Option<NodeRecor
         return Ok(Some(node));
     }
 
-    let normalized = normalize_title(title);
-    let topics = list_nodes_by_type(db, NodeType::Topic, false)
-        .await
-        .map_err(|e| e.to_string())?;
-    for topic in topics {
-        if is_similar_title(&normalized, &normalize_title(&topic.title)) {
-            return Ok(Some(topic));
+    let mut vector_error = None;
+    let mut vector_results = match search_similar_topic_by_vector(ai, title).await {
+        Ok(results) => results,
+        Err(err) => {
+            vector_error = Some(err);
+            Vec::new()
+        }
+    };
+
+    if vector_error.is_none() && vector_results.is_empty() {
+        let topics = list_nodes_by_type(db, NodeType::Topic, false)
+            .await
+            .map_err(|e| e.to_string())?;
+        if !topics.is_empty() {
+            refresh_topic_title_embeddings(ai, &topics).await;
+            vector_results = search_similar_topic_by_vector(ai, title).await?;
         }
     }
+
+    for (node_id, score) in vector_results {
+        if score < TOPIC_TITLE_SIMILARITY_THRESHOLD {
+            break;
+        }
+        let node = get_node_by_id(db, node_id)
+            .await
+            .map_err(|e| e.to_string())?;
+        if node.node_type != NodeType::Topic {
+            continue;
+        }
+        if let Err(err) = ai
+            .embedding
+            .upsert_title_embedding(node.node_id, &node.title)
+            .await
+        {
+            tracing::warn!(
+                node_id = node.node_id,
+                error = %err,
+                "Failed to refresh topic title embedding"
+            );
+        }
+        return Ok(Some(node));
+    }
+
+    if let Some(err) = vector_error {
+        tracing::warn!(
+            error = %err,
+            "Topic title vector search failed, falling back to fuzzy match"
+        );
+        let normalized = normalize_title(title);
+        let topics = list_nodes_by_type(db, NodeType::Topic, false)
+            .await
+            .map_err(|e| e.to_string())?;
+        for topic in topics {
+            if is_similar_title(&normalized, &normalize_title(&topic.title)) {
+                return Ok(Some(topic));
+            }
+        }
+    }
+
     Ok(None)
+}
+
+async fn search_similar_topic_by_vector(
+    ai: &AiServices,
+    title: &str,
+) -> Result<Vec<(i64, f64)>, String> {
+    let mut results = ai
+        .embedding
+        .search_title_similar(title, CLASSIFY_TOP_K as u64)
+        .await?;
+    results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(Ordering::Equal));
+
+    let mut scored = Vec::new();
+    for result in results {
+        if result.score.is_nan() {
+            continue;
+        }
+        scored.push((result.node_id, result.score));
+    }
+
+    Ok(scored)
+}
+
+async fn refresh_topic_title_embeddings(ai: &AiServices, topics: &[NodeRecord]) {
+    for topic in topics {
+        if let Err(err) = ai
+            .embedding
+            .upsert_title_embedding(topic.node_id, &topic.title)
+            .await
+        {
+            tracing::warn!(
+                node_id = topic.node_id,
+                error = %err,
+                "Failed to backfill topic title embedding"
+            );
+        }
+    }
 }
 
 fn normalize_title(title: &str) -> String {
@@ -336,7 +450,7 @@ fn normalize_title(title: &str) -> String {
         .collect()
 }
 
-// TODO: 判断逻辑太简单
+// Fallback when vector search is unavailable.
 fn is_similar_title(a: &str, b: &str) -> bool {
     if a == b {
         return true;
@@ -349,6 +463,7 @@ fn is_similar_title(a: &str, b: &str) -> bool {
 
 async fn apply_topic_revision(
     db: &DbPool,
+    ai: &AiServices,
     topic_id: i64,
     new_title: Option<&str>,
     new_summary: Option<&str>,
@@ -383,6 +498,13 @@ async fn apply_topic_revision(
             update_node_title(db, topic_id, title)
                 .await
                 .map_err(|e| e.to_string())?;
+            if let Err(err) = ai.embedding.upsert_title_embedding(topic_id, title).await {
+                tracing::warn!(
+                    topic_id,
+                    error = %err,
+                    "Failed to upsert revised topic title embedding"
+                );
+            }
         }
     }
 

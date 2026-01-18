@@ -1,6 +1,7 @@
 //! 数据库输入类型定义（用于插入/创建）
 
 use serde::Deserialize;
+use serde_json::Value;
 use sqlx::types::Json;
 
 use super::enums::*;
@@ -91,5 +92,5 @@ pub struct EmbedChunkResult {
     pub token_count: Option<i32>,
     pub vector_kind: String,
     pub embedding_model: String,
+    pub chunk_meta: Option<Value>,
 }
-
