@@ -1,8 +1,7 @@
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 
-import { Sparkles, CheckCircle2, LayoutGrid, Plus } from "lucide-react";
+import { Sparkles, CheckCircle2, Plus } from "lucide-react";
 
 import { NodeRecord, IngestProgress, InputMode } from "../types";
 import { TaskCard } from "../components/TaskCard";
