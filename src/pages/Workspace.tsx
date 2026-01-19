@@ -167,7 +167,7 @@ export function WorkspacePage({
           contextResources={context.contextResources}
           availableResources={context.availableResources}
           loadingResources={context.loadingResources}
-          editorContent={editor.content}
+          userNote={editor.userNote}
           viewMode={editor.viewMode}
           width={leftPanel.width}
           tempWidth={leftPanel.tempWidth}
@@ -190,6 +190,7 @@ export function WorkspacePage({
           isTopicMode={isTopicMode}
           selectedTopic={isTopicMode ? propSelectedResource : null}
           editorContent={editor.content}
+          userNote={editor.userNote}
           viewMode={editor.viewMode}
           isEditingName={editor.isEditingName}
           editedDisplayName={editor.editedDisplayName}
@@ -197,6 +198,7 @@ export function WorkspacePage({
           isSaving={editor.isSaving}
           assetsPath={assetsPath}
           onEditorChange={editor.setContent}
+          onUserNoteChange={editor.setUserNote}
           onSave={editor.save}
           onViewModeChange={editor.setViewMode}
           onEditingNameChange={(editing) =>

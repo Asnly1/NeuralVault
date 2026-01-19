@@ -26,9 +26,14 @@ import { GraphPanel } from "./GraphPanel";
 interface WarehousePageProps {
   onSelectNode: (node: NodeRecord) => void;
   onPinnedChange?: () => void;
+  onDashboardRefresh?: () => Promise<void>;
 }
 
-export function WarehousePage({ onSelectNode, onPinnedChange }: WarehousePageProps) {
+export function WarehousePage({
+  onSelectNode,
+  onPinnedChange,
+  onDashboardRefresh,
+}: WarehousePageProps) {
   const [viewMode, setViewMode] = useState<"list" | "graph">("list");
   const [activeTab, setActiveTab] = useState<WarehouseTab>("all");
   const [nodes, setNodes] = useState<NodeRecord[]>([]);
@@ -171,21 +176,21 @@ export function WarehousePage({ onSelectNode, onPinnedChange }: WarehousePagePro
     }
   }, [loadGraphData, viewMode]);
 
+  const refreshWarehouseData = useCallback(async () => {
+    await loadData(activeTab);
+    await loadInboxCount();
+    await onDashboardRefresh?.();
+  }, [activeTab, loadData, loadInboxCount, onDashboardRefresh]);
+
   // Link nodes hook
   const linkNodes = useLinkNodes({
-    onSuccess: async () => {
-      await loadData(activeTab);
-      await loadInboxCount();
-    },
+    onSuccess: refreshWarehouseData,
     getErrorMessage: (key: string) => t("warehouse", key),
   });
 
   // Node operations hook
   const nodeOps = useNodeOperations({
-    onSuccess: async () => {
-      await loadData(activeTab);
-      await loadInboxCount();
-    },
+    onSuccess: refreshWarehouseData,
     onPinnedChange,
   });
 

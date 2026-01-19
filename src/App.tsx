@@ -76,6 +76,7 @@ function App() {
           <WarehousePage
             onSelectNode={nav.selectNode}
             onPinnedChange={refreshSidebar}
+            onDashboardRefresh={dashboard.reloadData}
           />
         )}
 
@@ -111,4 +112,3 @@ function App() {
 }
 
 export default App;
-

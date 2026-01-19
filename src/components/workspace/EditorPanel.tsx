@@ -21,6 +21,7 @@ interface EditorPanelProps {
   isTopicMode?: boolean;
   selectedTopic?: NodeRecord | null;
   editorContent: string;
+  userNote: string;
   viewMode: 'file' | 'text';
   isEditingName: boolean;
   editedDisplayName: string;
@@ -28,6 +29,7 @@ interface EditorPanelProps {
   isSaving: boolean;
   assetsPath: string;
   onEditorChange: (content: string) => void;
+  onUserNoteChange: (note: string) => void;
   onSave: () => void;
   onViewModeChange: (mode: 'file' | 'text') => void;
   onEditingNameChange: (editing: boolean) => void;
@@ -39,6 +41,7 @@ export function EditorPanel({
   isTopicMode = false,
   selectedTopic,
   editorContent,
+  userNote,
   viewMode,
   isEditingName,
   editedDisplayName,
@@ -46,13 +49,17 @@ export function EditorPanel({
   isSaving,
   assetsPath,
   onEditorChange,
+  onUserNoteChange,
   onSave,
   onViewModeChange,
   onEditingNameChange,
   onDisplayNameChange,
 }: EditorPanelProps) {
+  const isTextResource = currentResource?.resource_subtype === "text";
   // 判断是否是文件类型资源（可以切换查看模式）
-  const isFileResource = currentResource && currentResource.resource_subtype !== 'text' && currentResource.file_path;
+  const isFileResource =
+    currentResource && currentResource.resource_subtype !== "text" && currentResource.file_path;
+  const canToggleView = Boolean(currentResource && (isTextResource || isFileResource));
   const { t } = useLanguage();
 
   const renderEditorArea = () => {
@@ -90,25 +97,36 @@ export function EditorPanel({
       );
     }
 
-    // 如果是"编辑文本"模式，显示 TiptapEditor（用于非 text 类型资源的文本编辑，即使内容为空也可以添加）
-    if (viewMode === 'text' && currentResource.resource_subtype !== 'text') {
-      return (
-        <TiptapEditor
-          content={editorContent}
-          onChange={onEditorChange}
-          editable={true}
-          placeholder="添加笔记或备注..."
-        />
-      );
-    }
-
     if (currentResource.resource_subtype === "text") {
+      if (viewMode === "text") {
+        return (
+          <TiptapEditor
+            content={userNote}
+            onChange={onUserNoteChange}
+            editable={true}
+            placeholder={t("workspace", "resourceNotesPlaceholder")}
+          />
+        );
+      }
+
       return (
         <TiptapEditor
           content={editorContent}
           onChange={onEditorChange}
           editable={true}
           placeholder="开始输入内容..."
+        />
+      );
+    }
+
+    // 如果是"编辑文本"模式，显示 TiptapEditor（用于非 text 类型资源的文本编辑，即使内容为空也可以添加）
+    if (viewMode === "text") {
+      return (
+        <TiptapEditor
+          content={editorContent}
+          onChange={onEditorChange}
+          editable={true}
+          placeholder="添加笔记或备注..."
         />
       );
     }
@@ -309,8 +327,8 @@ export function EditorPanel({
                 {currentResource.resource_subtype ? resourceSubtypeIcons[currentResource.resource_subtype] : "📎"}{" "}
                 {currentResource.title || "未命名"}
               </span>
-              {/* 文本/文件切换按钮 - 对所有文件类型资源都显示 */}
-              {isFileResource && (
+              {/* 文本/文件切换按钮 */}
+              {canToggleView && (
                 <div className="flex gap-1 ml-2 bg-muted rounded-md p-0.5">
                   <Button
                     variant={viewMode === 'text' ? 'secondary' : 'ghost'}

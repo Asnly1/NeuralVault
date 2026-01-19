@@ -26,7 +26,7 @@ interface ContextPanelProps {
   contextResources: NodeRecord[];
   availableResources: NodeRecord[];
   loadingResources: boolean;
-  editorContent: string;
+  userNote: string;
   viewMode: "file" | "text";
   width: number;
   tempWidth: number | null;
@@ -49,7 +49,7 @@ export function ContextPanel({
   contextResources,
   availableResources,
   loadingResources,
-  editorContent,
+  userNote,
   viewMode,
   width,
   tempWidth,
@@ -173,7 +173,7 @@ export function ContextPanel({
           </div>
 
           {/* Attached Text (when viewing file) */}
-          {viewMode === "file" && editorContent?.trim() && (
+          {viewMode === "file" && userNote?.trim() && (
             <div>
               <h3 className="text-sm font-semibold mb-3">
                 {t("workspace", "attachedText")}
@@ -181,7 +181,7 @@ export function ContextPanel({
               <Card>
                 <CardContent className="p-3 max-h-48 overflow-y-auto">
                   <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words">
-                    {editorContent}
+                    {userNote}
                   </p>
                 </CardContent>
               </Card>
