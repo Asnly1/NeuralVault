@@ -69,8 +69,8 @@ export function ContextPanel({
     <aside
       style={{ width: `${currentWidth}px` }}
       className={cn(
-        "border-r flex flex-col shrink-0 relative overflow-hidden",
-        !isResizing && "transition-all duration-300"
+        "border-r border-border/30 flex flex-col shrink-0 relative overflow-hidden",
+        !isResizing && "transition-all duration-200"
       )}
     >
       <ScrollArea className="flex-1">
@@ -193,12 +193,12 @@ export function ContextPanel({
       {/* Resize Handle */}
       <div
         className={cn(
-          "absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-accent transition-colors",
-          isResizing && "bg-accent"
+          "absolute top-0 right-0 w-px h-full cursor-col-resize hover:bg-foreground/20 transition-colors duration-100",
+          isResizing && "bg-foreground/20"
         )}
         onMouseDown={onMouseDown}
       >
-        <div className="absolute top-0 right-0 w-4 h-full -mr-1.5" />
+        <div className="absolute top-0 right-0 w-3 h-full -mr-1" />
       </div>
     </aside>
   );

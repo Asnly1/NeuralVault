@@ -48,20 +48,22 @@ export function NodeCard({
   return (
     <Card
       className={cn(
-        "group cursor-pointer transition-all hover:shadow-md border-border/50",
-        onClick && "hover:border-primary/30"
+        "group cursor-pointer transition-all duration-100 border-transparent hover:bg-muted/40 rounded-md relative",
+        onClick && "hover:bg-muted/50"
       )}
       onClick={onClick}
     >
-      <CardContent className="p-3">
+      {/* Notion-style left indicator */}
+      <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-transparent group-hover:bg-foreground/10 rounded-l transition-colors duration-100" />
+      <CardContent className="p-3 pl-4">
         <div className="flex items-start gap-3">
           {/* Icon */}
           <div
             className={cn(
-              "shrink-0 w-8 h-8 rounded-lg flex items-center justify-center",
-              node.node_type === "topic" && "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400",
-              node.node_type === "task" && "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400",
-              node.node_type === "resource" && "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"
+              "shrink-0 w-6 h-6 rounded flex items-center justify-center text-muted-foreground",
+              node.node_type === "topic" && "text-purple-500 dark:text-purple-400",
+              node.node_type === "task" && "text-blue-500 dark:text-blue-400",
+              node.node_type === "resource" && "text-green-500 dark:text-green-400"
             )}
           >
             {getNodeTypeIcon(node.node_type)}

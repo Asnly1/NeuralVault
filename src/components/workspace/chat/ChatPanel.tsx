@@ -208,8 +208,8 @@ export function ChatPanel({
     <aside
       style={{ width: `${currentWidth}px` }}
       className={cn(
-        "border-l flex flex-col shrink-0 relative",
-        !isResizing && "transition-all duration-300"
+        "border-l border-border/30 flex flex-col shrink-0 relative",
+        !isResizing && "transition-all duration-200"
       )}
     >
       {/* All Sessions Dialog */}
@@ -252,17 +252,17 @@ export function ChatPanel({
       {/* Resize Handle */}
       <div
         className={cn(
-          "absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-accent transition-colors",
-          isResizing && "bg-accent"
+          "absolute top-0 left-0 w-px h-full cursor-col-resize hover:bg-foreground/20 transition-colors duration-100",
+          isResizing && "bg-foreground/20"
         )}
         onMouseDown={onMouseDown}
       >
-        <div className="absolute top-0 left-0 w-4 h-full -ml-1.5" />
+        <div className="absolute top-0 left-0 w-3 h-full -ml-1" />
       </div>
 
       {/* Header - session management */}
       {sessionManager.hasSessionContext && (
-        <div className="px-4 py-3 border-b shrink-0">
+        <div className="px-4 py-2 border-b border-border/30 shrink-0">
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">
               {t("workspace", "chatSessions")}
@@ -370,7 +370,7 @@ export function ChatPanel({
       </ScrollArea>
 
       {/* Input area with model selector */}
-      <div className="p-4 border-t shrink-0 space-y-2">
+      <div className="p-4 border-t border-border/30 shrink-0 space-y-2">
         {configuredProviders.length === 0 ? (
           <Button variant="outline" className="w-full" onClick={onNavigateToSettings}>
             <Settings className="h-4 w-4 mr-2" />

@@ -71,11 +71,13 @@ export function TaskCard({ task, onClick, onDelete, onUpdate }: TaskCardProps) {
     <>
       <Card
         className={cn(
-          "cursor-pointer transition-all border-border hover:bg-accent/50 relative group min-h-[110px] flex flex-col",
+          "cursor-pointer transition-all duration-100 border-transparent hover:bg-muted/40 relative group min-h-[100px] flex flex-col rounded-md",
           isOverdue && "border-destructive/30 bg-destructive/5"
         )}
         onClick={onClick}
       >
+        {/* Notion-style left indicator */}
+        <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-transparent group-hover:bg-foreground/10 rounded-l transition-colors duration-100" />
         {/* Action Buttons */}
         <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
           {/* Edit Button */}

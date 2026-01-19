@@ -37,7 +37,12 @@
     --input: 240 5.9% 90%;
     --ring: 240 5% 26%;
 
-    --radius: 0.3rem;
+    --radius: 0.25rem;
+
+    /* Notion Style Variables */
+    --notion-hover-bg: 240 5% 96%;
+    --notion-indicator: 210 100% 50%;
+    --transition-fast: 100ms;
 
     /* Sidebar - Notion Light #F7F7F5 */
     --sidebar-background: 60 9% 96%; 

@@ -61,11 +61,13 @@ export function ResourceCard({
   const stageInfo = progress ? stageConfig[progress.status] : null;
 
   return (
-    <Card 
-      className={`group transition-all border-border hover:bg-accent/50 overflow-hidden relative ${onClick ? 'cursor-pointer' : ''}`}
+    <Card
+      className={`group transition-all duration-100 border-transparent hover:bg-muted/40 overflow-hidden relative rounded-md ${onClick ? 'cursor-pointer' : ''}`}
       onClick={() => onClick?.(resource)}
     >
-      <CardContent className="flex items-center gap-3 p-3">
+      {/* Notion-style left indicator */}
+      <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-transparent group-hover:bg-foreground/10 rounded-l transition-colors duration-100" />
+      <CardContent className="flex items-center gap-3 p-3 pl-4">
         {/* File Icon */}
         <div className="shrink-0 opacity-80 group-hover:opacity-100 transition-opacity text-base">
           {resource.resource_subtype ? resourceSubtypeIcons[resource.resource_subtype] : "📎"}

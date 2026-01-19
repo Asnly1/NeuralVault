@@ -123,7 +123,7 @@ export function SearchBar({ onSelectResult }: SearchBarProps) {
           onChange={(e) => setQuery(e.target.value)}
           onFocus={handleFocus}
           placeholder={t("sidebar", "searchPlaceholder")}
-          className="h-8 w-full rounded-md bg-muted/50 border border-transparent px-8 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:bg-muted focus:border-border/50 focus:outline-none transition-all"
+          className="h-7 w-full rounded bg-transparent border border-border/30 px-8 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/60 hover:border-border/50 focus:border-foreground/30 focus:bg-muted/30 focus:outline-none transition-all duration-100"
         />
         {query && (
           <button
@@ -137,9 +137,9 @@ export function SearchBar({ onSelectResult }: SearchBarProps) {
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-popover border border-border rounded-md shadow-lg z-50 overflow-hidden">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-popover border border-border/50 rounded-md shadow-md z-50 overflow-hidden">
           {/* Mode Toggle */}
-          <div className="flex border-b border-border">
+          <div className="flex border-b border-border/40">
             <button
               onClick={() => setMode("semantic")}
               className={cn(
@@ -184,7 +184,7 @@ export function SearchBar({ onSelectResult }: SearchBarProps) {
                 <button
                   key={result.node.node_id}
                   onClick={() => handleResultClick(result.node.node_id, result.node.node_type)}
-                  className="w-full px-3 py-2 text-left hover:bg-muted/50 transition-colors border-b border-border/50 last:border-0"
+                  className="w-full px-3 py-2 text-left hover:bg-muted/40 transition-colors duration-100 border-b border-border/30 last:border-0"
                 >
                   <div className="flex items-start gap-2">
                     {getNodeTypeIcon(result.node.node_type)}
@@ -210,7 +210,7 @@ export function SearchBar({ onSelectResult }: SearchBarProps) {
                 <button
                   key={result.node_id}
                   onClick={() => handleResultClick(result.node_id, result.node_type, result)}
-                  className="w-full px-3 py-2 text-left hover:bg-muted/50 transition-colors border-b border-border/50 last:border-0"
+                  className="w-full px-3 py-2 text-left hover:bg-muted/40 transition-colors duration-100 border-b border-border/30 last:border-0"
                 >
                   <div className="flex items-start gap-2">
                     {getNodeTypeIcon(result.node_type)}

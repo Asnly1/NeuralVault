@@ -360,10 +360,10 @@ export function QuickCapture({
           )}
 
           <div className={cn(
-            "flex items-center gap-2 rounded-xl border bg-background px-3 py-2 transition-all focus-within:ring-1 focus-within:ring-primary/20",
-            !isHUD && "shadow-sm border-border hover:border-primary/20",
+            "flex items-center gap-2 rounded-lg border bg-background px-3 py-2 transition-all duration-100 focus-within:border-foreground/30",
+            !isHUD && "border-border/40 hover:border-border/60",
             // Chat 模式样式：蓝色边框和淡蓝色背景
-            isChatMode && "border-blue-400/50 bg-blue-50/50 dark:bg-blue-950/20 focus-within:ring-blue-400/30"
+            isChatMode && "border-blue-400/40 bg-blue-50/30 dark:bg-blue-950/10 focus-within:border-blue-400/60"
           )}>
              {/* 模式切换按钮 */}
              {onModeChange && (
@@ -419,10 +419,10 @@ export function QuickCapture({
                 type="submit"
                 size="icon"
                 className={cn(
-                  "h-7 w-7 rounded-full transition-all shrink-0",
-                  canSubmit 
-                    ? "bg-primary text-primary-foreground hover:bg-primary/90" 
-                    : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
+                  "h-7 w-7 rounded-md transition-all duration-100 shrink-0",
+                  canSubmit
+                    ? "bg-foreground text-background hover:bg-foreground/90"
+                    : "bg-muted text-muted-foreground/50 cursor-not-allowed"
                 )}
                 disabled={!canSubmit}
                 title="发送 (Enter)"

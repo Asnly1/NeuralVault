@@ -87,14 +87,14 @@ export function DashboardPage({
   }
 
   return (
-    <div className="h-full flex flex-col max-w-[1200px] mx-auto w-full p-8 lg:p-12 space-y-10 overflow-auto">
+    <div className="h-full flex flex-col max-w-[900px] mx-auto w-full px-8 lg:px-16 py-10 lg:py-14 space-y-12 overflow-auto">
       {/* 1. Header & Quick Capture */}
-      <section className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <header className="flex flex-col gap-2">
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+      <section className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <header className="flex flex-col gap-1">
+          <h1 className="text-[28px] font-bold tracking-tight text-foreground">
             {getGreeting()}, User
           </h1>
-          <p className="text-muted-foreground text-base">
+          <p className="text-muted-foreground/80 text-sm">
             {t("dashboard", "quickCapture")}
           </p>
         </header>
@@ -110,25 +110,23 @@ export function DashboardPage({
       </section>
 
       {/* 2. Tasks Area */}
-      <section className="space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-100">
-        <div className="flex items-center justify-between border-b pb-3">
-          <div className="flex items-center gap-2 text-foreground">
-            <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
-            <h2 className="text-lg font-medium">{t("dashboard", "tasks")}</h2>
-            <Badge
-              variant="secondary"
-              className="ml-2 font-normal text-xs bg-muted text-muted-foreground hover:bg-muted"
-            >
-              {activeTasks.length} Pending
-            </Badge>
+      <section className="space-y-4 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-100">
+        <div className="flex items-center justify-between pb-2">
+          <div className="flex items-center gap-3">
+            <h2 className="text-xs font-semibold text-muted-foreground/70 uppercase tracking-wider">
+              {t("dashboard", "tasks")}
+            </h2>
+            <span className="text-xs text-muted-foreground/50">
+              {activeTasks.length} pending
+            </span>
           </div>
 
           <div className="flex items-center gap-2">
             {/* 查看今日已完成任务按钮 */}
             <Button
               size="sm"
-              variant="outline"
-              className="h-8 rounded-full px-3 shadow-none"
+              variant="ghost"
+              className="h-7 rounded px-2.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
               onClick={() => setCompletedDialogOpen(true)}
             >
               <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
@@ -138,30 +136,30 @@ export function DashboardPage({
             {/* 创建任务按钮 */}
             <Button
               size="sm"
-              className="h-8 rounded-full px-3 shadow-none bg-foreground text-background hover:bg-foreground/90 transition-all"
+              className="h-7 rounded px-2.5 text-xs shadow-none bg-foreground text-background hover:bg-foreground/90 transition-all"
               onClick={() => setCreateTaskOpen(true)}
             >
-              <Plus className="h-3.5 w-3.5 mr-1.5" />
+              <Plus className="h-3.5 w-3.5 mr-1" />
               {t("dashboard", "createTask")}
             </Button>
           </div>
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center h-20 text-muted-foreground text-sm">
+          <div className="flex items-center justify-center h-16 text-muted-foreground/60 text-sm">
             Loading...
           </div>
         ) : error ? (
-          <div className="text-destructive text-sm bg-destructive/10 p-4 rounded-md">
+          <div className="text-destructive text-sm bg-destructive/10 p-3 rounded">
             {error}
           </div>
         ) : activeTasks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-32 text-muted-foreground border border-dashed rounded-lg bg-muted/20">
-            <Sparkles className="h-8 w-8 mb-2 opacity-20" />
-            <p className="text-sm font-medium">{t("dashboard", "noTasks")}</p>
+          <div className="flex flex-col items-center justify-center h-24 text-muted-foreground/60 border border-dashed border-border/50 rounded-md bg-muted/10">
+            <Sparkles className="h-6 w-6 mb-2 opacity-30" />
+            <p className="text-sm">{t("dashboard", "noTasks")}</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
             {activeTasks.map((task) => (
               <TaskCard
                 key={task.node_id}
@@ -207,19 +205,17 @@ export function DashboardPage({
       />
 
       {/* 3. Resources Area */}
-      <section className="space-y-6 pb-10 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200">
-        <div className="flex items-center gap-2 text-foreground border-b pb-3">
-          <LayoutGrid className="h-5 w-5 text-muted-foreground" />
-          <h2 className="text-lg font-medium">{t("dashboard", "resources")}</h2>
-          <Badge
-            variant="secondary"
-            className="ml-2 font-normal text-xs bg-muted text-muted-foreground hover:bg-muted"
-          >
-            {unlinkedResources.length} Inbox
-          </Badge>
+      <section className="space-y-4 pb-10 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200">
+        <div className="flex items-center gap-3 pb-2">
+          <h2 className="text-xs font-semibold text-muted-foreground/70 uppercase tracking-wider">
+            {t("dashboard", "resources")}
+          </h2>
+          <span className="text-xs text-muted-foreground/50">
+            {unlinkedResources.length} inbox
+          </span>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
           {unlinkedResources.map((res) => (
             <ResourceCard
               key={res.node_id}

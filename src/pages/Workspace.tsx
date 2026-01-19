@@ -100,11 +100,11 @@ export function WorkspacePage({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <header className="flex items-center gap-4 px-4 py-3 border-b shrink-0">
-        <Button variant="ghost" size="sm" onClick={onBack}>
+      <header className="flex items-center gap-3 px-5 py-2 border-b border-border/30 shrink-0">
+        <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground hover:text-foreground px-2" onClick={onBack}>
           ← {t("workspace", "backToDashboard")}
         </Button>
-        <Separator orientation="vertical" className="h-5" />
+        <Separator orientation="vertical" className="h-4 bg-border/40" />
 
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm">
@@ -125,13 +125,13 @@ export function WorkspacePage({
           ) : (
             // Task 模式
             <>
-              <span className="font-medium" title={selectedTask!.title}>
+              <span className="font-medium text-foreground" title={selectedTask!.title}>
                 {truncateTitle(selectedTask!.title) || t("common", "untitled")}
               </span>
               {currentResource && (
                 <>
-                  <span className="text-muted-foreground">/</span>
-                  <span className="text-muted-foreground" title={currentResource.title}>
+                  <span className="text-muted-foreground/40">/</span>
+                  <span className="text-muted-foreground/70" title={currentResource.title}>
                     {truncateTitle(currentResource.title) || "未命名文件"}
                   </span>
                 </>

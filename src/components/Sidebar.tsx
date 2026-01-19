@@ -189,22 +189,25 @@ export function Sidebar({
 
       {/* Navigation */}
       <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto">
-        <div className="text-[11px] font-medium text-muted-foreground px-2 py-1.5 mb-0.5">
-          {t("sidebar", "menu").toUpperCase()}
+        <div className="text-[10px] font-medium text-muted-foreground/60 px-2.5 py-1 mb-0.5 uppercase tracking-wider">
+          {t("sidebar", "menu")}
         </div>
         {navItems.map((item) => (
           <Button
             key={item.key}
             variant="ghost"
             className={cn(
-              "w-full justify-start h-8 mb-0.5 text-sm font-normal px-2.5 transition-colors",
+              "w-full justify-start h-7 mb-px text-[13px] font-normal px-2.5 transition-all duration-100 relative rounded",
               currentPage === item.key
-                ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+                ? "bg-muted/60 text-foreground font-medium"
+                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
             )}
             onClick={() => onNavigate(item.key)}
           >
-            <span className={cn("mr-2", currentPage === item.key ? "text-sidebar-foreground" : "text-muted-foreground")}>
+            {currentPage === item.key && (
+              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 bg-foreground/80 rounded-r" />
+            )}
+            <span className={cn("mr-2", currentPage === item.key ? "text-foreground" : "text-muted-foreground")}>
               {iconMap[item.key]}
             </span>
             {t("sidebar", item.key)}
@@ -213,12 +216,12 @@ export function Sidebar({
 
         {/* Favorites Section */}
         <div className="mt-6">
-          <div className="text-[11px] font-medium text-muted-foreground px-2 py-1.5 mb-0.5">
-            {t("sidebar", "favorites").toUpperCase()}
+          <div className="text-[10px] font-medium text-muted-foreground/60 px-2.5 py-1 mb-0.5 uppercase tracking-wider">
+            {t("sidebar", "favorites")}
           </div>
           {pinnedNodes.length === 0 ? (
-            <div className="px-2 py-1">
-              <span className="text-xs text-muted-foreground/60 pl-2">
+            <div className="px-2.5 py-1">
+              <span className="text-[12px] text-muted-foreground/50">
                 {t("sidebar", "noFavorites")}
               </span>
             </div>
@@ -227,10 +230,10 @@ export function Sidebar({
               <Button
                 key={node.node_id}
                 variant="ghost"
-                className="w-full justify-start h-7 text-xs px-2.5 text-muted-foreground hover:text-foreground"
+                className="w-full justify-start h-6 text-[12px] px-2.5 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-all duration-100 rounded"
                 onClick={() => onSelectNode?.(node)}
               >
-                <span className="mr-2 opacity-70">
+                <span className="mr-2 opacity-50">
                   {getNodeTypeIcon(node.node_type)}
                 </span>
                 <span className="truncate">{node.title}</span>
