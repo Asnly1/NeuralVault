@@ -16,10 +16,12 @@ interface GraphPanelProps {
   onRefresh: () => Promise<void>;
 }
 
-const NODE_RADIUS = 18;
+const MIN_NODE_RADIUS = 18;
 const ZOOM_MIN = 0.35;
 const ZOOM_MAX = 2.2;
 const DRAG_THRESHOLD = 4;
+const LABEL_FONT_SIZE = 10;
+const LABEL_PADDING = 8;
 
 const nodePalette: Record<NodeRecord["node_type"], { fill: string; stroke: string }> = {
   topic: {
@@ -39,9 +41,6 @@ const nodePalette: Record<NodeRecord["node_type"], { fill: string; stroke: strin
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
-const truncateLabel = (value: string, max = 12) =>
-  value.length > max ? `${value.slice(0, max)}...` : value;
-
 const normalizeEdge = (
   relationType: RelationType,
   sourceId: number,
@@ -57,7 +56,8 @@ const buildLayout = (
   nodes: NodeRecord[],
   edges: EdgeRecord[],
   width: number,
-  height: number
+  height: number,
+  maxRadius: number
 ): Map<number, Point> => {
   const positions = new Map<number, Point>();
   if (nodes.length === 0 || width === 0 || height === 0) {
@@ -122,8 +122,12 @@ const buildLayout = (
     ...Array.from(levels.values()).map((list) => list.length)
   );
 
-  const gapX = clamp(width / (maxPerLevel + 1), 140, 240);
-  const gapY = clamp(height / (levelKeys.length + 1), 120, 220);
+  const minGapX = Math.max(140, maxRadius * 2 + 40);
+  const minGapY = Math.max(120, maxRadius * 2 + 40);
+  const maxGapX = Math.max(240, minGapX);
+  const maxGapY = Math.max(220, minGapY);
+  const gapX = clamp(width / (maxPerLevel + 1), minGapX, maxGapX);
+  const gapY = clamp(height / (levelKeys.length + 1), minGapY, maxGapY);
   const startY = -((levelKeys.length - 1) * gapY) / 2;
 
   levelKeys.forEach((depth, idx) => {
@@ -153,6 +157,8 @@ export function GraphPanel({
   const { t } = useLanguage();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const textMeasureRef = useRef<HTMLCanvasElement | null>(null);
+  const nodeMenuRef = useRef<HTMLDivElement | null>(null);
 
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const [pan, setPan] = useState<Point>({ x: 0, y: 0 });
@@ -160,6 +166,11 @@ export function GraphPanel({
   const [positions, setPositions] = useState<Map<number, Point>>(new Map());
   const [linkMode, setLinkMode] = useState(false);
   const [relationType, setRelationType] = useState<RelationType>("contains");
+  const [nodeMenu, setNodeMenu] = useState<{
+    nodeId: number;
+    x: number;
+    y: number;
+  } | null>(null);
   const [linkPreview, setLinkPreview] = useState<{ sourceId: number; point: Point } | null>(
     null
   );
@@ -196,6 +207,62 @@ export function GraphPanel({
     return `${nodeIds}|${containsPairs}`;
   }, [nodes, edges]);
 
+  const labelMap = useMemo(() => {
+    const map = new Map<number, { text: string; radius: number }>();
+    if (nodes.length === 0) return map;
+
+    const estimateTextWidth = (value: string) => {
+      let width = 0;
+      for (const char of value) {
+        if (/[\u4e00-\u9fff]/.test(char)) {
+          width += LABEL_FONT_SIZE;
+        } else {
+          width += LABEL_FONT_SIZE * 0.6;
+        }
+      }
+      return width;
+    };
+
+    if (!textMeasureRef.current && typeof document !== "undefined") {
+      textMeasureRef.current = document.createElement("canvas");
+    }
+    const ctx = textMeasureRef.current?.getContext("2d") ?? null;
+
+    if (ctx) {
+      const fontFamily =
+        (containerRef.current && getComputedStyle(containerRef.current).fontFamily) ||
+        '"Geist", "SF Pro Display", -apple-system, BlinkMacSystemFont, sans-serif';
+      ctx.font = `${LABEL_FONT_SIZE}px ${fontFamily}`;
+    }
+
+    nodes.forEach((node) => {
+      const text = node.title || t("common", "untitled");
+      const width = ctx ? ctx.measureText(text).width : estimateTextWidth(text);
+      const radius = Math.max(MIN_NODE_RADIUS, width / 2 + LABEL_PADDING);
+      map.set(node.node_id, { text, radius });
+    });
+
+    return map;
+  }, [nodes, t]);
+
+  const maxRadius = useMemo(() => {
+    let max = MIN_NODE_RADIUS;
+    labelMap.forEach((label) => {
+      if (label.radius > max) max = label.radius;
+    });
+    return max;
+  }, [labelMap]);
+
+  const layoutFingerprint = useMemo(
+    () => `${layoutKey}|${Math.round(maxRadius)}`,
+    [layoutKey, maxRadius]
+  );
+
+  const getNodeRadius = useCallback(
+    (nodeId: number) => labelMap.get(nodeId)?.radius ?? MIN_NODE_RADIUS,
+    [labelMap]
+  );
+
   useEffect(() => {
     if (!containerRef.current) return;
     const observer = new ResizeObserver((entries) => {
@@ -212,14 +279,30 @@ export function GraphPanel({
   }, []);
 
   useEffect(() => {
+    if (!nodeMenu) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        nodeMenuRef.current &&
+        nodeMenuRef.current.contains(event.target as Node)
+      ) {
+        return;
+      }
+      setNodeMenu(null);
+    };
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => window.removeEventListener("pointerdown", handlePointerDown);
+  }, [nodeMenu]);
+
+  useEffect(() => {
     if (!viewport.width || !viewport.height) return;
     const shouldRelayout =
-      layoutKey !== lastLayoutKeyRef.current && (!userMovedRef.current || positions.size === 0);
+      layoutFingerprint !== lastLayoutKeyRef.current &&
+      (!userMovedRef.current || positions.size === 0);
     if (!shouldRelayout) return;
 
-    const next = buildLayout(nodes, edges, viewport.width, viewport.height);
+    const next = buildLayout(nodes, edges, viewport.width, viewport.height, maxRadius);
     setPositions(next);
-    lastLayoutKeyRef.current = layoutKey;
+    lastLayoutKeyRef.current = layoutFingerprint;
     userMovedRef.current = false;
     if (next.size > 0) {
       const centerX = viewport.width / 2;
@@ -227,17 +310,31 @@ export function GraphPanel({
       setPan({ x: centerX, y: centerY });
       setScale(1);
     }
-  }, [layoutKey, nodes, edges, viewport.width, viewport.height, positions.size]);
+  }, [
+    layoutFingerprint,
+    nodes,
+    edges,
+    viewport.width,
+    viewport.height,
+    positions.size,
+    maxRadius,
+  ]);
 
   const fitToView = useCallback(
     (override?: Map<number, Point>) => {
       const map = override ?? positions;
       if (map.size === 0 || !viewport.width || !viewport.height) return;
-      const points = Array.from(map.values());
-      const minX = Math.min(...points.map((p) => p.x));
-      const maxX = Math.max(...points.map((p) => p.x));
-      const minY = Math.min(...points.map((p) => p.y));
-      const maxY = Math.max(...points.map((p) => p.y));
+      let minX = Infinity;
+      let maxX = -Infinity;
+      let minY = Infinity;
+      let maxY = -Infinity;
+      for (const [nodeId, point] of map.entries()) {
+        const radius = getNodeRadius(nodeId);
+        minX = Math.min(minX, point.x - radius);
+        maxX = Math.max(maxX, point.x + radius);
+        minY = Math.min(minY, point.y - radius);
+        maxY = Math.max(maxY, point.y + radius);
+      }
       const padding = 120;
       const graphWidth = maxX - minX + padding;
       const graphHeight = maxY - minY + padding;
@@ -254,7 +351,7 @@ export function GraphPanel({
         y: viewport.height / 2 - centerY * nextScale,
       });
     },
-    [positions, viewport.width, viewport.height]
+    [positions, viewport.width, viewport.height, getNodeRadius]
   );
 
   const screenToGraph = useCallback(
@@ -280,14 +377,15 @@ export function GraphPanel({
         const dx = pos.x - point.x;
         const dy = pos.y - point.y;
         const dist = Math.hypot(dx, dy);
-        if (dist <= NODE_RADIUS + 6 && dist < minDist) {
+        const radius = getNodeRadius(node.node_id);
+        if (dist <= radius + 6 && dist < minDist) {
           minDist = dist;
           hit = node.node_id;
         }
       }
       return hit;
     },
-    [nodes, positions]
+    [nodes, positions, getNodeRadius]
   );
 
   const handleEdgeUpdate = useCallback(
@@ -354,6 +452,63 @@ export function GraphPanel({
     },
     [edges, relationType, onRefresh, isUpdatingEdge, t]
   );
+
+  const handleEdgeRemove = useCallback(
+    async (edge: EdgeRecord) => {
+      if (isUpdatingEdge) return;
+      setEdgeError(null);
+      setIsUpdatingEdge(true);
+      try {
+        await unlinkNodes(edge.source_node_id, edge.target_node_id, edge.relation_type);
+        await onRefresh();
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : t("warehouse", "graphEdgeRemoveFailed");
+        setEdgeError(message);
+      } finally {
+        setIsUpdatingEdge(false);
+      }
+    },
+    [isUpdatingEdge, onRefresh, t]
+  );
+
+  const handleEdgeContextMenu = useCallback(
+    (edge: EdgeRecord, event: React.MouseEvent<SVGLineElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      void handleEdgeRemove(edge);
+    },
+    [handleEdgeRemove]
+  );
+
+  const handleNodeContextMenu = useCallback(
+    (nodeId: number, event: React.MouseEvent<SVGGElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const menuWidth = 160;
+      const menuHeight = 76;
+      const nextX = clamp(
+        event.clientX - rect.left,
+        8,
+        Math.max(8, rect.width - menuWidth - 8)
+      );
+      const nextY = clamp(
+        event.clientY - rect.top,
+        8,
+        Math.max(8, rect.height - menuHeight - 8)
+      );
+      setNodeMenu({ nodeId, x: nextX, y: nextY });
+    },
+    []
+  );
+
+  const handleNodeMenuSelect = useCallback((type: RelationType) => {
+    setRelationType(type);
+    setLinkMode(true);
+    setNodeMenu(null);
+  }, []);
 
   const handlePointerDown = useCallback(
     (event: React.PointerEvent<SVGSVGElement>) => {
@@ -540,22 +695,35 @@ export function GraphPanel({
             const target = positions.get(edge.target_node_id)!;
             const isRelated = edge.relation_type === "related_to";
             return (
-              <line
-                key={edge.edge_id}
-                x1={source.x}
-                y1={source.y}
-                x2={target.x}
-                y2={target.y}
-                stroke={
-                  isRelated
-                    ? "hsl(var(--muted-foreground) / 0.6)"
-                    : "hsl(var(--foreground) / 0.35)"
-                }
-                strokeWidth={1.4}
-                strokeDasharray={isRelated ? "5 5" : undefined}
-                markerEnd={isRelated ? undefined : "url(#graph-arrow)"}
-                vectorEffect="non-scaling-stroke"
-              />
+              <g key={edge.edge_id}>
+                <line
+                  x1={source.x}
+                  y1={source.y}
+                  x2={target.x}
+                  y2={target.y}
+                  stroke={
+                    isRelated
+                      ? "hsl(var(--muted-foreground) / 0.6)"
+                      : "hsl(var(--foreground) / 0.35)"
+                  }
+                  strokeWidth={1.4}
+                  strokeDasharray={isRelated ? "5 5" : undefined}
+                  markerEnd={isRelated ? undefined : "url(#graph-arrow)"}
+                  vectorEffect="non-scaling-stroke"
+                  pointerEvents="none"
+                />
+                <line
+                  x1={source.x}
+                  y1={source.y}
+                  x2={target.x}
+                  y2={target.y}
+                  stroke="transparent"
+                  strokeWidth={12}
+                  vectorEffect="non-scaling-stroke"
+                  pointerEvents="stroke"
+                  onContextMenu={(event) => handleEdgeContextMenu(edge, event)}
+                />
+              </g>
             );
           })}
 
@@ -577,16 +745,20 @@ export function GraphPanel({
             if (!position) return null;
             const palette = nodePalette[node.node_type];
             const isHovered = hoverTargetId === node.node_id;
+            const label = labelMap.get(node.node_id);
+            const labelText = label?.text ?? (node.title || t("common", "untitled"));
+            const radius = label?.radius ?? MIN_NODE_RADIUS;
             return (
               <g
                 key={node.node_id}
                 transform={`translate(${position.x} ${position.y})`}
                 onPointerDown={(event) => handleNodePointerDown(node.node_id, event)}
+                onContextMenu={(event) => handleNodeContextMenu(node.node_id, event)}
                 className={linkMode ? "cursor-crosshair" : "cursor-grab"}
               >
                 <title>{node.title || t("common", "untitled")}</title>
                 <circle
-                  r={NODE_RADIUS}
+                  r={radius}
                   fill={palette.fill}
                   stroke={isHovered ? "hsl(var(--primary))" : palette.stroke}
                   strokeWidth={isHovered ? 2.2 : 1.6}
@@ -594,16 +766,40 @@ export function GraphPanel({
                 <text
                   y={4}
                   textAnchor="middle"
-                  fontSize="10"
+                  fontSize={LABEL_FONT_SIZE}
                   fill="hsl(var(--foreground))"
                 >
-                  {truncateLabel(node.title || t("common", "untitled"))}
+                  {labelText}
                 </text>
               </g>
             );
           })}
         </g>
       </svg>
+
+      {nodeMenu && (
+        <div
+          ref={nodeMenuRef}
+          className="absolute z-20 min-w-[140px] rounded-md border bg-background/95 shadow-md p-1 text-xs"
+          style={{ left: nodeMenu.x, top: nodeMenu.y }}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="w-full rounded-sm px-2 py-1.5 text-left hover:bg-muted"
+            onClick={() => handleNodeMenuSelect("contains")}
+          >
+            {t("warehouse", "graphRelationContains")}
+          </button>
+          <button
+            type="button"
+            className="w-full rounded-sm px-2 py-1.5 text-left hover:bg-muted"
+            onClick={() => handleNodeMenuSelect("related_to")}
+          >
+            {t("warehouse", "graphRelationRelated")}
+          </button>
+        </div>
+      )}
 
       <div className="absolute top-3 left-3 z-10 flex items-center gap-2 rounded-md border bg-background/80 backdrop-blur px-2 py-1">
         <Button
