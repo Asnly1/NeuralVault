@@ -50,7 +50,11 @@ jobs:
         run: npm ci
 
       - name: Build App
-        # 增加 --verbose 以便在构建出错时能看到详细日志
+        env:
+          # === 核心修复 ===
+          # 强制 Windows 使用动态链接 (MD)，解决 LNK2038 冲突
+          # -C target-feature=-crt-static 意思是：不要(minus)静态CRT，即使用动态CRT
+          RUSTFLAGS: ${{ matrix.os == 'windows-latest' && '-C target-feature=-crt-static' || '' }}
         run: npm run tauri build -- --bundles ${{ matrix.bundles }} --verbose
 
       # macOS 打包逻辑优化
