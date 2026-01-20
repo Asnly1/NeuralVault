@@ -36,10 +36,12 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
+      # === 临时修改：注释掉缓存 ===
+      # 为了解决 Windows 链接错误，我们必须强制让 Cargo 重新编译 esaxx-rs。
+      # - name: Rust Cache
+      #   uses: Swatinem/rust-cache@v2
+      #   with:
+      #     workspaces: src-tauri
 
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
