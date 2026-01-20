@@ -51,6 +51,13 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
+      # === 额外保险：强制清理 ===
+      # 如果上面的缓存没注释干净，这一步会物理删除 target 目录，确保 100% 重编
+      - name: Clean Target (Windows)
+        if: matrix.os == 'windows-latest'
+        run: Remove-Item -Recurse -Force src-tauri/target -ErrorAction SilentlyContinue
+        shell: pwsh
+
       - name: Build App
         env:
           # === 核心修复 ===
