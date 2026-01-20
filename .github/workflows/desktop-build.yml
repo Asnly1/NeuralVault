@@ -41,6 +41,11 @@ jobs:
         with:
           workspaces: src-tauri
 
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Install Dependencies
         run: npm ci
 
