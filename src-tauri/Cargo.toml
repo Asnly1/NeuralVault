@@ -39,7 +39,7 @@ directories = "5"
 thiserror = "2.0.17"
 pdf_oxide = "0.3.1"
 active-win-pos-rs = "0.9.1"
-ocr_rs = { git = "https://github.com/Asnly1/rust-paddle-ocr.git", rev = "ab7ac86", package = "ocr-rs" }
+ocr_rs = { git = "https://github.com/Asnly1/rust-paddle-ocr.git", rev = "9016512", package = "ocr-rs" }
 pdfium-render = "0.8.37"
 image = "0.25"
 fastembed = "5.7.0"
