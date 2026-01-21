@@ -60,10 +60,9 @@ jobs:
 
       - name: Build App
         env:
-          # === 核心修复 ===
-          # 强制 Windows 使用动态链接 (MD)，解决 LNK2038 冲突
-          # -C target-feature=-crt-static 意思是：不要(minus)静态CRT，即使用动态CRT
-          RUSTFLAGS: ${{ matrix.os == 'windows-latest' && '-C target-feature=-crt-static' || '' }}
+          RUSTFLAGS: -C target-feature=-crt-static
+          CFLAGS: /MD
+          CXXFLAGS: /MD
         run: npm run tauri build -- --bundles ${{ matrix.bundles }} --verbose
 
       # macOS 打包逻辑优化
