@@ -58,11 +58,18 @@ jobs:
         run: Remove-Item -Recurse -Force src-tauri/target -ErrorAction SilentlyContinue
         shell: pwsh
 
-      - name: Build App
+      - name: Build App (Windows)
+        if: runner.os == 'Windows'
         env:
           RUSTFLAGS: -C target-feature=-crt-static
           CFLAGS: /MD
           CXXFLAGS: /MD
+        run: npm run tauri build -- --bundles ${{ matrix.bundles }} --verbose
+
+      - name: Build App (macOS/Linux)
+        if: runner.os != 'Windows'
+        env:
+          RUSTFLAGS: -C target-feature=-crt-static
         run: npm run tauri build -- --bundles ${{ matrix.bundles }} --verbose
 
       # macOS 打包逻辑优化
