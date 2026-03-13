@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM edges WHERE edge_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "4cc8ccd0102598d5946773a89fbb391feb4cd894154941900d5b8b1a6ac9b6e9"
+}

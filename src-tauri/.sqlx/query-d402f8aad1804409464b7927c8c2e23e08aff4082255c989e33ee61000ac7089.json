@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE nodes SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE node_id = ? AND is_deleted = 0",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "d402f8aad1804409464b7927c8c2e23e08aff4082255c989e33ee61000ac7089"
+}

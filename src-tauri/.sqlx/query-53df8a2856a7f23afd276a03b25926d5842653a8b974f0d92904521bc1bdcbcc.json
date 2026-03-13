@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE nodes SET summary = ?, updated_at = CURRENT_TIMESTAMP WHERE node_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "53df8a2856a7f23afd276a03b25926d5842653a8b974f0d92904521bc1bdcbcc"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE chat_sessions SET title = COALESCE(?, title), summary = COALESCE(?, summary), chat_model = COALESCE(?, chat_model), updated_at = CURRENT_TIMESTAMP WHERE session_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "d9d12f7073e48f4ba3799bab873e1f323f69d7f356f146f1e5c4882a42e9e7c6"
+}

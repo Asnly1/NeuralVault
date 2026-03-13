@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT OR IGNORE INTO session_bindings (session_id, node_id, binding_type) VALUES (?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "75dfb3bd06a4f0f3a3b44d76cd12f30e8a9280877d6e4a5c55252dd95b24c883"
+}

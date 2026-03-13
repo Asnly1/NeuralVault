@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO nodes (uuid, user_id, title, summary, node_type, task_status, priority, due_date, done_date, file_hash, file_path, file_content, user_note, resource_subtype, source_meta, embedded_hash, processing_hash, embedding_status, last_embedding_at, last_embedding_error, processing_stage, review_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 22
+    },
+    "nullable": []
+  },
+  "hash": "28476a238bad497aa97a7755fbf7a6649a36e7f569bea2e85689a0a137d30bdc"
+}

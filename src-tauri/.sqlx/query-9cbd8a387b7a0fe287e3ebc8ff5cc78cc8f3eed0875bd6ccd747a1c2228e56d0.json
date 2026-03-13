@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE nodes SET file_content = ?, file_hash = COALESCE(?, file_hash), updated_at = CURRENT_TIMESTAMP WHERE node_id = ? AND node_type = 'resource'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "9cbd8a387b7a0fe287e3ebc8ff5cc78cc8f3eed0875bd6ccd747a1c2228e56d0"
+}

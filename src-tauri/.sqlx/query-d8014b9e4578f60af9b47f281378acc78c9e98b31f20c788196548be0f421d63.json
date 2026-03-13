@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO node_revision_logs (node_id, field_name, old_value, new_value, reason, provider, model, confidence_score) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 8
+    },
+    "nullable": []
+  },
+  "hash": "d8014b9e4578f60af9b47f281378acc78c9e98b31f20c788196548be0f421d63"
+}

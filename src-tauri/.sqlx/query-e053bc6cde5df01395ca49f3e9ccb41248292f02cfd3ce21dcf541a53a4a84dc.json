@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM session_bindings WHERE session_id = ? AND binding_type = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "e053bc6cde5df01395ca49f3e9ccb41248292f02cfd3ce21dcf541a53a4a84dc"
+}

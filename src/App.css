@@ -1,0 +1,352 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================
+   shadcn/ui CSS Variables - Dark Theme Default
+   ============================================ */
+
+@layer base {
+  :root {
+    /* Notion Light Mode */
+    --background: 0 0% 100%; /* #FFFFFF */
+    --foreground: 240 5% 26%; /* #37352F */
+
+    --card: 0 0% 100%;
+    --card-foreground: 240 5% 26%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 5% 26%;
+
+    --primary: 240 5% 26%;
+    --primary-foreground: 0 0% 98%;
+
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5% 26%;
+
+    --radius: 0.25rem;
+
+    /* Notion Style Variables */
+    --notion-hover-bg: 240 5% 96%;
+    --notion-indicator: 210 100% 50%;
+    --transition-fast: 100ms;
+
+    /* Sidebar - Notion Light #F7F7F5 */
+    --sidebar-background: 60 9% 96%; 
+    --sidebar-foreground: 240 5% 26%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 0 0% 90%; /* darken #F7F7F5 slightly for hover */
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 0 0% 90%; /* Subtle border */
+    --sidebar-ring: 240 5% 26%;
+
+    /* Priority Colors */
+    --priority-high: 0 72% 51%;
+    --priority-medium: 38 92% 50%;
+    --priority-low: 142 71% 45%;
+
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+  }
+
+  .dark {
+    /* Notion Dark Mode */
+    --background: 210 12% 12%; /* #191919 */
+    --foreground: 0 0% 82%; /* #D4D4D4 (Notion text is slightly muted white) */
+
+    --card: 210 12% 12%;
+    --card-foreground: 0 0% 82%;
+
+    --popover: 210 12% 12%;
+    --popover-foreground: 0 0% 82%;
+
+    --primary: 0 0% 90%;
+    --primary-foreground: 210 12% 12%;
+
+    --secondary: 210 10% 21%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 210 10% 21%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 210 10% 21%;
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 0 0% 20%; /* #333333 */
+    --input: 210 10% 21%;
+    --ring: 240 4.9% 83.9%;
+
+    /* Sidebar - Notion Dark #202020 */
+    --sidebar-background: 0 0% 12.5%; /* #202020 */
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 0 0% 20%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Priority Colors */
+    --priority-high: 0 72% 51%;
+    --priority-medium: 38 92% 50%;
+    --priority-low: 142 71% 45%;
+
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: "Geist", "SF Pro Display", -apple-system, BlinkMacSystemFont,
+      sans-serif;
+  }
+}
+
+/* ============================================
+   Global Utilities
+   ============================================ */
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* Hide scrollbar but keep scroll functionality */
+.scrollbar-hidden {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
+/* Custom scrollbar for scroll areas */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* ============================================
+   TiptapEditor Styles
+   ============================================ */
+
+.tiptap-editor {
+  @apply h-full w-full;
+}
+
+.tiptap-editor .ProseMirror {
+  @apply h-full outline-none p-4;
+}
+
+.tiptap-editor .ProseMirror p {
+  @apply mb-3;
+}
+
+.tiptap-editor .ProseMirror h1 {
+  @apply text-2xl font-bold mb-4 mt-6;
+}
+
+.tiptap-editor .ProseMirror h2 {
+  @apply text-xl font-bold mb-3 mt-5;
+}
+
+.tiptap-editor .ProseMirror h3 {
+  @apply text-lg font-semibold mb-2 mt-4;
+}
+
+.tiptap-editor .ProseMirror ul,
+.tiptap-editor .ProseMirror ol {
+  @apply pl-6 mb-3;
+}
+
+.tiptap-editor .ProseMirror li {
+  @apply mb-1;
+}
+
+.tiptap-editor .ProseMirror blockquote {
+  @apply border-l-4 border-primary/50 pl-4 italic text-muted-foreground my-4;
+}
+
+.tiptap-editor .ProseMirror code {
+  @apply bg-muted px-1.5 py-0.5 rounded text-sm font-mono;
+}
+
+.tiptap-editor .ProseMirror pre {
+  @apply bg-muted p-4 rounded-lg my-4 overflow-x-auto;
+}
+
+.tiptap-editor .ProseMirror pre code {
+  @apply bg-transparent p-0;
+}
+
+.tiptap-editor .ProseMirror a {
+  @apply text-primary underline underline-offset-2;
+}
+
+.tiptap-editor .ProseMirror hr {
+  @apply border-border my-6;
+}
+
+.tiptap-editor .ProseMirror .is-empty::before {
+  @apply text-muted-foreground pointer-events-none float-left h-0;
+  content: attr(data-placeholder);
+}
+
+/* ============================================
+   PDF Highlighter Styles
+   ============================================ */
+
+.pdf-viewer-wrapper {
+  @apply relative w-full h-full overflow-hidden;
+}
+
+.PdfHighlighter {
+  @apply relative h-full overflow-auto;
+  background-color: hsl(var(--background)) !important;
+}
+
+/* PDF 滚动条透明样式 - 使用 !important 覆盖库的默认样式 */
+.pdf-viewer-wrapper ::-webkit-scrollbar,
+.pdf-viewer-wrapper *::-webkit-scrollbar,
+.PdfHighlighter::-webkit-scrollbar,
+.PdfHighlighter *::-webkit-scrollbar {
+  width: 8px !important;
+  height: 6px !important;
+  background: transparent !important;
+}
+
+.pdf-viewer-wrapper ::-webkit-scrollbar-track,
+.pdf-viewer-wrapper *::-webkit-scrollbar-track,
+.PdfHighlighter::-webkit-scrollbar-track,
+.PdfHighlighter *::-webkit-scrollbar-track {
+  background: transparent !important;
+  border-radius: 0 !important;
+}
+
+.pdf-viewer-wrapper ::-webkit-scrollbar-track-piece,
+.pdf-viewer-wrapper *::-webkit-scrollbar-track-piece,
+.PdfHighlighter::-webkit-scrollbar-track-piece,
+.PdfHighlighter *::-webkit-scrollbar-track-piece {
+  background: transparent !important;
+}
+
+.pdf-viewer-wrapper ::-webkit-scrollbar-thumb,
+.pdf-viewer-wrapper *::-webkit-scrollbar-thumb,
+.PdfHighlighter::-webkit-scrollbar-thumb,
+.PdfHighlighter *::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.4) !important;
+  border-radius: 3px !important;
+  border: none !important;
+}
+
+.pdf-viewer-wrapper ::-webkit-scrollbar-thumb:hover,
+.pdf-viewer-wrapper *::-webkit-scrollbar-thumb:hover,
+.PdfHighlighter::-webkit-scrollbar-thumb:hover,
+.PdfHighlighter *::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.6) !important;
+}
+
+.pdf-viewer-wrapper ::-webkit-scrollbar-corner,
+.pdf-viewer-wrapper *::-webkit-scrollbar-corner,
+.PdfHighlighter::-webkit-scrollbar-corner,
+.PdfHighlighter *::-webkit-scrollbar-corner {
+  background: transparent !important;
+}
+
+/* Firefox 滚动条样式 */
+.pdf-viewer-wrapper,
+.pdf-viewer-wrapper *,
+.PdfHighlighter,
+.PdfHighlighter * {
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(128, 128, 128, 0.3) transparent !important;
+}
+
+.PdfHighlighter__page-container {
+  @apply mx-auto p-4 flex justify-center;
+}
+
+.PdfHighlighter canvas {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.Highlight {
+  background: rgba(255, 226, 143, 0.3);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.Highlight--scrolledTo {
+  background: rgba(255, 226, 143, 0.6);
+}
+
+.Tip {
+  @apply bg-card border border-border rounded-lg p-3 z-10;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.Tip__compact {
+  @apply flex gap-2 items-center;
+}
+
+.Tip__card {
+  @apply bg-card border border-border rounded-lg p-4 max-w-md;
+}
+
+.Tip__emoji {
+  @apply text-2xl;
+}
+
+.Tip__text {
+  @apply text-foreground text-sm leading-relaxed;
+}
+
+.pdf-loading {
+  @apply flex flex-col items-center justify-center h-full gap-4;
+}
+
+.pdf-error {
+  @apply flex flex-col items-center justify-center h-full gap-4 text-destructive;
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT OR IGNORE INTO edges (source_node_id, target_node_id, relation_type, confidence_score, is_manual) VALUES (?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "a457df39242dc9635f2b6b92a8f822e81178fb9d1e7a4bdb0361bbfa009daccd"
+}
